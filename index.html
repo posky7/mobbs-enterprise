@@ -671,6 +671,8 @@ if (/iphone|ipad|ipod/i.test(navigator.userAgent) && /^((?!chrome|android).)*saf
 function dismissBanner() { document.getElementById('install-banner').classList.remove('show'); localStorage.setItem('sp_banner','1'); }
 
 // ── Data ───────────────────────────────────────────────────
+const DEFAULT_INVENTORY = [];
+
 let inventory = [];
 let loans = [];
 let currentLoanId = null, currentDetailId = null;
@@ -688,7 +690,7 @@ async function loadAllData() {
     const invData  = await invRes.json();
     const loansData = await loansRes.json();
     const expData  = await expRes.json();
-    inventory = (invData && invData.length) ? invData : [];
+    inventory = Array.isArray(invData) ? invData : DEFAULT_INVENTORY;
     loans     = loansData || [];
     expenses  = expData   || [];
   } catch(e) {
