@@ -1,0 +1,2486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Mobbs Enterprise">
+<meta name="theme-color" content="#f5f2ee">
+<meta name="description" content="Home decor vendor booth inventory tracker">
+<title>Mobbs Enterprise — Booth Inventory</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%235b4fcf'/%3E%3Ctext x='90' y='118' font-size='90' text-anchor='middle' font-family='system-ui'%3E📦%3C/text%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #f5f2ee;
+  --surface:  #ffffff;
+  --surface2: #ede9e3;
+  --border:   #d8d0c6;
+  --accent:   #5b4fcf;
+  --accent2:  #1a9e6e;
+  --accent3:  #c4670f;
+  --danger:   #c93030;
+  --text:     #1a1612;
+  --text2:    #5a5248;
+  --text3:    #9a9080;
+  --radius:   16px;
+  --radius-sm:10px;
+  --font-main:'Syne','Helvetica Neue',Arial,sans-serif;
+  --font-mono:'DM Mono','Courier New',monospace;
+}
+* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; width:100%; overflow:hidden; background:var(--bg); font-family:var(--font-main); color:var(--text); -webkit-text-size-adjust:100%; }
+
+/* Install Banner */
+#install-banner { position:fixed; bottom:0; left:0; right:0; background:var(--accent); color:#fff; padding:14px 20px calc(14px + env(safe-area-inset-bottom,0px)); z-index:9999; display:none; flex-direction:column; gap:8px; box-shadow:0 -4px 20px rgba(0,0,0,.15); }
+#install-banner.show { display:flex; }
+.install-title { font-size:14px; font-weight:800; }
+.install-steps { font-size:12px; opacity:.9; line-height:1.5; }
+.install-close { position:absolute; top:12px; right:16px; background:rgba(255,255,255,.2); border:none; color:#fff; width:26px; height:26px; border-radius:50%; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+
+/* Toast (FIX #14) */
+#toast { position:fixed; bottom:calc(90px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%) translateY(20px); background:#1a1612; color:#fff; padding:10px 20px; border-radius:22px; font-size:13px; font-weight:700; z-index:9998; opacity:0; transition:opacity .2s,transform .2s; white-space:nowrap; pointer-events:none; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* Confirm Dialog (FIX #2) */
+#confirm-overlay { position:fixed; inset:0; background:rgba(26,22,18,.5); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:9000; display:none; align-items:center; justify-content:center; padding:24px; }
+#confirm-overlay.open { display:flex; }
+#confirm-box { background:var(--surface); border-radius:var(--radius); padding:24px 20px 16px; width:100%; max-width:320px; box-shadow:0 8px 40px rgba(0,0,0,.15); }
+#confirm-title { font-size:17px; font-weight:800; color:var(--text); margin-bottom:8px; }
+#confirm-msg   { font-size:14px; color:var(--text2); line-height:1.5; margin-bottom:20px; }
+.confirm-btns  { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.confirm-cancel { background:var(--surface2); border:1px solid var(--border); color:var(--text2); border-radius:var(--radius-sm); padding:13px; font-family:var(--font-main); font-size:14px; font-weight:700; cursor:pointer; min-height:48px; }
+.confirm-ok     { background:var(--danger); color:#fff; border:none; border-radius:var(--radius-sm); padding:13px; font-family:var(--font-main); font-size:14px; font-weight:700; cursor:pointer; min-height:48px; }
+
+/* App Shell */
+#app { display:flex; flex-direction:column; height:100%; height:100dvh; padding-top:env(safe-area-inset-top,0px); padding-left:env(safe-area-inset-left,0px); padding-right:env(safe-area-inset-right,0px); background:var(--bg); }
+
+/* Tab Content */
+.tab-content { display:none; flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:calc(80px + env(safe-area-inset-bottom,0px)); }
+.tab-content::-webkit-scrollbar { display:none; }
+.tab-content.active { display:block; }
+
+/* Header (FIX #13 — live clock) */
+.app-header { padding:18px 20px 0; }
+.header-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:2px; }
+.app-logo   { font-size:11px; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--accent); }
+.header-clock { text-align:right; }
+.header-clock-time { font-family:var(--font-mono); font-size:13px; font-weight:500; color:var(--text2); }
+.header-clock-date { font-family:var(--font-mono); font-size:10px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
+.header-title { font-size:30px; font-weight:800; color:var(--text); letter-spacing:-.5px; line-height:1.1; margin-bottom:2px; }
+
+/* Summary Cards */
+.summary-strip { padding:12px 16px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; position:relative; overflow:hidden; }
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+.stat-card.purple::before { background:linear-gradient(90deg,var(--accent),transparent); }
+.stat-card.green::before  { background:linear-gradient(90deg,var(--accent2),transparent); }
+.stat-card.orange::before { background:linear-gradient(90deg,var(--accent3),transparent); }
+.stat-card.red::before    { background:linear-gradient(90deg,var(--danger),transparent); }
+.stat-label { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); margin-bottom:5px; }
+.stat-value { font-family:var(--font-mono); font-size:22px; font-weight:600; color:var(--text); letter-spacing:-.5px; }
+.stat-sub   { font-size:11px; color:var(--text3); margin-top:2px; }
+
+/* Section Header */
+.section-header { padding:4px 16px 10px; display:flex; justify-content:space-between; align-items:center; }
+.section-title  { font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text2); }
+.btn-add { background:var(--accent); color:#fff; border:none; border-radius:22px; padding:8px 18px; font-family:var(--font-main); font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:opacity .15s; min-height:44px; }
+.btn-add:active { opacity:.75; }
+
+/* Search */
+.search-wrap { padding:0 16px 12px; }
+.search-input { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px 12px 40px; font-family:var(--font-mono); font-size:15px; color:var(--text); outline:none; -webkit-appearance:none; min-height:44px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239a9080' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:13px center; }
+.search-input::placeholder { color:var(--text3); }
+.search-input:focus { border-color:var(--accent); }
+
+/* Data Tools (FIX #1) */
+.data-tools { display:flex; gap:8px; padding:0 16px 14px; }
+.btn-tool { flex:1; background:var(--surface); border:1.5px solid var(--border); color:var(--text2); border-radius:var(--radius-sm); padding:10px 8px; font-family:var(--font-main); font-size:11px; font-weight:700; letter-spacing:.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; min-height:44px; transition:background .15s; }
+.btn-tool:active { background:var(--surface2); }
+
+/* Cards */
+.inv-list { padding:0 16px; display:flex; flex-direction:column; gap:10px; }
+.inv-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); overflow:hidden; cursor:pointer; transition:border-color .15s,transform .1s; }
+.inv-card:active { transform:scale(.985); border-color:var(--accent); }
+.inv-card-header { padding:14px 14px 10px; display:flex; justify-content:space-between; align-items:flex-start; }
+.inv-name { font-size:16px; font-weight:700; color:var(--text); letter-spacing:-.2px; flex:1; padding-right:10px; line-height:1.25; }
+.inv-qty-badge { background:var(--surface2); border:1.5px solid var(--border); border-radius:9px; padding:5px 11px; font-family:var(--font-mono); font-size:14px; font-weight:600; color:var(--text); white-space:nowrap; }
+.inv-qty-badge.low { border-color:var(--danger); color:var(--danger); background:#fff0f0; }
+.inv-qty-badge.ok  { border-color:var(--accent2); color:var(--accent2); background:#f0faf6; }
+.category-chip { display:inline-block; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); margin-top:3px; }
+.inv-metrics { display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--border); }
+.inv-metric  { padding:10px 8px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:3px; }
+.inv-metric:last-child { border-right:none; }
+.inv-metric-label { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); }
+.inv-metric-value { font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--text); }
+.inv-metric-value.highlight { color:var(--accent2); }
+.inv-metric-value.cost      { color:var(--accent3); }
+.inv-metric-value.price     { color:var(--accent); }
+.margin-bar  { height:3px; background:var(--surface2); margin:0 14px 12px; border-radius:2px; overflow:hidden; }
+.margin-fill { height:100%; background:linear-gradient(90deg,var(--accent2),var(--accent)); border-radius:2px; }
+
+/* Bottom Nav */
+.bottom-nav { position:fixed; bottom:0; left:0; right:0; padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px)); background:var(--surface); border-top:1px solid var(--border); display:flex; justify-content:space-around; align-items:center; z-index:100; }
+.nav-btn { display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; cursor:pointer; padding:6px 20px; border-radius:14px; transition:background .15s; min-width:72px; min-height:44px; justify-content:center; }
+.nav-btn:active { background:var(--surface2); }
+.nav-icon  { font-size:22px; line-height:1; }
+.nav-label { font-family:var(--font-main); font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text3); }
+.nav-btn.active .nav-label { color:var(--accent); }
+
+/* Modals (FIX #5 swipe handle) */
+.modal-overlay { position:fixed; inset:0; background:rgba(26,22,18,.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:500; display:none; align-items:flex-end; }
+.modal-overlay.open { display:flex; }
+.modal-sheet { width:100%; background:var(--surface); border-radius:26px 26px 0 0; border-top:1px solid var(--border); padding-bottom:calc(20px + env(safe-area-inset-bottom,0px)); max-height:92dvh; display:flex; flex-direction:column; animation:slideUp .28s cubic-bezier(.32,.72,0,1); }
+@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+.modal-handle { width:40px; height:4px; background:var(--border); border-radius:2px; margin:14px auto 0; flex-shrink:0; cursor:grab; touch-action:none; }
+.modal-header { padding:16px 20px 14px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; border-bottom:1px solid var(--border); }
+.modal-title  { font-size:20px; font-weight:800; color:var(--text); letter-spacing:-.3px; }
+.modal-close  { background:var(--surface2); border:1px solid var(--border); color:var(--text2); border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:16px; cursor:pointer; }
+.modal-body   { overflow-y:auto; flex:1; padding:16px 20px; -webkit-overflow-scrolling:touch; }
+.modal-body::-webkit-scrollbar { display:none; }
+
+/* Forms */
+.form-group   { margin-bottom:16px; }
+.form-label   { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); margin-bottom:7px; display:block; }
+.form-input   { width:100%; background:var(--bg); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:13px 14px; font-family:var(--font-mono); font-size:16px; color:var(--text); outline:none; -webkit-appearance:none; transition:border-color .15s; min-height:48px; }
+.form-input:focus { border-color:var(--accent); background:#fff; }
+.form-input::placeholder { color:var(--text3); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.form-section       { margin-bottom:8px; padding:14px 0 8px; border-bottom:1px solid var(--border); }
+.form-section-title { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent); margin-bottom:14px; }
+.calc-preview { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; margin-bottom:16px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.calc-item       { text-align:center; }
+.calc-item-label { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); font-weight:700; margin-bottom:5px; }
+.calc-item-val   { font-family:var(--font-mono); font-size:15px; font-weight:600; color:var(--text2); }
+.calc-item-val.pos { color:var(--accent2); }
+.calc-item-val.neg { color:var(--danger); }
+
+/* Reorder Point (FIX #6) */
+.reorder-row { display:flex; align-items:center; gap:10px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:16px; }
+.reorder-label { font-size:12px; color:var(--text2); font-weight:600; flex:1; }
+.reorder-input { width:70px; background:var(--surface); border:1.5px solid var(--border); border-radius:8px; padding:8px 10px; font-family:var(--font-mono); font-size:15px; color:var(--text); text-align:center; outline:none; -webkit-appearance:none; min-height:40px; }
+.reorder-input:focus { border-color:var(--accent); }
+
+.btn-save { width:100%; background:linear-gradient(135deg,var(--accent),#4a3fb8); color:#fff; border:none; border-radius:var(--radius-sm); padding:16px; font-family:var(--font-main); font-size:15px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; margin-top:8px; min-height:52px; transition:opacity .15s; }
+.btn-save:active { opacity:.8; }
+.btn-delete { width:100%; background:transparent; color:var(--danger); border:1.5px solid var(--danger); border-radius:var(--radius-sm); padding:14px; font-family:var(--font-main); font-size:14px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; margin-top:10px; min-height:52px; transition:background .15s; }
+.btn-delete:active { background:rgba(201,48,48,.08); }
+
+/* Detail View */
+.detail-badge { display:inline-flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:7px 14px; font-family:var(--font-mono); font-size:12px; color:var(--text2); margin-bottom:16px; }
+.detail-grid  { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+.detail-stat  { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; }
+.detail-stat-label { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); font-weight:700; margin-bottom:6px; }
+.detail-stat-value { font-family:var(--font-mono); font-size:20px; font-weight:600; color:var(--text); }
+.detail-stat-value.accent { color:var(--accent); }
+.detail-stat-value.green  { color:var(--accent2); }
+.detail-stat-value.orange { color:var(--accent3); }
+.profit-summary { background:linear-gradient(135deg,rgba(26,158,110,.08),rgba(91,79,207,.06)); border:1px solid rgba(26,158,110,.25); border-radius:var(--radius-sm); padding:18px; margin-bottom:16px; text-align:center; }
+.profit-label  { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent2); margin-bottom:4px; }
+.profit-value  { font-family:var(--font-mono); font-size:32px; font-weight:600; color:var(--text); }
+.profit-margin { font-size:13px; color:var(--text2); margin-top:3px; }
+.qty-controls  { display:flex; align-items:center; gap:14px; background:var(--bg); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:16px; }
+.qty-btn       { width:44px; height:44px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; color:var(--text); font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:300; transition:background .15s; flex-shrink:0; }
+.qty-btn:active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.qty-display   { flex:1; text-align:center; font-family:var(--font-mono); font-size:26px; font-weight:600; color:var(--text); }
+.qty-unit      { font-size:12px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
+
+/* Empty State */
+.empty-state { text-align:center; padding:50px 20px; }
+.empty-icon  { font-size:48px; margin-bottom:14px; }
+.empty-text  { font-size:16px; color:var(--text2); margin-bottom:5px; font-weight:700; }
+.empty-sub   { font-size:13px; color:var(--text3); }
+
+/* Reports */
+.rpt-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.rpt-card-title { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); margin-bottom:14px; }
+.rpt-chart-wrap { position:relative; width:100%; height:200px; }
+.rpt-chart-wrap.rpt-chart-sm { height:220px; }
+
+/* P&L Period Selector */
+.pnl-period-btn {
+  background: transparent; border: none; border-radius: 8px;
+  padding: 9px 4px; font-family: var(--font-main); font-size: 11px;
+  font-weight: 700; letter-spacing: 0.3px; color: var(--text3);
+  cursor: pointer; transition: background .15s, color .15s; width: 100%;
+  white-space: nowrap;
+}
+.pnl-period-btn.active {
+  background: var(--surface); color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+.pnl-period-btn:active { opacity: .75; }
+
+/* P&L */
+.pnl-section { padding:0 16px; }
+.pnl-card    { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:12px; }
+.pnl-row     { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border); }
+.pnl-row:last-child { border-bottom:none; }
+.pnl-row-label { font-size:14px; color:var(--text2); font-weight:600; }
+.pnl-row-val   { font-family:var(--font-mono); font-size:15px; font-weight:600; color:var(--text); }
+.pnl-row-val.pos { color:var(--accent2); }
+.pnl-row-val.neg { color:var(--danger); }
+
+/* Select */
+select.form-input { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%239a9080' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:36px; appearance:none; -webkit-appearance:none; }
+select.form-input option { background:#fff; color:#1a1612; }
+
+/* iPad (FIX #15) */
+@media (min-width:768px) {
+  .summary-strip,
+  .inv-list,.pnl-section,.section-header,.search-wrap,.app-header,.data-tools { max-width:680px; margin-left:auto; margin-right:auto; }
+  .summary-strip { grid-template-columns:repeat(4,1fr); }
+  .modal-sheet   { max-width:540px; margin:0 auto; border-radius:26px; margin-bottom:40px; }
+  .modal-overlay { align-items:center; justify-content:center; }
+  .bottom-nav    { justify-content:center; }
+  .nav-btn       { padding:6px 36px; }
+}
+</style>
+</head>
+<body>
+
+<div id="install-banner">
+  <button class="install-close" onclick="dismissBanner()">✕</button>
+  <div class="install-title">📲 Add Mobbs Enterprise to your Home Screen</div>
+  <div class="install-steps">Tap the <strong>Share</strong> button ( ⎙ ) in Safari's toolbar, then choose <strong>"Add to Home Screen"</strong> → tap <strong>Add</strong>.</div>
+</div>
+
+<div id="toast"></div>
+
+<div id="confirm-overlay">
+  <div id="confirm-box">
+    <div id="confirm-title">Are you sure?</div>
+    <div id="confirm-msg"></div>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="confirmResolve(false)">Cancel</button>
+      <button class="confirm-ok" id="confirm-ok-btn" onclick="confirmResolve(true)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+
+  <!-- Inventory Tab -->
+  <div id="tab-inventory" class="tab-content active">
+    <div class="app-header">
+      <div class="header-top">
+        <div class="app-logo">Mobbs Enterprise</div>
+        <div class="header-clock"><div class="header-clock-time" id="clock-time">—</div><div class="header-clock-date" id="clock-date">—</div></div>
+      </div>
+      <div class="header-title">Inventory</div>
+    </div>
+    <div class="summary-strip">
+      <div class="stat-card purple"><div class="stat-label">In Stock</div><div class="stat-value" id="sum-items">0</div><div class="stat-sub">SKUs tracked</div></div>
+      <div class="stat-card green"><div class="stat-label">Total Units</div><div class="stat-value" id="sum-units">0</div><div class="stat-sub">in stock</div></div>
+      <div class="stat-card orange"><div class="stat-label">Cost Value</div><div class="stat-value" id="sum-cost">$0</div><div class="stat-sub">inventory cost</div></div>
+      <div class="stat-card red"><div class="stat-label">Suggested Value</div><div class="stat-value" id="sum-retail">$0</div><div class="stat-sub">at suggested price</div></div>
+    </div>
+    <!-- Sold summary strip -->
+    <div class="summary-strip" id="sold-summary-strip" style="padding-top:0;display:none;">
+      <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Units Sold</div><div class="stat-value" id="sum-sold-units">0</div><div class="stat-sub">total sold</div></div>
+      <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Revenue Earned</div><div class="stat-value" id="sum-sold-revenue">$0</div><div class="stat-sub">from sales</div></div>
+    </div>
+    <div class="section-header"><div class="section-title">Items</div><button class="btn-add" onclick="openAddModal()">＋ Add Item</button></div>
+    <div class="search-wrap"><input class="search-input" type="search" placeholder="Search inventory…" id="search-box" oninput="renderList()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
+    <div class="data-tools">
+      <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn-tool" onclick="document.getElementById('import-file').click()">⬆ Import CSV</button>
+      <button class="btn-tool" onclick="openBackupModal()" style="color:var(--accent);border-color:var(--accent);">🔒 Backup</button>
+      <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
+      <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
+    </div>
+    <div id="backup-status" style="padding:0 16px 10px;font-size:11px;color:var(--text3);font-family:var(--font-mono);display:none;">
+      Last backup: <span id="backup-date">never</span>
+    </div>
+    <div class="inv-list" id="inv-list"></div>
+
+    <!-- Sold section -->
+    <div id="sold-section" style="display:none;">
+      <div class="section-header" style="cursor:pointer;padding-top:8px;" onclick="toggleSoldSection()">
+        <div class="section-title" style="display:flex;align-items:center;gap:8px;">
+          <span>✅ Sold</span>
+          <span id="sold-count-badge" style="background:var(--accent2);color:#fff;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:1px;">0</span>
+        </div>
+        <span id="sold-toggle-arrow" style="font-size:18px;color:var(--text3);transition:transform .2s;">▾</span>
+      </div>
+      <div id="sold-list" class="inv-list" style="padding-bottom:16px;"></div>
+    </div>
+  </div>
+
+  <!-- P&L Tab -->
+  <div id="tab-pnl" class="tab-content">
+    <div class="app-header">
+      <div class="header-top">
+        <div class="app-logo">Mobbs Enterprise</div>
+        <div class="header-clock"><div class="header-clock-time" id="pnl-clock">—</div><div class="header-clock-date" id="pnl-date">—</div></div>
+      </div>
+      <div class="header-title">Profit &amp; Loss</div>
+    </div>
+
+    <!-- Period selector -->
+    <div style="padding:12px 16px 0;">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface2);border-radius:var(--radius-sm);padding:3px;gap:3px;">
+        <button id="pnl-period-ytd"   class="pnl-period-btn active" onclick="setPnLPeriod('ytd')">Year to Date</button>
+        <button id="pnl-period-month" class="pnl-period-btn"        onclick="setPnLPeriod('month')">This Month</button>
+        <button id="pnl-period-last"  class="pnl-period-btn"        onclick="setPnLPeriod('last')">Last Month</button>
+      </div>
+    </div>
+
+    <div class="pnl-section" id="pnl-section" style="padding-top:14px;"></div>
+  </div>
+
+  <!-- Loans Tab -->
+  <div id="tab-loans" class="tab-content">
+    <div class="app-header">
+      <div class="header-top">
+        <div class="app-logo">Mobbs Enterprise</div>
+        <div class="header-clock"><div class="header-clock-time" id="loans-clock">—</div><div class="header-clock-date" id="loans-date">—</div></div>
+      </div>
+      <div class="header-title">Loans</div>
+    </div>
+    <div class="summary-strip">
+      <div class="stat-card purple"><div class="stat-label">Active</div><div class="stat-value" id="loan-sum-count">0</div><div class="stat-sub">loans</div></div>
+      <div class="stat-card red"><div class="stat-label">Borrowed</div><div class="stat-value" id="loan-sum-borrowed">$0</div><div class="stat-sub">original total</div></div>
+      <div class="stat-card orange"><div class="stat-label">Total Paid</div><div class="stat-value" id="loan-sum-paid">$0</div><div class="stat-sub">payments made</div></div>
+      <div class="stat-card green"><div class="stat-label">Balance</div><div class="stat-value" id="loan-sum-balance">$0</div><div class="stat-sub">remaining</div></div>
+    </div>
+    <div class="section-header"><div class="section-title">Loan Accounts</div><button class="btn-add" onclick="openAddLoanModal()">＋ Add Loan</button></div>
+    <div class="search-wrap"><input class="search-input" type="search" placeholder="Search loans…" id="loan-search-box" oninput="renderLoans()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
+    <div class="inv-list" id="loan-list"></div>
+  </div>
+
+  <!-- Expenses Tab -->
+  <div id="tab-expenses" class="tab-content">
+    <div class="app-header">
+      <div class="header-top">
+        <div class="app-logo">Mobbs Enterprise</div>
+        <div class="header-clock"><div class="header-clock-time" id="exp-clock">—</div><div class="header-clock-date" id="exp-date">—</div></div>
+      </div>
+      <div class="header-title">Expenses</div>
+    </div>
+    <div class="summary-strip">
+      <div class="stat-card purple"><div class="stat-label">Total Expenses</div><div class="stat-value" id="exp-sum-count">0</div><div class="stat-sub">tracked items</div></div>
+      <div class="stat-card red"><div class="stat-label">Monthly Total</div><div class="stat-value" id="exp-sum-monthly">$0</div><div class="stat-sub">recurring/mo</div></div>
+      <div class="stat-card orange"><div class="stat-label">Annual Total</div><div class="stat-value" id="exp-sum-annual">$0</div><div class="stat-sub">projected/yr</div></div>
+      <div class="stat-card green"><div class="stat-label">Paid YTD</div><div class="stat-value" id="exp-sum-ytd">$0</div><div class="stat-sub">this year</div></div>
+    </div>
+    <div class="section-header"><div class="section-title">All Expenses</div><button class="btn-add" onclick="openAddExpenseModal()">＋ Add Expense</button></div>
+    <div class="search-wrap"><input class="search-input" type="search" placeholder="Search expenses…" id="exp-search-box" oninput="renderExpenses()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
+    <div class="inv-list" id="exp-list"></div>
+  </div>
+
+  <!-- Reports Tab -->
+  <div id="tab-reports" class="tab-content">
+    <div class="app-header">
+      <div class="header-top">
+        <div class="app-logo">Mobbs Enterprise</div>
+        <div class="header-clock"><div class="header-clock-time" id="rpt-clock">—</div><div class="header-clock-date" id="rpt-date">—</div></div>
+      </div>
+      <div class="header-title">Reports</div>
+    </div>
+
+    <!-- Period selector -->
+    <div style="padding:12px 16px 0;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface2);border-radius:var(--radius-sm);padding:3px;gap:3px;">
+        <button id="rpt-period-ytd"    class="pnl-period-btn active" onclick="setRptPeriod('ytd')">YTD</button>
+        <button id="rpt-period-month"  class="pnl-period-btn"        onclick="setRptPeriod('month')">Month</button>
+        <button id="rpt-period-last"   class="pnl-period-btn"        onclick="setRptPeriod('last')">Last Mo.</button>
+        <button id="rpt-period-all"    class="pnl-period-btn"        onclick="setRptPeriod('all')">All Time</button>
+      </div>
+    </div>
+
+    <!-- KPI strip -->
+    <div class="summary-strip" id="rpt-kpi-strip">
+      <div class="stat-card green"><div class="stat-label">Revenue</div><div class="stat-value" id="rpt-revenue">$0</div><div class="stat-sub">period total</div></div>
+      <div class="stat-card purple"><div class="stat-label">Profit</div><div class="stat-value" id="rpt-profit">$0</div><div class="stat-sub">after costs</div></div>
+      <div class="stat-card orange"><div class="stat-label">Units Sold</div><div class="stat-value" id="rpt-units">0</div><div class="stat-sub">items</div></div>
+      <div class="stat-card red"><div class="stat-label">Margin</div><div class="stat-value" id="rpt-margin">0%</div><div class="stat-sub">avg profit %</div></div>
+    </div>
+
+    <!-- Charts -->
+    <div style="padding:0 16px;">
+
+      <!-- Revenue over time -->
+      <div class="rpt-card">
+        <div class="rpt-card-title">Revenue &amp; Profit Over Time</div>
+        <div class="rpt-chart-wrap"><canvas id="chart-revenue"></canvas></div>
+      </div>
+
+      <!-- Sales by category donut -->
+      <div class="rpt-card">
+        <div class="rpt-card-title">Revenue by Category</div>
+        <div class="rpt-chart-wrap rpt-chart-sm"><canvas id="chart-category"></canvas></div>
+      </div>
+
+      <!-- Top items bar -->
+      <div class="rpt-card">
+        <div class="rpt-card-title">Top Items by Revenue</div>
+        <div class="rpt-chart-wrap"><canvas id="chart-items"></canvas></div>
+      </div>
+
+      <!-- Expenses vs Revenue -->
+      <div class="rpt-card">
+        <div class="rpt-card-title">Revenue vs Expenses</div>
+        <div class="rpt-chart-wrap"><canvas id="chart-exp"></canvas></div>
+      </div>
+
+    </div>
+
+    <!-- Export buttons -->
+    <div style="padding:8px 16px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <button class="btn-save" onclick="exportReportCSV()" style="margin-top:0;font-size:13px;">⬇ Export CSV</button>
+      <button class="btn-save" onclick="exportReportPDF()" style="margin-top:0;background:linear-gradient(135deg,var(--accent3),#a8540a);font-size:13px;">⬇ Export PDF</button>
+    </div>
+
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="nav-inventory" onclick="switchTab('inventory')"><span class="nav-icon">📦</span><span class="nav-label">Inventory</span></button>
+    <button class="nav-btn" id="nav-expenses" onclick="switchTab('expenses')"><span class="nav-icon">💸</span><span class="nav-label">Expenses</span></button>
+    <button class="nav-btn" id="nav-pnl" onclick="switchTab('pnl')"><span class="nav-icon">📊</span><span class="nav-label">P&amp;L</span></button>
+    <button class="nav-btn" id="nav-loans" onclick="switchTab('loans')"><span class="nav-icon">🏦</span><span class="nav-label">Loans</span></button>
+    <button class="nav-btn" id="nav-reports" onclick="switchTab('reports')"><span class="nav-icon">📈</span><span class="nav-label">Reports</span></button>
+  </nav>
+</div>
+
+<!-- Add/Edit Item Modal -->
+<div class="modal-overlay" id="modal-add">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title" id="modal-title">Add Item</div><button class="modal-close" onclick="closeModal('modal-add')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-section">
+        <div class="form-section-title">Item Info</div>
+        <div class="form-group"><label class="form-label">Item Name</label><input class="form-input" type="text" id="f-name" placeholder="e.g. Terracotta Vase Set" autocomplete="off"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Category</label>
+            <select class="form-input" id="f-category" onchange="onCategoryChange()">
+              <option value="Art">Art</option>
+              <option value="Ceramic Tableware">Ceramic Tableware</option>
+              <option value="Clear Glassware">Clear Glassware</option>
+              <option value="Lamps">Lamps</option>
+              <option value="Seasonal">Seasonal</option>
+              <option value="Self Filler">Self Filler</option>
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Unit Type</label><select class="form-input" id="f-unit"></select></div>
+        </div>
+        <div class="form-group"><label class="form-label">Quantity in Stock</label><input class="form-input" type="number" id="f-qty" placeholder="0" min="0" inputmode="numeric"></div>
+        <div class="reorder-row"><span class="reorder-label">🔔 Low stock alert when qty ≤</span><input class="reorder-input" type="number" id="f-reorder" value="5" min="0" inputmode="numeric"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Pricing &amp; Costs</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Initial Cost ($)</label><input class="form-input" type="number" id="f-cost" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateCalc()"></div>
+          <div class="form-group"><label class="form-label">Labor Cost ($)</label><input class="form-input" type="number" id="f-labor" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateCalc()"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Suggested Price ($)</label><input class="form-input" type="number" id="f-suggested-price" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateCalc()"></div>
+        <div class="calc-preview">
+          <div class="calc-item"><div class="calc-item-label">Total Cost</div><div class="calc-item-val" id="calc-total-cost">$0.00</div></div>
+          <div class="calc-item"><div class="calc-item-label">Profit/Unit</div><div class="calc-item-val pos" id="calc-profit">$0.00</div></div>
+          <div class="calc-item"><div class="calc-item-label">Margin</div><div class="calc-item-val pos" id="calc-margin">0%</div></div>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="f-notes" placeholder="Any additional details…" autocomplete="off"></div>
+      <button class="btn-save" onclick="saveItem()">Save Item</button>
+      <button class="btn-delete" id="btn-delete-item" style="display:none" onclick="confirmDeleteItem()">Delete Item</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Item Detail Modal -->
+<div class="modal-overlay" id="modal-detail">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title" id="detail-name">Item</div><button class="modal-close" onclick="closeModal('modal-detail')">✕</button></div>
+    <div class="modal-body">
+      <div id="detail-badge" class="detail-badge">📦 <span id="detail-cat">—</span></div>
+      <div style="margin-bottom:16px;">
+        <div class="form-label" style="margin-bottom:8px;">Adjust Quantity</div>
+        <div class="qty-controls">
+          <button class="qty-btn" onclick="adjustQty(-1)">−</button>
+          <div style="flex:1;text-align:center;"><div class="qty-display" id="detail-qty">0</div><div class="qty-unit" id="detail-unit">units</div></div>
+          <button class="qty-btn" onclick="adjustQty(1)">+</button>
+        </div>
+      </div>
+      <div class="profit-summary"><div class="profit-label">Profit per Unit</div><div class="profit-value" id="detail-profit">$0.00</div><div class="profit-margin" id="detail-margin">0% margin</div></div>
+      <div class="detail-grid">
+        <div class="detail-stat"><div class="detail-stat-label">Initial Cost</div><div class="detail-stat-value orange" id="dd-cost">$0.00</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Labor Cost</div><div class="detail-stat-value orange" id="dd-labor">$0.00</div></div>
+        <div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Suggested Price</div><div class="detail-stat-value green" id="dd-suggested-price">$0.00</div></div>
+      </div>
+      <div class="detail-grid"><div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Total Value (Suggested × Qty)</div><div class="detail-stat-value green" id="dd-total-val">$0.00</div></div></div>
+      <div id="detail-notes-wrap" style="margin-bottom:16px;display:none"><div class="form-label" style="margin-bottom:4px">Notes</div><div style="font-size:14px;color:var(--text2);font-family:var(--font-mono);line-height:1.5" id="detail-notes"></div></div>
+
+      <!-- Record Sale -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">Record a Sale</div>
+      <div class="form-row" style="margin-bottom:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Qty Sold</label>
+          <input class="form-input" type="number" id="sale-qty" placeholder="1" min="1" inputmode="numeric" value="1">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Sale Price ($)</label>
+          <input class="form-input" type="number" id="sale-price-override" placeholder="Suggested price" step="0.01" inputmode="decimal">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sale Date</label>
+        <input class="form-input" type="date" id="sale-date">
+      </div>
+      <button class="btn-save" onclick="recordSale()" style="background:linear-gradient(135deg,var(--accent2),#138a5c);">✓ Record Sale</button>
+
+      <!-- Sale history for this item -->
+      <div id="detail-sale-history-wrap" style="margin-top:16px;display:none;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;">Sale History</div>
+        <div id="detail-sale-history" class="pnl-card"></div>
+      </div>
+
+      <button class="btn-save" onclick="editCurrentItem()" style="margin-top:14px;">Edit Item</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Loan Modal -->
+<div class="modal-overlay" id="modal-loan">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title" id="loan-modal-title">Add Loan</div><button class="modal-close" onclick="closeModal('modal-loan')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="loan-edit-id">
+      <div class="form-section">
+        <div class="form-section-title">Loan Details</div>
+        <div class="form-group"><label class="form-label">Lender / Description</label><input class="form-input" type="text" id="l-name" placeholder="e.g. Small Business Loan" autocomplete="off"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Date Received</label><input class="form-input" type="date" id="l-date"></div>
+          <div class="form-group"><label class="form-label">Original Amount ($)</label><input class="form-input" type="number" id="l-amount" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateLoanCalc()"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Interest Rate (%)</label><input class="form-input" type="number" id="l-rate" placeholder="0.00" step="0.01" inputmode="decimal"></div>
+          <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="l-status"><option value="Active">Active</option><option value="Paid Off">Paid Off</option></select></div>
+        </div>
+        <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="l-notes" placeholder="e.g. Monthly payments of $200" autocomplete="off"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Payment Summary</div>
+        <div class="calc-preview">
+          <div class="calc-item"><div class="calc-item-label">Borrowed</div><div class="calc-item-val" id="lc-borrowed">$0.00</div></div>
+          <div class="calc-item"><div class="calc-item-label">Total Paid</div><div class="calc-item-val pos" id="lc-paid">$0.00</div></div>
+          <div class="calc-item"><div class="calc-item-label">Balance</div><div class="calc-item-val neg" id="lc-balance">$0.00</div></div>
+        </div>
+      </div>
+      <button class="btn-save" onclick="saveLoan()">Save Loan</button>
+      <button class="btn-delete" id="btn-delete-loan" style="display:none" onclick="confirmDeleteLoan()">Delete Loan</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Loan Detail Modal -->
+<div class="modal-overlay" id="modal-loan-detail">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title" id="ld-name">Loan</div><button class="modal-close" onclick="closeModal('modal-loan-detail')">✕</button></div>
+    <div class="modal-body">
+      <div class="profit-summary" id="ld-hero">
+        <div class="profit-label">Remaining Balance</div>
+        <div class="profit-value" id="ld-balance">$0.00</div>
+        <div class="profit-margin" id="ld-progress">0% paid off</div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-stat"><div class="detail-stat-label">Date Received</div><div class="detail-stat-value" style="font-size:15px" id="ld-date">—</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Original Amount</div><div class="detail-stat-value orange" id="ld-amount">$0.00</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Total Paid</div><div class="detail-stat-value green" id="ld-paid">$0.00</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Interest Rate</div><div class="detail-stat-value accent" id="ld-rate">0%</div></div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);">Payoff Progress</span><span style="font-size:11px;font-family:var(--font-mono);color:var(--text2);" id="ld-pct">0%</span></div>
+        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;border:1px solid var(--border);"><div id="ld-bar" style="height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:4px;transition:width .4s ease;width:0%"></div></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">Record a Payment</div>
+      <div class="form-row" style="margin-bottom:10px;">
+        <div class="form-group" style="margin-bottom:0"><label class="form-label">Payment Date</label><input class="form-input" type="date" id="p-date"></div>
+        <div class="form-group" style="margin-bottom:0"><label class="form-label">Amount ($)</label><input class="form-input" type="number" id="p-amount" placeholder="0.00" step="0.01" inputmode="decimal"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Payment Note (optional)</label><input class="form-input" type="text" id="p-note" placeholder="e.g. Monthly payment" autocomplete="off"></div>
+      <button class="btn-save" onclick="addPayment()" style="background:linear-gradient(135deg,var(--accent2),#138a5c);margin-bottom:14px;">Add Payment</button>
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:10px;">Payment History</div>
+      <div id="ld-payments" class="pnl-card"></div>
+      <button class="btn-save" onclick="editCurrentLoan()" style="margin-top:14px;">Edit Loan</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Utilities ──────────────────────────────────────────────
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+// FIX #12: sanitize all user content before innerHTML insertion
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmt(n)  { return '$' + parseFloat(n||0).toFixed(2); }
+function fmtK(n) { n=parseFloat(n||0); return Math.abs(n)>=1000 ? '$'+(n/1000).toFixed(1)+'k' : fmt(n); }
+
+// ── Toast (FIX #14) ────────────────────────────────────────
+let _tt;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ── Confirm dialog (FIX #2) ───────────────────────────────
+let _cr = null;
+function showConfirm(title, msg, okLabel='Delete') {
+  return new Promise(res => {
+    _cr = res;
+    document.getElementById('confirm-title').textContent  = title;
+    document.getElementById('confirm-msg').textContent    = msg;
+    document.getElementById('confirm-ok-btn').textContent = okLabel;
+    document.getElementById('confirm-overlay').classList.add('open');
+  });
+}
+function confirmResolve(v) {
+  document.getElementById('confirm-overlay').classList.remove('open');
+  if (_cr) { _cr(v); _cr = null; }
+}
+
+// ── Clock (FIX #13) ───────────────────────────────────────
+function updateClock() {
+  const now  = new Date();
+  const time = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+  const date = now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  ['clock-time','pnl-clock','loans-clock','exp-clock','rpt-clock'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=time; });
+  ['clock-date','pnl-date','loans-date','exp-date','rpt-date'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=date; });
+}
+updateClock();
+setInterval(updateClock, 10000);
+
+// ── Install Banner ─────────────────────────────────────────
+const isStandalone = window.navigator.standalone===true || window.matchMedia('(display-mode:standalone)').matches;
+if (/iphone|ipad|ipod/i.test(navigator.userAgent) && /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+    && !isStandalone && localStorage.getItem('sp_banner')!=='1')
+  document.getElementById('install-banner').classList.add('show');
+function dismissBanner() { document.getElementById('install-banner').classList.remove('show'); localStorage.setItem('sp_banner','1'); }
+
+// ── Data ───────────────────────────────────────────────────
+// Inventory is server-backed only — never seed demo rows; empty API / invalid JSON must stay [].
+
+let inventory = [];
+let loans = [];
+let currentLoanId = null, currentDetailId = null;
+
+// ── API helpers ──────────────────────────────────────────────
+const API = '/.netlify/functions';
+
+async function loadAllData() {
+  try {
+    const [invRes, loansRes, expRes] = await Promise.all([
+      fetch(`${API}/inventory`),
+      fetch(`${API}/loans`),
+      fetch(`${API}/expenses`),
+    ]);
+    let invData;
+    try { invData = await invRes.json(); } catch { invData = null; }
+    const loansData = await loansRes.json();
+    const expData  = await expRes.json();
+    inventory = Array.isArray(invData) ? invData : [];
+    loans     = loansData || [];
+    expenses  = expData   || [];
+  } catch(e) {
+    console.error('Failed to load data from server', e);
+    inventory = [];
+    loans = [];
+    expenses = [];
+  }
+}
+
+function saveInventory() { fetch(`${API}/inventory`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(inventory) }).catch(e=>console.error('Save inventory error',e)); }
+function saveLoans()     { fetch(`${API}/loans`,     { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(loans)     }).catch(e=>console.error('Save loans error',e)); }
+function saveExpenses()  { fetch(`${API}/expenses`,  { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(expenses)  }).catch(e=>console.error('Save expenses error',e)); }
+function loanPaid(l)    { return (l.payments||[]).reduce((s,p)=>s+Number(p.amount),0); }
+function loanBalance(l) { return Math.max(0, Number(l.amount)-loanPaid(l)); }
+
+// ── Category → Units ──────────────────────────────────────
+const CAT_UNITS = {
+  'Art':              ['print','canvas','piece','set','collection'],
+  'Ceramic Tableware':['piece','set','collection','nested set','box'],
+  'Clear Glassware':  ['piece','set','pair','collection','box'],
+  'Lamps':            ['piece','pair','set'],
+  'Seasonal':         ['piece','set','pack','bundle','collection'],
+  'Self Filler':      ['piece','set','bundle','arrangement','jar'],
+};
+const ALL_UNITS = ['piece','set','pair','bundle','jar','box','pack','collection','arrangement','nested set','print','canvas'];
+
+function populateUnitSelect(selected) {
+  const units = CAT_UNITS[document.getElementById('f-category').value] || ALL_UNITS;
+  const sel = document.getElementById('f-unit');
+  sel.innerHTML = units.map(u=>`<option value="${u}"${u===selected?' selected':''}>${u}</option>`).join('');
+  const extras = ALL_UNITS.filter(u=>!units.includes(u));
+  if (extras.length) {
+    const g = document.createElement('optgroup'); g.label='More units';
+    extras.forEach(u=>{ const o=document.createElement('option'); o.value=u; o.textContent=u; if(u===selected)o.selected=true; g.appendChild(o); });
+    sel.appendChild(g);
+  }
+}
+function onCategoryChange() { populateUnitSelect(document.getElementById('f-unit').value); }
+
+// ── Swipe-to-dismiss modals (FIX #5) ──────────────────────
+function initSwipeDismiss(overlayId) {
+  const overlay = document.getElementById(overlayId);
+  if (!overlay) return; // guard: skip if element not in DOM yet
+  const sheet   = overlay.querySelector('.modal-sheet');
+  const handle  = sheet && sheet.querySelector('.modal-handle');
+  if (!sheet || !handle) return;
+  let startY=0, curY=0, active=false;
+
+  handle.addEventListener('touchstart', e=>{ startY=e.touches[0].clientY; curY=0; active=true; sheet.style.transition='none'; },{passive:true});
+  handle.addEventListener('touchmove',  e=>{ if(!active) return; curY=Math.max(0,e.touches[0].clientY-startY); sheet.style.transform=`translateY(${curY}px)`; },{passive:true});
+  handle.addEventListener('touchend',   ()=>{ if(!active) return; active=false; sheet.style.transition='';
+    if(curY>100) { sheet.style.transform='translateY(100%)'; setTimeout(()=>{ sheet.style.transform=''; closeModal(overlayId); },250); }
+    else sheet.style.transform='';
+  });
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Tabs ───────────────────────────────────────────────────
+function switchTab(n) {
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+n).classList.add('active');
+  document.getElementById('nav-'+n).classList.add('active');
+  if(n==='pnl')      renderPnL();
+  if(n==='loans')    renderLoans();
+  if(n==='expenses') renderExpenses();
+  if(n==='reports')  renderReports();
+}
+
+// ── Render Inventory ───────────────────────────────────────
+let soldSectionOpen = true;
+
+function renderList() {
+  const q = (document.getElementById('search-box').value||'').toLowerCase();
+  const allMatch = inventory.filter(i=>i.name.toLowerCase().includes(q)||i.category.toLowerCase().includes(q));
+
+  // Split: in-stock = qty > 0, sold-out = qty === 0 AND has sales history
+  const inStock = allMatch.filter(i => Number(i.qty) > 0).sort((a,b)=>a.name.localeCompare(b.name));
+  const soldOut = allMatch.filter(i => Number(i.qty) === 0 && (i.sales||[]).length > 0).sort((a,b)=>a.name.localeCompare(b.name));
+
+  // Summary stats — in-stock only
+  const tot = (arr, fn) => arr.reduce(fn, 0);
+  document.getElementById('sum-items').textContent  = inStock.length;
+  document.getElementById('sum-units').textContent  = tot(inStock, (a,i)=>a+Number(i.qty));
+  document.getElementById('sum-cost').textContent   = fmtK(tot(inStock, (a,i)=>a+(Number(i.cost)+Number(i.labor))*Number(i.qty)));
+  document.getElementById('sum-retail').textContent = fmtK(tot(inStock, (a,i)=>a+Number(i.suggestedPrice??i.salePrice??0)*Number(i.qty)));
+
+  // Sold summary — across ALL items with any sales
+  const allSold = inventory.filter(i=>(i.sales||[]).length>0);
+  const totalSoldUnits   = allSold.reduce((s,i)=>(i.sales||[]).reduce((ss,sl)=>ss+Number(sl.qty),0)+s, 0);
+  const totalSoldRevenue = allSold.reduce((s,i)=>(i.sales||[]).reduce((ss,sl)=>ss+Number(sl.revenue),0)+s, 0);
+  const soldStrip = document.getElementById('sold-summary-strip');
+  if (totalSoldUnits > 0) {
+    soldStrip.style.display = 'grid';
+    document.getElementById('sum-sold-units').textContent   = totalSoldUnits;
+    document.getElementById('sum-sold-revenue').textContent = fmtK(totalSoldRevenue);
+  } else {
+    soldStrip.style.display = 'none';
+  }
+
+  // In-stock list
+  const el = document.getElementById('inv-list');
+  if (!inStock.length && !q) {
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No items in stock</div><div class="empty-sub">Tap + Add Item to get started</div></div>`;
+  } else if (!inStock.length && q) {
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No matches</div><div class="empty-sub">Try a different search</div></div>`;
+  } else {
+    el.innerHTML = inStock.map(item => buildItemCard(item)).join('');
+  }
+
+  // Sold section
+  renderSoldList(soldOut);
+}
+
+function buildItemCard(item) {
+  const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
+  const tc=Number(item.cost)+Number(item.labor), profit=suggested-tc;
+  const margin=suggested>0?Math.round((profit/suggested)*100):0;
+  const thresh=Number(item.reorderPt??5);
+  return `<div class="inv-card" onclick="openDetail('${item.id}')">
+    <div class="inv-card-header">
+      <div><div class="inv-name">${esc(item.name)}</div><span class="category-chip">${esc(item.category)}</span></div>
+      <div class="inv-qty-badge ${item.qty<=thresh?'low':'ok'}">${item.qty} ${esc(item.unit||'units')}</div>
+    </div>
+    <div class="margin-bar"><div class="margin-fill" style="width:${Math.min(100,Math.max(0,margin))}%"></div></div>
+    <div class="inv-metrics">
+      <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(item.cost)}</div></div>
+      <div class="inv-metric"><div class="inv-metric-label">Labor</div><div class="inv-metric-value cost">${fmt(item.labor)}</div></div>
+      <div class="inv-metric"><div class="inv-metric-label">Suggested</div><div class="inv-metric-value highlight">${fmt(suggested)}</div></div>
+      <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value price">${margin}%</div></div>
+    </div></div>`;
+}
+
+function renderSoldList(soldItems) {
+  const sec = document.getElementById('sold-section');
+  const list = document.getElementById('sold-list');
+  const badge = document.getElementById('sold-count-badge');
+  const arrow = document.getElementById('sold-toggle-arrow');
+
+  // Show sold section if any item has sales (even if still in stock)
+  const allWithSales = inventory.filter(i=>(i.sales||[]).length>0).sort((a,b)=>a.name.localeCompare(b.name));
+  if (!allWithSales.length) { sec.style.display='none'; return; }
+
+  sec.style.display = 'block';
+  badge.textContent = allWithSales.length;
+  arrow.style.transform = soldSectionOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+  list.style.display = soldSectionOpen ? 'flex' : 'none';
+
+  if (!soldSectionOpen) return;
+
+  list.innerHTML = allWithSales.map(item => {
+    const totalSoldQty = (item.sales||[]).reduce((s,sl)=>s+Number(sl.qty),0);
+    const totalRevenue = (item.sales||[]).reduce((s,sl)=>s+Number(sl.revenue),0);
+    const totalCostBasis = (item.sales||[]).reduce((s,sl)=>s+(Number(item.cost)+Number(item.labor))*Number(sl.qty),0);
+    const totalProfit = totalRevenue - totalCostBasis;
+    const lastSale = [...(item.sales||[])].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+    const soldOutBadge = Number(item.qty)===0;
+    return `<div class="inv-card" onclick="openDetail('${item.id}')" style="opacity:${soldOutBadge?1:.85}">
+      <div class="inv-card-header">
+        <div style="flex:1;padding-right:10px;">
+          <div class="inv-name">${esc(item.name)}</div>
+          <span class="category-chip">${esc(item.category)}</span>
+        </div>
+        <div style="text-align:right;">
+          ${soldOutBadge
+            ? `<div style="background:#f0faf6;border:1.5px solid var(--accent2);border-radius:9px;padding:4px 10px;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--accent2);white-space:nowrap;">✓ Sold Out</div>`
+            : `<div class="inv-qty-badge ok">${item.qty} left</div>`
+          }
+          <div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;">${lastSale?new Date(lastSale.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—'}</div>
+        </div>
+      </div>
+      <div class="inv-metrics">
+        <div class="inv-metric"><div class="inv-metric-label">Sold</div><div class="inv-metric-value price">${totalSoldQty} ${esc(item.unit||'units')}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(totalRevenue)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Profit</div><div class="inv-metric-value ${totalProfit>=0?'highlight':'cost'}">${fmt(totalProfit)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Suggested $</div><div class="inv-metric-value">${fmt(Number(item.suggestedPrice??item.salePrice??0))}</div></div>
+      </div></div>`;
+  }).join('');
+}
+
+function toggleSoldSection() {
+  soldSectionOpen = !soldSectionOpen;
+  const allWithSales = inventory.filter(i=>(i.sales||[]).length>0).sort((a,b)=>a.name.localeCompare(b.name));
+  renderSoldList(allWithSales);
+}
+
+// ── Add/Edit Item ──────────────────────────────────────────
+function updateCalc() {
+  const c=parseFloat(document.getElementById('f-cost').value)||0;
+  const l=parseFloat(document.getElementById('f-labor').value)||0;
+  const s=parseFloat(document.getElementById('f-suggested-price').value)||0;
+  const tc=c+l, p=s-tc, m=s>0?Math.round((p/s)*100):0;
+  document.getElementById('calc-total-cost').textContent=fmt(tc);
+  const pe=document.getElementById('calc-profit'), me=document.getElementById('calc-margin');
+  pe.textContent=fmt(p); pe.className='calc-item-val '+(p>=0?'pos':'neg');
+  me.textContent=m+'%'; me.className='calc-item-val '+(m>=0?'pos':'neg');
+}
+
+function openAddModal() {
+  ['edit-id','f-name','f-qty','f-cost','f-labor','f-suggested-price','f-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-reorder').value='5';
+  document.getElementById('f-category').value='Art';
+  populateUnitSelect('print');
+  document.getElementById('modal-title').textContent='Add Item';
+  document.getElementById('btn-delete-item').style.display='none';
+  updateCalc();
+  document.getElementById('modal-add').classList.add('open');
+}
+
+function openEditModal(id) {
+  const item=inventory.find(i=>i.id===id); if(!item) return;
+  document.getElementById('modal-title').textContent='Edit Item';
+  document.getElementById('edit-id').value=id;
+  document.getElementById('f-name').value=item.name;
+  document.getElementById('f-category').value=item.category;
+  document.getElementById('f-qty').value=item.qty;
+  document.getElementById('f-reorder').value=item.reorderPt??5;
+  document.getElementById('f-cost').value=item.cost;
+  document.getElementById('f-labor').value=item.labor;
+  document.getElementById('f-suggested-price').value=item.suggestedPrice ?? item.salePrice ?? ''; // backward compat
+  document.getElementById('f-notes').value=item.notes||'';
+  populateUnitSelect(item.unit);
+  document.getElementById('btn-delete-item').style.display='block';
+  updateCalc();
+  document.getElementById('modal-add').classList.add('open');
+}
+
+function saveItem() {
+  const name=document.getElementById('f-name').value.trim(); if(!name){document.getElementById('f-name').focus();return;}
+  const editId=document.getElementById('edit-id').value;
+  const existing=editId?inventory.find(i=>i.id===editId):null;
+  const item={
+    id:editId||uid(), name,
+    category:document.getElementById('f-category').value,
+    unit:document.getElementById('f-unit').value||'piece',
+    qty:parseInt(document.getElementById('f-qty').value)||0,
+    reorderPt:parseInt(document.getElementById('f-reorder').value)||5,
+    cost:parseFloat(document.getElementById('f-cost').value)||0,
+    labor:parseFloat(document.getElementById('f-labor').value)||0,
+    suggestedPrice:parseFloat(document.getElementById('f-suggested-price').value)||0,
+    notes:document.getElementById('f-notes').value.trim(),
+    sales:existing?existing.sales||[]:[], // preserve sale history on edit
+  };
+  if(editId){const idx=inventory.findIndex(i=>i.id===editId);if(idx>-1)inventory[idx]=item;}else inventory.unshift(item);
+  saveInventory(); closeModal('modal-add'); renderList();
+  showToast(editId?'✓ Item updated':'✓ Item added');
+}
+
+async function confirmDeleteItem() {
+  const ok=await showConfirm('Delete item?','This cannot be undone.'); if(!ok) return;
+  const id=document.getElementById('edit-id').value;
+  inventory=inventory.filter(i=>i.id!==id);
+  saveInventory(); closeModal('modal-add'); renderList(); showToast('Item deleted');
+}
+
+// ── Item Detail ────────────────────────────────────────────
+function openDetail(id) { currentDetailId=id; renderDetail(); document.getElementById('modal-detail').classList.add('open'); }
+function renderDetail() {
+  const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
+  const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
+  const tc=Number(item.cost)+Number(item.labor), profit=suggested-tc;
+  const margin=suggested>0?(profit/suggested*100).toFixed(1):0;
+  document.getElementById('detail-name').textContent=item.name;
+  document.getElementById('detail-cat').textContent=item.category;
+  document.getElementById('detail-qty').textContent=item.qty;
+  document.getElementById('detail-unit').textContent=item.unit||'units';
+  document.getElementById('detail-profit').textContent=fmt(profit);
+  document.getElementById('detail-margin').textContent=margin+'% margin';
+  document.getElementById('dd-cost').textContent=fmt(item.cost);
+  document.getElementById('dd-labor').textContent=fmt(item.labor);
+  document.getElementById('dd-suggested-price').textContent=fmt(suggested);
+  document.getElementById('dd-total-val').textContent=fmt(suggested*Number(item.qty));
+  const nw=document.getElementById('detail-notes-wrap');
+  if(item.notes){nw.style.display='block';document.getElementById('detail-notes').textContent=item.notes;}else nw.style.display='none';
+
+  // Pre-fill sale section with suggested price
+  document.getElementById('sale-qty').value='1';
+  document.getElementById('sale-price-override').value=suggested||'';
+  document.getElementById('sale-date').value=new Date().toISOString().split('T')[0];
+
+  // Sale history
+  const sales=[...(item.sales||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const hw=document.getElementById('detail-sale-history-wrap');
+  const hl=document.getElementById('detail-sale-history');
+  if(sales.length){
+    hw.style.display='block';
+    hl.innerHTML=sales.map(s=>`<div class="pnl-row">
+      <div>
+        <div class="pnl-row-label">${s.qty} ${esc(item.unit||'units')} @ ${fmt(s.priceEach)}</div>
+        <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${s.date?new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div>
+          <div class="pnl-row-val pos" style="font-size:14px">${fmt(s.revenue)}</div>
+          <div style="font-size:10px;color:var(--accent2);font-family:var(--font-mono);text-align:right">+${fmt(s.profit)} profit</div>
+        </div>
+        <button onclick="removeSale('${s.sid}')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:2px 6px;min-width:32px;min-height:32px">×</button>
+      </div>
+    </div>`).join('');
+  } else {
+    hw.style.display='none';
+  }
+}
+
+function recordSale() {
+  const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
+  const qty=parseInt(document.getElementById('sale-qty').value)||1;
+  const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
+  const priceEach=parseFloat(document.getElementById('sale-price-override').value)||suggested;
+  const date=document.getElementById('sale-date').value;
+
+  if(qty<=0){document.getElementById('sale-qty').focus();return;}
+  if(qty>Number(item.qty)){
+    showToast(`Only ${item.qty} in stock`); return;
+  }
+
+  const costEach=Number(item.cost)+Number(item.labor);
+  const revenue=qty*priceEach;
+  const profit=revenue-(qty*costEach);
+
+  if(!item.sales)item.sales=[];
+  item.sales.push({sid:uid(),date,qty,priceEach,revenue,profit});
+  item.qty=Math.max(0,Number(item.qty)-qty);
+
+  saveInventory(); renderDetail(); renderList();
+  showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(revenue)}`);
+}
+
+function removeSale(sid) {
+  const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
+  const sale=(item.sales||[]).find(s=>s.sid===sid); if(!sale) return;
+  // Restore qty
+  item.qty=Number(item.qty)+Number(sale.qty);
+  item.sales=item.sales.filter(s=>s.sid!==sid);
+  saveInventory(); renderDetail(); renderList(); showToast('Sale removed');
+}
+
+function adjustQty(d) {
+  const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
+  item.qty=Math.max(0,Number(item.qty)+d); saveInventory(); renderDetail(); renderList();
+}
+function editCurrentItem() { closeModal('modal-detail'); setTimeout(()=>openEditModal(currentDetailId),180); }
+
+// ── P&L Period ─────────────────────────────────────────────
+let pnlPeriod = 'ytd';
+
+function setPnLPeriod(p) {
+  pnlPeriod = p;
+  document.querySelectorAll('.pnl-period-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pnl-period-'+p).classList.add('active');
+  renderPnL();
+}
+
+function getPeriodBounds() {
+  const now   = new Date();
+  const y     = now.getFullYear();
+  const m     = now.getMonth();        // 0-based
+  if (pnlPeriod === 'ytd') {
+    // end = today, not Dec 31 — so we only count expenses that have actually occurred
+    return { start: new Date(y, 0, 1), end: now, label: `Jan 1 – Today ${y}` };
+  }
+  if (pnlPeriod === 'month') {
+    const label = now.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+    return { start: new Date(y, m, 1), end: new Date(y, m+1, 0, 23, 59, 59), label };
+  }
+  // last month
+  const lm    = m === 0 ? 11 : m-1;
+  const ly    = m === 0 ? y-1 : y;
+  const label = new Date(ly, lm, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  return { start: new Date(ly, lm, 1), end: new Date(ly, lm+1, 0, 23, 59, 59), label };
+}
+
+function salesInPeriod(item, bounds) {
+  return (item.sales||[]).filter(sl => {
+    if (!sl.date) return false;
+    const d = new Date(sl.date);
+    return d >= bounds.start && d <= bounds.end;
+  });
+}
+
+// ── P&L ───────────────────────────────────────────────────
+function renderPnL() {
+  const section = document.getElementById('pnl-section');
+  const bounds  = getPeriodBounds();
+
+  // suggestedPrice helper with backward compat
+  const sp = i => Number(i.suggestedPrice ?? i.salePrice ?? 0);
+
+  // Projected (in-stock items only, period-independent)
+  const inStock = inventory.filter(i => Number(i.qty) > 0);
+  const totCost = inStock.reduce((a,i)=>a+(Number(i.cost)+Number(i.labor))*Number(i.qty), 0);
+  const totSugg = inStock.reduce((a,i)=>a+sp(i)*Number(i.qty), 0);
+  const labor   = inStock.reduce((a,i)=>a+Number(i.labor)*Number(i.qty), 0);
+  const raw     = inStock.reduce((a,i)=>a+Number(i.cost)*Number(i.qty), 0);
+  const gross   = totSugg - totCost;
+  const margin  = totSugg > 0 ? (gross/totSugg*100).toFixed(1) : 0;
+
+  // ── Expense calculations split by type ───────────────────
+  const recurringActive = expenses.filter(e => e.status==='Active' && e.frequency!=='One-Time');
+  const monthlyExp = recurringActive.reduce((s,e)=>s+expMonthly(e), 0);
+
+  // Recurring: count actual scheduled occurrences within the period (schedule-based)
+  const recurringForPeriod = recurringActive.reduce((s,e)=>s+expCostInPeriod(e, bounds), 0);
+  // Count of occurrences for display
+  const recurringOccurrences = recurringActive.reduce((s,e)=>s+expOccurrencesInPeriod(e,bounds).length, 0);
+
+  // One-time expenses whose paid date falls within the selected period
+  const oneTimeInPeriod = expenses.filter(e => {
+    if (e.frequency !== 'One-Time') return false;
+    if (!e.due) return false;
+    const d = new Date(e.due);
+    return d >= bounds.start && d <= bounds.end;
+  });
+  const oneTimeTotal = oneTimeInPeriod.reduce((s,e)=>s+Number(e.amount), 0);
+
+  // Total expenses for period = recurring portion + one-time items in period
+  const expForPeriod = recurringForPeriod + oneTimeTotal;
+
+  // Loan payments
+  const loanPayments = loans.reduce((s,l)=>s+loanPaid(l), 0);
+
+  // Sales filtered to selected period
+  const periodSales   = inventory.flatMap(i => salesInPeriod(i, bounds).map(sl => ({ ...sl, item: i })));
+  const actualUnits   = periodSales.reduce((s,sl)=>s+Number(sl.qty), 0);
+  const actualRevenue = periodSales.reduce((s,sl)=>s+Number(sl.revenue), 0);
+  const actualCost    = periodSales.reduce((s,sl)=>s+(Number(sl.item.cost)+Number(sl.item.labor))*Number(sl.qty), 0);
+  const actualProfit  = periodSales.reduce((s,sl)=>s+Number(sl.profit), 0);
+  const net           = actualProfit - expForPeriod - loanPayments;
+
+  // By-category — period sales only
+  const byCategory = {};
+  inventory.forEach(item => {
+    if (!byCategory[item.category]) byCategory[item.category] = { cost:0, sugg:0, qty:0, soldRevenue:0, soldProfit:0, soldUnits:0 };
+    const d = byCategory[item.category];
+    d.cost += (Number(item.cost)+Number(item.labor))*Number(item.qty);
+    d.sugg += sp(item)*Number(item.qty);
+    d.qty  += Number(item.qty);
+    const ps = salesInPeriod(item, bounds);
+    d.soldRevenue += ps.reduce((s,sl)=>s+Number(sl.revenue), 0);
+    d.soldProfit  += ps.reduce((s,sl)=>s+Number(sl.profit),  0);
+    d.soldUnits   += ps.reduce((s,sl)=>s+Number(sl.qty),     0);
+  });
+
+  const catRows = Object.entries(byCategory)
+    .filter(([, d]) => d.qty > 0 || d.soldUnits > 0)
+    .sort((a,b) => a[0].localeCompare(b[0]))
+    .map(([cat, d]) => {
+      const projProfit = d.sugg - d.cost;
+      const hasSales   = d.soldUnits > 0;
+      return `<div class="pnl-row">
+        <div>
+          <div class="pnl-row-label">${esc(cat)}</div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:2px;">
+            ${d.qty > 0 ? `${d.qty} in stock` : 'sold out'}
+            ${hasSales ? ` · <span style="color:var(--accent2)">${d.soldUnits} sold</span>` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          ${hasSales
+            ? `<div style="font-family:var(--font-mono);font-size:15px;font-weight:600;color:var(--accent2)">${fmt(d.soldRevenue)}</div>
+               <div style="font-size:10px;color:var(--accent2);font-family:var(--font-mono);opacity:.8">${fmt(d.soldProfit)} profit</div>`
+            : `<div class="pnl-row-val ${projProfit>=0?'pos':'neg'}" style="font-size:13px;opacity:.6">${fmt(projProfit)} proj.</div>`
+          }
+        </div>
+      </div>`;
+    }).join('');
+
+  // One-time expense rows for the breakdown card
+  const oneTimeRows = oneTimeInPeriod.length > 0
+    ? oneTimeInPeriod
+        .sort((a,b) => new Date(a.due)-new Date(b.due))
+        .map(e => `<div class="pnl-row">
+          <div>
+            <div class="pnl-row-label">${esc(e.name)}</div>
+            <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${esc(e.category)} · ${e.due?new Date(e.due).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}</div>
+          </div>
+          <div class="pnl-row-val neg">−${fmt(e.amount)}</div>
+        </div>`).join('')
+    : '';
+
+  const periodLabel = bounds.label;
+
+  section.innerHTML = `
+    <!-- Projected hero -->
+    <div style="background:linear-gradient(135deg,rgba(26,158,110,.08),rgba(91,79,207,.06));border:1px solid rgba(26,158,110,.25);border-radius:var(--radius);padding:22px;margin-bottom:14px;text-align:center;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent2);margin-bottom:6px;">Projected Gross Profit</div>
+      <div style="font-family:var(--font-mono);font-size:38px;font-weight:600;color:${gross>=0?'var(--accent2)':'var(--danger)'};">${fmtK(gross)}</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:5px;">If all in-stock items sell at suggested price · ${margin}% margin</div>
+    </div>
+
+    <!-- Period sales panel -->
+    <div style="background:${actualRevenue>0?'linear-gradient(135deg,rgba(26,158,110,.12),rgba(26,158,110,.04))':'var(--surface)'};border:1.5px solid ${actualRevenue>0?'rgba(26,158,110,.3)':'var(--border)'};border-radius:var(--radius);padding:18px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${actualRevenue>0?'var(--accent2)':'var(--text2)'};">Sales — ${esc(periodLabel)}</div>
+        ${actualUnits>0?`<div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">${actualUnits} unit${actualUnits!==1?'s':''}</div>`:''}
+      </div>
+      ${actualRevenue>0?`
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:14px;">
+        <div>
+          <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2);font-weight:700;margin-bottom:4px;">Revenue</div>
+          <div style="font-family:var(--font-mono);font-size:20px;font-weight:600;color:var(--accent2)">${fmtK(actualRevenue)}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2);font-weight:700;margin-bottom:4px;">COGS</div>
+          <div style="font-family:var(--font-mono);font-size:20px;font-weight:600;color:var(--accent3)">${fmtK(actualCost)}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2);font-weight:700;margin-bottom:4px;">Gross Profit</div>
+          <div style="font-family:var(--font-mono);font-size:20px;font-weight:600;color:${actualProfit>=0?'var(--accent2)':'var(--danger)'}">${fmtK(actualProfit)}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);text-align:center;">See Expenses breakdown below for deductions → Net Profit</div>`:`
+      <div style="text-align:center;padding:16px 0;color:var(--text3);font-size:13px;">No sales recorded for this period</div>`}
+    </div>
+
+    <!-- Expense breakdown for period -->
+    <div class="pnl-card" style="margin-bottom:14px;">
+      <div style="padding:12px 16px 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">Expenses — ${esc(periodLabel)}</div>
+      ${actualRevenue>0?`
+      <div class="pnl-row">
+        <div class="pnl-row-label">Gross Profit (from sales)</div>
+        <div class="pnl-row-val pos">${fmtK(actualProfit)}</div>
+      </div>`:''}
+      ${recurringActive.length>0?`
+      <div class="pnl-row">
+        <div>
+          <div class="pnl-row-label">Recurring (${recurringActive.length} active)</div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${recurringOccurrences} payment${recurringOccurrences!==1?'s':''} in period · ${fmtK(monthlyExp)}/mo rate</div>
+        </div>
+        <div class="pnl-row-val neg">−${fmtK(recurringForPeriod)}</div>
+      </div>`:''}
+      ${oneTimeRows}
+      ${loanPayments>0?`
+      <div class="pnl-row">
+        <div class="pnl-row-label">Loan Payments (all time)</div>
+        <div class="pnl-row-val neg">−${fmtK(loanPayments)}</div>
+      </div>`:''}
+      ${oneTimeInPeriod.length===0&&recurringActive.length===0&&loanPayments===0
+        ?`<div class="pnl-row"><div class="pnl-row-label" style="color:var(--text3)">No expenses recorded</div></div>`
+        :`<div class="pnl-row" style="background:var(--surface2);">
+            <div class="pnl-row-label" style="font-weight:700;color:var(--text);font-size:15px;">Net Profit</div>
+            <div class="pnl-row-val ${net>=0?'pos':'neg'}" style="font-size:18px;">
+              ${fmtK(net)}
+            </div>
+          </div>`
+      }
+    </div>
+
+    <!-- Projected breakdown -->
+    <div class="pnl-card" style="margin-bottom:14px;">
+      <div style="padding:12px 16px 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">Projected (all in-stock inventory)</div>
+      <div class="pnl-row"><div class="pnl-row-label">Suggested Price Revenue</div><div class="pnl-row-val pos">${fmtK(totSugg)}</div></div>
+      <div class="pnl-row"><div class="pnl-row-label">Raw Material Cost</div><div class="pnl-row-val neg">−${fmtK(raw)}</div></div>
+      <div class="pnl-row"><div class="pnl-row-label">Total Labor Cost</div><div class="pnl-row-val neg">−${fmtK(labor)}</div></div>
+      <div class="pnl-row" style="background:var(--surface2)"><div class="pnl-row-label" style="font-weight:700;color:var(--text);font-size:15px">Projected Gross Profit</div><div class="pnl-row-val ${gross>=0?'pos':'neg'}" style="font-size:18px">${fmtK(gross)}</div></div>
+    </div>
+
+    <!-- By category -->
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;padding:0 2px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">By Category</div>
+      <div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);">${esc(periodLabel)}</div>
+    </div>
+    <div class="pnl-card">${catRows||'<div class="pnl-row"><div class="pnl-row-label" style="color:var(--text3)">No items yet</div></div>'}</div>
+    <div style="height:20px"></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPENSES
+// ═══════════════════════════════════════════════════════════
+
+let expenses = [];
+let currentExpenseId = null;
+// saveExpenses defined above with other API helpers
+
+// Monthly equivalent for any frequency
+function expMonthly(e) {
+  if (e.frequency === 'One-Time') return 0;
+  const a = Number(e.amount)||0;
+  switch(e.frequency) {
+    case 'Weekly':    return a * 52 / 12;
+    case 'Monthly':   return a;
+    case 'Quarterly': return a / 3;
+    case 'Annual':    return a / 12;
+    default:          return a;
+  }
+}
+function expAnnual(e) { return expMonthly(e) * 12; }
+
+// ── Generate scheduled occurrence dates ───────────────────
+// Returns array of Dates from startDate up to `upTo` (default: today)
+function expOccurrences(e, upTo) {
+  if (e.frequency === 'One-Time' || !e.startDate) return [];
+  const start  = new Date(e.startDate);
+  const end    = upTo ? new Date(upTo) : new Date();
+  const payday = Math.max(1, parseInt(e.payday)||1);
+  const dates  = [];
+
+  const clampDay = (y, m, d) => {
+    const max = new Date(y, m+1, 0).getDate();
+    return new Date(y, m, Math.min(d, max));
+  };
+
+  if (e.frequency === 'Weekly') {
+    let cur = new Date(start);
+    while (cur <= end) { dates.push(new Date(cur)); cur.setDate(cur.getDate()+7); }
+  } else if (e.frequency === 'Monthly') {
+    let y = start.getFullYear(), m = start.getMonth();
+    while (true) {
+      const d = clampDay(y, m, payday);
+      if (d > end) break;
+      if (d >= start) dates.push(d);
+      m++; if (m > 11) { m = 0; y++; }
+    }
+  } else if (e.frequency === 'Quarterly') {
+    let y = start.getFullYear(), m = start.getMonth();
+    while (true) {
+      const d = clampDay(y, m, payday);
+      if (d > end) break;
+      if (d >= start) dates.push(d);
+      m += 3; while (m > 11) { m -= 12; y++; }
+    }
+  } else if (e.frequency === 'Annual') {
+    const startMonth = start.getMonth();
+    let y = start.getFullYear();
+    while (true) {
+      const d = clampDay(y, startMonth, payday);
+      if (d > end) break;
+      if (d >= start) dates.push(d);
+      y++;
+    }
+  }
+  return dates;
+}
+
+// Occurrences within a P&L period window
+function expOccurrencesInPeriod(e, bounds) {
+  if (e.frequency === 'One-Time') return [];
+  return expOccurrences(e, bounds.end).filter(d => d >= bounds.start && d <= bounds.end);
+}
+
+// Total cost of a recurring expense within a period.
+// If startDate is missing, fall back to rate × elapsed months so existing expenses aren't $0.
+function expCostInPeriod(e, bounds) {
+  if (e.frequency === 'One-Time') return 0;
+
+  // If we have a start date, use exact schedule
+  if (e.startDate) {
+    const occ = expOccurrencesInPeriod(e, bounds);
+    if (occ.length > 0) return occ.length * Number(e.amount||0);
+    // startDate set but zero occurrences in this window — trust it (e.g. expense started after period)
+    return 0;
+  }
+
+  // No startDate: fall back to proportional calculation based on period length
+  const days = Math.max(1, (bounds.end - bounds.start) / 86400000);
+  const months = days / 30.44; // average days per month
+  return expMonthly(e) * months;
+}
+
+// YTD spend: count occurrences so far this calendar year
+function expYTD(e) {
+  if (e.frequency === 'One-Time') {
+    if (!e.due) return 0;
+    const d = new Date(e.due);
+    return d.getFullYear() === new Date().getFullYear() ? Number(e.amount||0) : 0;
+  }
+  const ytdBounds = {
+    start: new Date(new Date().getFullYear(), 0, 1),
+    end:   new Date()
+  };
+  return expCostInPeriod(e, ytdBounds);
+}
+
+// ── Render Expenses ────────────────────────────────────────
+function renderExpenses() {
+  updateClock();
+  const q=(document.getElementById('exp-search-box').value||'').toLowerCase();
+  const active=expenses.filter(e=>e.status==='Active');
+  const monthlyTotal=active.reduce((s,e)=>s+expMonthly(e),0);
+  const annualTotal=active.reduce((s,e)=>s+expAnnual(e),0);
+  const ytdTotal=expenses.reduce((s,e)=>s+expYTD(e),0);
+
+  document.getElementById('exp-sum-count').textContent=expenses.length;
+  document.getElementById('exp-sum-monthly').textContent=fmtK(monthlyTotal);
+  document.getElementById('exp-sum-annual').textContent=fmtK(annualTotal);
+  document.getElementById('exp-sum-ytd').textContent=fmtK(ytdTotal);
+
+  const filtered=expenses
+    .filter(e=>!q||e.name.toLowerCase().includes(q)||e.category.toLowerCase().includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+
+  const el=document.getElementById('exp-list');
+  if(!filtered.length){
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">💸</div><div class="empty-text">${q?'No expenses match':'No expenses yet'}</div><div class="empty-sub">${q?'Try a different search':'Tap + Add Expense to start tracking'}</div></div>`;
+    return;
+  }
+
+  // Category color map
+  const catColor={
+    'Rent & Venue':'var(--danger)','Supplies':'var(--accent3)','Packaging':'var(--accent3)',
+    'Marketing':'var(--accent)','Transportation':'var(--accent2)','Utilities':'var(--accent3)',
+    'Software & Tools':'var(--accent)','Insurance':'var(--text2)','Other':'var(--text2)'
+  };
+
+  el.innerHTML=filtered.map(exp=>{
+    const isOneTime=exp.frequency==='One-Time';
+    const monthly=expMonthly(exp);
+    const annual=expAnnual(exp);
+    const paused=exp.status==='Paused';
+    const ytd=expYTD(exp);
+    return`<div class="inv-card" onclick="openExpenseDetail('${exp.id}')" style="${paused&&!isOneTime?'opacity:.65':''}">
+      <div class="inv-card-header">
+        <div style="flex:1;padding-right:10px;">
+          <div class="inv-name">${esc(exp.name)}</div>
+          <span class="category-chip">${esc(exp.category)}</span>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--danger);">${fmt(exp.amount)}</div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${isOneTime?'var(--accent2)':paused?'var(--text3)':'var(--accent3)'};">
+            ${isOneTime?'✓ One-Time':exp.frequency}
+          </div>
+        </div>
+      </div>
+      <div class="inv-metrics">
+        ${isOneTime
+          ?`<div class="inv-metric" style="grid-column:span 2"><div class="inv-metric-label">Date Paid</div><div class="inv-metric-value">${exp.due?new Date(exp.due).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}</div></div>
+            <div class="inv-metric" style="grid-column:span 2"><div class="inv-metric-label">Amount</div><div class="inv-metric-value cost">${fmt(exp.amount)}</div></div>`
+          :`<div class="inv-metric"><div class="inv-metric-label">Per Month</div><div class="inv-metric-value cost">${fmt(monthly)}</div></div>
+            <div class="inv-metric"><div class="inv-metric-label">Per Year</div><div class="inv-metric-value cost">${fmt(annual)}</div></div>
+            <div class="inv-metric"><div class="inv-metric-label">Paid YTD</div><div class="inv-metric-value highlight">${fmt(ytd)}</div></div>
+            <div class="inv-metric"><div class="inv-metric-label">Status</div><div class="inv-metric-value" style="color:${paused?'var(--text3)':'var(--accent2)'};">${paused?'Paused':'Active'}</div></div>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Add/Edit Expense ───────────────────────────────────────
+function updateExpenseCalc() {
+  const aEl   = document.getElementById('e-amount');
+  const freqEl = document.getElementById('e-frequency');
+  if (!aEl || !freqEl) return;
+
+  const a    = parseFloat(aEl.value)||0;
+  const freq = freqEl.value;
+  const isOneTime = freq === 'One-Time';
+
+  // Toggle one-time vs recurring fields — guard each element
+  const dueLabel  = document.getElementById('e-due-label');
+  const dueInput  = document.getElementById('e-due');
+  const recurFlds = document.getElementById('e-recurring-fields');
+  const statusWrp = document.getElementById('e-status-wrap');
+  const paydayLbl = document.getElementById('e-payday-label');
+
+  if (dueLabel)  dueLabel.textContent = isOneTime ? 'Date Paid' : 'Next Due Date (optional)';
+  if (dueInput)  dueInput.style.display = isOneTime ? 'block' : 'none';
+  if (recurFlds) recurFlds.style.display = isOneTime ? 'none' : 'block';
+  if (statusWrp) statusWrp.style.display = isOneTime ? 'none' : 'block';
+
+  const paydayLabels = { Weekly:'Day of week (1=Mon)', Monthly:'Day of month', Quarterly:'Day of month', Annual:'Day of month' };
+  if (paydayLbl) paydayLbl.textContent = paydayLabels[freq] || 'Payment Day';
+
+  const dummy = { amount:a, frequency:freq };
+  const mEl = document.getElementById('ec-monthly');
+  const qEl = document.getElementById('ec-quarterly');
+  const yEl = document.getElementById('ec-annual');
+  if (mEl) mEl.textContent = fmt(expMonthly(dummy));
+  if (qEl) qEl.textContent = fmt(expMonthly(dummy)*3);
+  if (yEl) yEl.textContent = fmt(expAnnual(dummy));
+}
+
+function openAddExpenseModal() {
+  document.getElementById('exp-modal-title').textContent = 'Add Expense';
+  document.getElementById('exp-edit-id').value = '';
+  ['e-name','e-amount','e-notes','e-payday'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const today = new Date().toISOString().split('T')[0];
+  const catEl   = document.getElementById('e-category');   if (catEl)   catEl.value   = 'Rent & Venue';
+  const freqEl  = document.getElementById('e-frequency');  if (freqEl)  freqEl.value  = 'Monthly';
+  const statEl  = document.getElementById('e-status');     if (statEl)  statEl.value  = 'Active';
+  const dueEl   = document.getElementById('e-due');        if (dueEl)   dueEl.value   = today;
+  const startEl = document.getElementById('e-start');      if (startEl) startEl.value = today;
+  const delBtn  = document.getElementById('btn-delete-expense'); if (delBtn) delBtn.style.display = 'none';
+  updateExpenseCalc();
+  document.getElementById('modal-expense').classList.add('open');
+}
+
+function openEditExpenseModal(id) {
+  const exp = expenses.find(e => e.id === id); if (!exp) return;
+  const g = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = (val ?? ''); };
+
+  document.getElementById('exp-modal-title').textContent = 'Edit Expense';
+  g('exp-edit-id',  id);
+  g('e-name',       exp.name);
+  g('e-amount',     exp.amount);
+  g('e-notes',      exp.notes || '');
+  g('e-due',        exp.due || '');
+  g('e-start',      exp.startDate || '');
+  g('e-payday',     exp.payday || '');
+
+  const catEl  = document.getElementById('e-category');  if (catEl)  catEl.value  = exp.category  || 'Rent & Venue';
+  const freqEl = document.getElementById('e-frequency'); if (freqEl) freqEl.value = exp.frequency || 'Monthly';
+  const statEl = document.getElementById('e-status');    if (statEl) statEl.value = exp.status    || 'Active';
+
+  const delBtn = document.getElementById('btn-delete-expense'); if (delBtn) delBtn.style.display = 'block';
+  updateExpenseCalc();
+  document.getElementById('modal-expense').classList.add('open');
+}
+
+function saveExpense() {
+  const name=document.getElementById('e-name').value.trim(); if(!name){document.getElementById('e-name').focus();return;}
+  const editId=document.getElementById('exp-edit-id').value;
+  const existing=editId?expenses.find(e=>e.id===editId):null;
+  const freq=document.getElementById('e-frequency').value;
+  const isOneTime = freq === 'One-Time';
+  const amount=parseFloat(document.getElementById('e-amount').value)||0;
+  const due=document.getElementById('e-due').value;
+
+  const exp={
+    id:editId||uid(), name,
+    category:document.getElementById('e-category').value,
+    frequency:freq,
+    amount,
+    due,
+    startDate: isOneTime ? due : (document.getElementById('e-start').value || new Date().toISOString().split('T')[0]),
+    payday:    isOneTime ? null : (parseInt(document.getElementById('e-payday').value)||1),
+    status: isOneTime ? 'Active' : document.getElementById('e-status').value,
+    notes:document.getElementById('e-notes').value.trim(),
+    payments:existing?existing.payments:[],
+  };
+
+  // For one-time: auto-record payment on save
+  if (isOneTime && exp.payments.length === 0 && amount > 0) {
+    exp.payments.push({ pid:uid(), date:due||new Date().toISOString().split('T')[0], amount, note:'One-time expense' });
+  }
+  if (isOneTime && exp.payments.length === 1 && exp.payments[0].note === 'One-time expense') {
+    exp.payments[0].amount = amount;
+    exp.payments[0].date   = due || exp.payments[0].date;
+  }
+
+  if(editId){const idx=expenses.findIndex(e=>e.id===editId);if(idx>-1)expenses[idx]=exp;}else expenses.unshift(exp);
+  saveExpenses(); closeModal('modal-expense'); renderExpenses();
+  showToast(editId?'✓ Expense updated':'✓ Expense recorded');
+}
+
+async function confirmDeleteExpense() {
+  const ok=await showConfirm('Delete expense?','All payment history will be lost.'); if(!ok) return;
+  const id=document.getElementById('exp-edit-id').value;
+  expenses=expenses.filter(e=>e.id!==id);
+  saveExpenses(); closeModal('modal-expense'); renderExpenses(); showToast('Expense deleted');
+}
+
+// ── Expense Detail ─────────────────────────────────────────
+function openExpenseDetail(id) {
+  currentExpenseId=id;
+  renderExpenseDetail();
+  document.getElementById('modal-expense-detail').classList.add('open');
+}
+
+function renderExpenseDetail() {
+  const exp=expenses.find(e=>e.id===currentExpenseId); if(!exp) return;
+  const isOneTime = exp.frequency === 'One-Time';
+  const monthly=expMonthly(exp), annual=expAnnual(exp);
+  const paused=exp.status==='Paused';
+
+  document.getElementById('ed-name').textContent=exp.name;
+  document.getElementById('ed-amount').textContent=fmt(exp.amount);
+  document.getElementById('ed-frequency').textContent=exp.frequency+(exp.notes?' · '+exp.notes:'');
+  document.getElementById('ed-category').textContent=exp.category;
+  document.getElementById('ed-status-val').textContent=isOneTime?'✓ Recorded':(paused?'⏸ Paused':'✓ Active');
+  document.getElementById('ed-status-val').style.color=isOneTime?'var(--accent2)':(paused?'var(--text3)':'var(--accent2)');
+  document.getElementById('ed-hero-label').textContent = isOneTime ? 'One-Time Amount' : 'Amount per Occurrence';
+  document.getElementById('ed-monthly-wrap').style.display = isOneTime ? 'none' : 'block';
+  document.getElementById('ed-annual-wrap').style.display  = isOneTime ? 'none' : 'block';
+  if (!isOneTime) {
+    document.getElementById('ed-monthly').textContent=fmt(monthly);
+    document.getElementById('ed-annual').textContent=fmt(annual);
+  }
+  document.getElementById('ed-recurring-section').style.display = isOneTime ? 'none' : 'block';
+  document.getElementById('ed-onetime-section').style.display   = isOneTime ? 'block' : 'none';
+
+  if (isOneTime) {
+    const el = document.getElementById('ed-due');
+    if (el) el.textContent = exp.due
+      ? new Date(exp.due).toLocaleDateString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric'})
+      : 'Not set';
+  } else {
+    // Start date and payment day
+    const startEl  = document.getElementById('ed-start');
+    const paydayEl = document.getElementById('ed-payday');
+    if (startEl) startEl.textContent = exp.startDate
+      ? new Date(exp.startDate).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
+      : 'Not set';
+    if (paydayEl) paydayEl.textContent = exp.payday
+      ? (exp.frequency==='Weekly'
+          ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][Math.min(Number(exp.payday)-1,6)]
+          : 'Day ' + exp.payday)
+      : '—';
+
+    // Generate schedule
+    const today     = new Date();
+    const past      = expOccurrences(exp, today);
+    const future    = expOccurrences(exp, new Date(today.getFullYear(), today.getMonth()+4, 0)).filter(d=>d>today);
+    const totalPaid = past.length * Number(exp.amount||0);
+
+    const tl = document.getElementById('ed-total-paid-label');
+    if (tl) tl.textContent = `${past.length} occurrence${past.length!==1?'s':''} · ${fmt(totalPaid)} total`;
+
+    const recentPast  = past.slice(-3).reverse();
+    const nextFuture  = future.slice(0,3);
+    const scheduleEl  = document.getElementById('ed-schedule');
+    if (scheduleEl) {
+      const rows = [
+        ...nextFuture.map(d=>`<div class="pnl-row">
+          <div><div class="pnl-row-label" style="color:var(--accent3)">Upcoming</div><div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div></div>
+          <div style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent3);">${fmt(exp.amount)}</div>
+        </div>`),
+        ...recentPast.map(d=>`<div class="pnl-row" style="opacity:.65">
+          <div><div class="pnl-row-label">Paid</div><div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div></div>
+          <div style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent2);">✓ ${fmt(exp.amount)}</div>
+        </div>`),
+      ];
+      scheduleEl.innerHTML = rows.length
+        ? rows.join('')
+        : `<div class="pnl-row"><div class="pnl-row-label" style="color:var(--text3)">No occurrences yet — check start date &amp; payment day</div></div>`;
+    }
+  }
+}
+
+function editCurrentExpense() {
+  closeModal('modal-expense-detail');
+  setTimeout(()=>openEditExpenseModal(currentExpenseId),180);
+}
+
+// ── Render Loans ──────────────────────────────────────────
+function renderLoans() {
+  updateClock();
+  const q=(document.getElementById('loan-search-box').value||'').toLowerCase();
+  const tot=loans.reduce((s,l)=>s+Number(l.amount),0);
+  const paid=loans.reduce((s,l)=>s+loanPaid(l),0);
+  const bal=loans.reduce((s,l)=>s+loanBalance(l),0);
+  document.getElementById('loan-sum-count').textContent=loans.filter(l=>l.status==='Active').length;
+  document.getElementById('loan-sum-borrowed').textContent=fmtK(tot);
+  document.getElementById('loan-sum-paid').textContent=fmtK(paid);
+  document.getElementById('loan-sum-balance').textContent=fmtK(bal);
+
+  const filtered=loans.filter(l=>!q||l.name.toLowerCase().includes(q)).sort((a,b)=>new Date(b.dateReceived)-new Date(a.dateReceived));
+  const el=document.getElementById('loan-list');
+  if(!filtered.length){el.innerHTML=`<div class="empty-state"><div class="empty-icon">🏦</div><div class="empty-text">${q?'No loans match':'No loans yet'}</div><div class="empty-sub">${q?'Try a different search':'Tap + Add Loan to get started'}</div></div>`;return;}
+
+  el.innerHTML=filtered.map(loan=>{
+    const b=loanBalance(loan),p=loanPaid(loan);
+    const pct=loan.amount>0?Math.min(100,Math.round((p/Number(loan.amount))*100)):0;
+    const off=loan.status==='Paid Off'||b===0;
+    const sc=off?'var(--accent2)':'var(--danger)',sb=off?'#f0faf6':'#fff0f0',sbr=off?'var(--accent2)':'var(--danger)';
+    return`<div class="inv-card" onclick="openLoanDetail('${loan.id}')">
+      <div class="inv-card-header">
+        <div style="flex:1;padding-right:10px;"><div class="inv-name">${esc(loan.name)}</div><div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:2px;">Received ${loan.dateReceived?new Date(loan.dateReceived).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}</div></div>
+        <div style="background:${sb};border:1.5px solid ${sbr};border-radius:9px;padding:5px 11px;font-family:var(--font-mono);font-size:12px;font-weight:600;color:${sc};white-space:nowrap;">${off?'✓ Paid Off':'Active'}</div>
+      </div>
+      <div class="margin-bar"><div class="margin-fill" style="width:${pct}%"></div></div>
+      <div class="inv-metrics">
+        <div class="inv-metric"><div class="inv-metric-label">Borrowed</div><div class="inv-metric-value cost">${fmt(loan.amount)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Paid</div><div class="inv-metric-value highlight">${fmt(p)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Balance</div><div class="inv-metric-value" style="color:${sc}">${fmt(b)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">% Paid</div><div class="inv-metric-value price">${pct}%</div></div>
+      </div></div>`;
+  }).join('');
+}
+
+// ── Add/Edit Loan ──────────────────────────────────────────
+function openAddLoanModal() {
+  document.getElementById('loan-modal-title').textContent='Add Loan';
+  document.getElementById('loan-edit-id').value='';
+  ['l-name','l-amount','l-rate','l-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('l-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('l-status').value='Active';
+  document.getElementById('btn-delete-loan').style.display='none';
+  updateLoanCalc(); document.getElementById('modal-loan').classList.add('open');
+}
+function openEditLoanModal(id) {
+  const loan=loans.find(l=>l.id===id); if(!loan) return;
+  document.getElementById('loan-modal-title').textContent='Edit Loan';
+  document.getElementById('loan-edit-id').value=id;
+  document.getElementById('l-name').value=loan.name;
+  document.getElementById('l-date').value=loan.dateReceived||'';
+  document.getElementById('l-amount').value=loan.amount;
+  document.getElementById('l-rate').value=loan.rate||'';
+  document.getElementById('l-status').value=loan.status||'Active';
+  document.getElementById('l-notes').value=loan.notes||'';
+  document.getElementById('btn-delete-loan').style.display='block';
+  updateLoanCalc(loan); document.getElementById('modal-loan').classList.add('open');
+}
+function updateLoanCalc(loan) {
+  const amt=parseFloat(document.getElementById('l-amount').value)||0;
+  const paid=loan?loanPaid(loan):0, bal=Math.max(0,amt-paid);
+  document.getElementById('lc-borrowed').textContent=fmt(amt);
+  document.getElementById('lc-paid').textContent=fmt(paid);
+  document.getElementById('lc-balance').textContent=fmt(bal);
+  document.getElementById('lc-balance').className='calc-item-val '+(bal>0?'neg':'pos');
+}
+function saveLoan() {
+  const name=document.getElementById('l-name').value.trim(); if(!name){document.getElementById('l-name').focus();return;}
+  const editId=document.getElementById('loan-edit-id').value;
+  const existing=editId?loans.find(l=>l.id===editId):null;
+  const loan={id:editId||uid(),name,dateReceived:document.getElementById('l-date').value,amount:parseFloat(document.getElementById('l-amount').value)||0,rate:parseFloat(document.getElementById('l-rate').value)||0,status:document.getElementById('l-status').value,notes:document.getElementById('l-notes').value.trim(),payments:existing?existing.payments:[]};
+  if(editId){const idx=loans.findIndex(l=>l.id===editId);if(idx>-1)loans[idx]=loan;}else loans.unshift(loan);
+  saveLoans(); closeModal('modal-loan'); renderLoans();
+  showToast(editId?'✓ Loan updated':'✓ Loan added');
+}
+async function confirmDeleteLoan() {
+  const ok=await showConfirm('Delete loan?','All payment history will be lost.'); if(!ok) return;
+  const id=document.getElementById('loan-edit-id').value;
+  loans=loans.filter(l=>l.id!==id);
+  saveLoans(); closeModal('modal-loan'); renderLoans(); showToast('Loan deleted');
+}
+
+// ── Loan Detail ────────────────────────────────────────────
+function openLoanDetail(id) {
+  currentLoanId=id;
+  document.getElementById('p-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('p-amount').value='';
+  document.getElementById('p-note').value='';
+  renderLoanDetail(); document.getElementById('modal-loan-detail').classList.add('open');
+}
+function renderLoanDetail() {
+  const loan=loans.find(l=>l.id===currentLoanId); if(!loan) return;
+  const bal=loanBalance(loan), paid=loanPaid(loan);
+  const pct=loan.amount>0?Math.min(100,Math.round((paid/Number(loan.amount))*100)):0;
+  const off=loan.status==='Paid Off'||bal===0;
+  document.getElementById('ld-name').textContent=loan.name;
+  document.getElementById('ld-balance').textContent=fmt(bal);
+  document.getElementById('ld-progress').textContent=pct+'% paid off';
+  document.getElementById('ld-date').textContent=loan.dateReceived?new Date(loan.dateReceived).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'—';
+  document.getElementById('ld-amount').textContent=fmt(loan.amount);
+  document.getElementById('ld-paid').textContent=fmt(paid);
+  document.getElementById('ld-rate').textContent=(loan.rate||0)+'%';
+  document.getElementById('ld-pct').textContent=pct+'%';
+  document.getElementById('ld-bar').style.width=pct+'%';
+  const hero=document.getElementById('ld-hero');
+  hero.style.background=off?'linear-gradient(135deg,rgba(26,158,110,.08),rgba(26,158,110,.04))':'linear-gradient(135deg,rgba(201,48,48,.06),rgba(196,103,15,.04))';
+  hero.style.borderColor=off?'rgba(26,158,110,.25)':'rgba(201,48,48,.2)';
+  document.getElementById('ld-balance').style.color=off?'var(--accent2)':'var(--danger)';
+  const ph=document.getElementById('ld-payments');
+  const pmts=[...(loan.payments||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  ph.innerHTML=!pmts.length
+    ?'<div class="pnl-row"><div class="pnl-row-label" style="color:var(--text3)">No payments recorded yet</div></div>'
+    :pmts.map(p=>`<div class="pnl-row"><div><div class="pnl-row-label">${esc(p.note||'Payment')}</div><div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${p.date?new Date(p.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}</div></div><div style="display:flex;align-items:center;gap:10px"><div class="pnl-row-val pos">${fmt(p.amount)}</div><button onclick="removePayment('${p.pid}')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:2px 6px;min-width:32px;min-height:32px">×</button></div></div>`).join('');
+}
+
+// FIX #4: cap payment at remaining balance  FIX #9: stable pid
+function addPayment() {
+  const loan=loans.find(l=>l.id===currentLoanId); if(!loan) return;
+  let amt=parseFloat(document.getElementById('p-amount').value);
+  if(!amt||amt<=0){document.getElementById('p-amount').focus();return;}
+  const rem=loanBalance(loan);
+  if(amt>rem){amt=rem;showToast('Capped at remaining balance');}
+  if(!loan.payments)loan.payments=[];
+  loan.payments.push({pid:uid(),date:document.getElementById('p-date').value,amount:amt,note:document.getElementById('p-note').value.trim()||'Payment'});
+  if(loanBalance(loan)===0)loan.status='Paid Off';
+  document.getElementById('p-amount').value='';
+  document.getElementById('p-note').value='';
+  saveLoans(); renderLoanDetail(); renderLoans(); showToast('✓ Payment recorded');
+}
+
+// FIX #9: remove by stable pid
+function removePayment(pid) {
+  const loan=loans.find(l=>l.id===currentLoanId); if(!loan) return;
+  loan.payments=(loan.payments||[]).filter(p=>p.pid!==pid);
+  if(loanBalance(loan)>0&&loan.status==='Paid Off')loan.status='Active';
+  saveLoans(); renderLoanDetail(); renderLoans(); showToast('Payment removed');
+}
+function editCurrentLoan() { closeModal('modal-loan-detail'); setTimeout(()=>openEditLoanModal(currentLoanId),180); }
+
+// ── Export / Import CSV ────────────────────────────────────
+function exportCSV() {
+  const rows=inventory.map(i=>[
+    i.name, i.category, i.unit, i.qty, i.reorderPt??5,
+    i.cost, i.labor,
+    i.suggestedPrice??i.salePrice??0,
+    i.notes||''
+  ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
+  const csv=['Name,Category,Unit,Qty,ReorderPt,Cost,Labor,SuggestedPrice,Notes',...rows].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`mobbs-enterprise-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); showToast('✓ CSV exported');
+}
+
+function importCSV(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    const lines=ev.target.result.trim().split('\n').slice(1);
+    if(!lines.length){showToast('No data in file');return;}
+    const ok=await showConfirm('Import CSV?',`Add ${lines.length} item(s) to inventory?`,'Import');
+    if(!ok){e.target.value='';return;}
+    let n=0;
+    lines.forEach(line=>{
+      const cols=line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)||[];
+      const c=cols.map(v=>v.replace(/^"|"$/g,'').replace(/""/g,'"'));
+      if(!c[0])return;
+      // Support both new (SuggestedPrice col 7, Notes col 8) and
+      // old format (InitPrice col 7, SalePrice col 8, Notes col 9)
+      const isOldFormat = c.length >= 10;
+      inventory.unshift({
+        id:uid(),
+        name:c[0]||'', category:c[1]||'Art', unit:c[2]||'piece',
+        qty:parseInt(c[3])||0, reorderPt:parseInt(c[4])||5,
+        cost:parseFloat(c[5])||0, labor:parseFloat(c[6])||0,
+        suggestedPrice: isOldFormat ? parseFloat(c[8])||0 : parseFloat(c[7])||0,
+        notes: isOldFormat ? c[9]||'' : c[8]||'',
+        sales:[],
+      });
+      n++;
+    });
+    saveInventory(); renderList(); showToast(`✓ ${n} item${n!==1?'s':''} imported`);
+    e.target.value='';
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════════════
+// REPORTS
+// ═══════════════════════════════════════════════════════════
+let rptPeriod = 'ytd';
+const rptCharts = {};   // holds Chart.js instances so we can destroy/recreate
+
+function setRptPeriod(p) {
+  rptPeriod = p;
+  document.querySelectorAll('[id^="rpt-period-"]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('rpt-period-'+p).classList.add('active');
+  renderReports();
+}
+
+function getRptBounds() {
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  if (rptPeriod === 'all')   return { start: new Date(2000,0,1), end: now, label: 'All Time' };
+  if (rptPeriod === 'ytd')   return { start: new Date(y,0,1),    end: now, label: `${y} Year to Date` };
+  if (rptPeriod === 'month') {
+    const lb = now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    return { start: new Date(y,m,1), end: new Date(y,m+1,0,23,59,59), label: lb };
+  }
+  // last month
+  const lm = m===0?11:m-1, ly = m===0?y-1:y;
+  const lb  = new Date(ly,lm,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  return { start: new Date(ly,lm,1), end: new Date(ly,lm+1,0,23,59,59), label: lb };
+}
+
+// Get all sale events in bounds, each with item reference
+function getRptSales(bounds) {
+  return inventory.flatMap(item =>
+    (item.sales||[])
+      .filter(sl => { if(!sl.date) return false; const d=new Date(sl.date); return d>=bounds.start && d<=bounds.end; })
+      .map(sl => ({ ...sl, item }))
+  );
+}
+
+// Group sales by week or day label for the line chart
+function groupSalesByTime(sales, bounds) {
+  // Determine bucket size based on date range
+  const days = (bounds.end - bounds.start) / 86400000;
+  const isDaily = days <= 62;   // month or less → daily; else weekly
+
+  const buckets = {};
+  sales.forEach(sl => {
+    const d = new Date(sl.date);
+    let key;
+    if (isDaily) {
+      key = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    } else {
+      // ISO week number
+      const dow = d.getDay(), diff = d.getDate() - dow + (dow===0?-6:1);
+      const mon = new Date(d); mon.setDate(diff);
+      key = 'Wk '+mon.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    }
+    if (!buckets[key]) buckets[key] = { revenue:0, profit:0 };
+    buckets[key].revenue += Number(sl.revenue);
+    buckets[key].profit  += Number(sl.profit);
+  });
+
+  // Sort chronologically by first date seen in each bucket
+  const salesSorted = [...sales].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const orderedKeys = [];
+  salesSorted.forEach(sl=>{
+    const d = new Date(sl.date);
+    let key;
+    if (isDaily) {
+      key = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    } else {
+      const dow=d.getDay(), diff=d.getDate()-dow+(dow===0?-6:1);
+      const mon=new Date(d); mon.setDate(diff);
+      key='Wk '+mon.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    }
+    if (!orderedKeys.includes(key)) orderedKeys.push(key);
+  });
+
+  return { labels: orderedKeys, revenue: orderedKeys.map(k=>buckets[k].revenue), profit: orderedKeys.map(k=>buckets[k].profit) };
+}
+
+// Chart.js defaults — warm light palette
+const CHART_COLORS = {
+  green:  '#1a9e6e', greenFill: 'rgba(26,158,110,.12)',
+  purple: '#5b4fcf', purpleFill:'rgba(91,79,207,.12)',
+  orange: '#c4670f', orangeFill:'rgba(196,103,15,.12)',
+  red:    '#c93030', redFill:   'rgba(201,48,48,.12)',
+  border: '#d8d0c6', text: '#5a5248', grid: 'rgba(0,0,0,.05)',
+};
+
+function chartDefaults() {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: CHART_COLORS.text, font: { family:"'DM Mono',monospace", size:10 }, boxWidth:10, padding:12 } }, tooltip: { backgroundColor:'#fff', titleColor:'#1a1612', bodyColor:'#5a5248', borderColor: CHART_COLORS.border, borderWidth:1, padding:10, titleFont:{family:"'Syne',sans-serif",weight:'700',size:12}, bodyFont:{family:"'DM Mono',monospace",size:11} } },
+    scales: {
+      x: { grid:{color:CHART_COLORS.grid}, ticks:{color:CHART_COLORS.text, font:{family:"'DM Mono',monospace",size:10}}, border:{color:CHART_COLORS.border} },
+      y: { grid:{color:CHART_COLORS.grid}, ticks:{color:CHART_COLORS.text, font:{family:"'DM Mono',monospace",size:10}, callback: v=>'$'+(Math.abs(v)>=1000?(v/1000).toFixed(1)+'k':v.toFixed(0))}, border:{color:CHART_COLORS.border} },
+    },
+  };
+}
+
+function makeChart(id, config) {
+  if (rptCharts[id]) { rptCharts[id].destroy(); delete rptCharts[id]; }
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  rptCharts[id] = new Chart(ctx, config);
+}
+
+function renderReports() {
+  updateClock();
+  const bounds = getRptBounds();
+  const sales  = getRptSales(bounds);
+
+  // KPIs
+  const revenue = sales.reduce((s,sl)=>s+Number(sl.revenue), 0);
+  const profit  = sales.reduce((s,sl)=>s+Number(sl.profit),  0);
+  const units   = sales.reduce((s,sl)=>s+Number(sl.qty),     0);
+  const margin  = revenue>0 ? Math.round((profit/revenue)*100) : 0;
+
+  document.getElementById('rpt-revenue').textContent = fmtK(revenue);
+  document.getElementById('rpt-profit').textContent  = fmtK(profit);
+  document.getElementById('rpt-units').textContent   = units;
+  document.getElementById('rpt-margin').textContent  = margin+'%';
+
+  if (!sales.length) {
+    // Clear all charts and show empty state
+    ['chart-revenue','chart-category','chart-items','chart-exp'].forEach(id=>{
+      if(rptCharts[id]){rptCharts[id].destroy();delete rptCharts[id];}
+    });
+    // Show "no data" overlay on first chart area
+    const ctx = document.getElementById('chart-revenue');
+    if(ctx) { const p=ctx.parentElement; p.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;font-family:var(--font-main);">No sales in this period</div>'; }
+    return;
+  }
+
+  // ── Chart 1: Revenue & Profit over time ──────────────────
+  const timeData = groupSalesByTime(sales, bounds);
+  makeChart('chart-revenue', {
+    type: 'line',
+    data: {
+      labels: timeData.labels,
+      datasets: [
+        { label:'Revenue', data: timeData.revenue, borderColor: CHART_COLORS.green,  backgroundColor: CHART_COLORS.greenFill,  fill:true, tension:.35, pointRadius:3, pointBackgroundColor: CHART_COLORS.green },
+        { label:'Profit',  data: timeData.profit,  borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleFill, fill:true, tension:.35, pointRadius:3, pointBackgroundColor: CHART_COLORS.purple },
+      ],
+    },
+    options: chartDefaults(),
+  });
+
+  // ── Chart 2: Revenue by Category (donut) ─────────────────
+  const byCat = {};
+  sales.forEach(sl => {
+    const cat = sl.item.category||'Other';
+    byCat[cat] = (byCat[cat]||0) + Number(sl.revenue);
+  });
+  const catLabels = Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]);
+  const palette = [CHART_COLORS.green, CHART_COLORS.purple, CHART_COLORS.orange, CHART_COLORS.red, '#3b82f6','#f59e0b','#10b981','#8b5cf6','#ef4444','#06b6d4'];
+  makeChart('chart-category', {
+    type: 'doughnut',
+    data: {
+      labels: catLabels,
+      datasets:[{ data: catLabels.map(k=>byCat[k]), backgroundColor: catLabels.map((_,i)=>palette[i%palette.length]), borderColor:'#fff', borderWidth:2, hoverOffset:6 }],
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, cutout:'60%',
+      plugins: {
+        legend:{ position:'bottom', labels:{ color:CHART_COLORS.text, font:{family:"'DM Mono',monospace",size:10}, boxWidth:10, padding:10 } },
+        tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: $${ctx.parsed.toFixed(2)}` }, backgroundColor:'#fff', titleColor:'#1a1612', bodyColor:'#5a5248', borderColor:CHART_COLORS.border, borderWidth:1 },
+      },
+    },
+  });
+
+  // ── Chart 3: Top items by revenue (horizontal bar) ────────
+  const byItem = {};
+  sales.forEach(sl => {
+    const k = sl.item.name;
+    if(!byItem[k]) byItem[k] = {revenue:0, profit:0};
+    byItem[k].revenue += Number(sl.revenue);
+    byItem[k].profit  += Number(sl.profit);
+  });
+  const itemsSorted = Object.entries(byItem).sort((a,b)=>b[1].revenue-a[1].revenue).slice(0,8);
+  const barOpts = { ...chartDefaults(), indexAxis:'y' };
+  barOpts.scales.y.ticks = { color:CHART_COLORS.text, font:{family:"'DM Mono',monospace",size:10} };
+  barOpts.scales.x.ticks.callback = v=>'$'+(Math.abs(v)>=1000?(v/1000).toFixed(1)+'k':v.toFixed(0));
+  makeChart('chart-items', {
+    type:'bar',
+    data:{
+      labels: itemsSorted.map(([k])=>k.length>18?k.slice(0,16)+'…':k),
+      datasets:[
+        { label:'Revenue', data:itemsSorted.map(([,v])=>v.revenue), backgroundColor:CHART_COLORS.greenFill, borderColor:CHART_COLORS.green, borderWidth:1.5, borderRadius:4 },
+        { label:'Profit',  data:itemsSorted.map(([,v])=>v.profit),  backgroundColor:CHART_COLORS.purpleFill, borderColor:CHART_COLORS.purple, borderWidth:1.5, borderRadius:4 },
+      ],
+    },
+    options: barOpts,
+  });
+
+  // ── Chart 4: Revenue vs Expenses (grouped bar) ────────────
+  const expPaid = expenses.reduce((s,e)=>{
+    if (e.frequency==='One-Time') {
+      if(!e.due) return s;
+      const d=new Date(e.due);
+      return d>=bounds.start&&d<=bounds.end ? s+Number(e.amount||0) : s;
+    }
+    return s + expCostInPeriod(e, bounds);
+  }, 0);
+  const monthlyExpActive = expenses.filter(e=>e.status==='Active'&&e.frequency!=='One-Time').reduce((s,e)=>s+expMonthly(e),0);
+  const expProjected = expOccurrences ? expPaid : monthlyExpActive; // fallback
+  const loanPaidAmt  = loans.reduce((s,l)=>s+loanPaid(l),0);
+
+  makeChart('chart-exp',{
+    type:'bar',
+    data:{
+      labels:['Revenue','Profit','Exp Paid','Exp Projected','Loan Payments'],
+      datasets:[{
+        data:[revenue, profit, expPaid, expProjected, loanPaidAmt],
+        backgroundColor:[CHART_COLORS.greenFill, CHART_COLORS.purpleFill, CHART_COLORS.orangeFill, CHART_COLORS.orangeFill, CHART_COLORS.redFill],
+        borderColor:   [CHART_COLORS.green,      CHART_COLORS.purple,     CHART_COLORS.orange,     CHART_COLORS.orange,     CHART_COLORS.red],
+        borderWidth:1.5, borderRadius:4,
+      }],
+    },
+    options:{
+      ...chartDefaults(),
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>' $'+ctx.parsed.y.toFixed(2) }, backgroundColor:'#fff',titleColor:'#1a1612',bodyColor:'#5a5248',borderColor:CHART_COLORS.border,borderWidth:1 } },
+    },
+  });
+}
+
+// ── Report Export ──────────────────────────────────────────
+function exportReportCSV() {
+  const bounds = getRptBounds();
+  const sales  = getRptSales(bounds);
+  if(!sales.length){showToast('No sales data to export');return;}
+
+  const headers = ['Date','Item','Category','Unit','Qty','Price Each','Revenue','Cost','Profit'];
+  const rows = sales
+    .sort((a,b)=>new Date(a.date)-new Date(b.date))
+    .map(sl=>[
+      sl.date||'', sl.item.name, sl.item.category, sl.item.unit||'',
+      sl.qty, sl.priceEach.toFixed(2), sl.revenue.toFixed(2),
+      ((Number(sl.item.cost)+Number(sl.item.labor))*Number(sl.qty)).toFixed(2),
+      sl.profit.toFixed(2),
+    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `mobbs-enterprise-report-${bounds.label.replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('✓ Report CSV exported');
+}
+
+function exportReportPDF() {
+  const bounds = getRptBounds();
+  const sales  = getRptSales(bounds);
+  const revenue= sales.reduce((s,sl)=>s+Number(sl.revenue),0);
+  const profit = sales.reduce((s,sl)=>s+Number(sl.profit),0);
+  const units  = sales.reduce((s,sl)=>s+Number(sl.qty),0);
+  const margin = revenue>0?Math.round((profit/revenue)*100):0;
+
+  // Category breakdown
+  const byCat={};
+  sales.forEach(sl=>{ const c=sl.item.category||'Other'; if(!byCat[c])byCat[c]={rev:0,pft:0,units:0}; byCat[c].rev+=Number(sl.revenue); byCat[c].pft+=Number(sl.profit); byCat[c].units+=Number(sl.qty); });
+  const catTable = Object.entries(byCat).sort((a,b)=>b[1].rev-a[1].rev)
+    .map(([cat,d])=>`<tr><td>${cat}</td><td>${d.units}</td><td>$${d.rev.toFixed(2)}</td><td>$${d.pft.toFixed(2)}</td><td>${d.rev>0?Math.round(d.pft/d.rev*100):0}%</td></tr>`).join('');
+
+  // Top items
+  const byItem={};
+  sales.forEach(sl=>{ const k=sl.item.name; if(!byItem[k])byItem[k]={rev:0,pft:0,units:0}; byItem[k].rev+=Number(sl.revenue); byItem[k].pft+=Number(sl.profit); byItem[k].units+=Number(sl.qty); });
+  const itemTable = Object.entries(byItem).sort((a,b)=>b[1].rev-a[1].rev).slice(0,10)
+    .map(([name,d])=>`<tr><td>${name}</td><td>${d.units}</td><td>$${d.rev.toFixed(2)}</td><td>$${d.pft.toFixed(2)}</td></tr>`).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Mobbs Enterprise Report</title>
+  <style>
+    body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1612;padding:32px;max-width:720px;margin:0 auto;}
+    h1{font-size:24px;font-weight:800;margin-bottom:4px;}
+    .period{font-size:13px;color:#5a5248;margin-bottom:28px;}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;}
+    .kpi{background:#f5f2ee;border-radius:10px;padding:14px;text-align:center;}
+    .kpi-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9a9080;margin-bottom:6px;}
+    .kpi-val{font-size:22px;font-weight:700;color:#1a1612;}
+    h2{font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9a9080;margin:24px 0 10px;}
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    th{text-align:left;padding:8px 10px;background:#f5f2ee;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#9a9080;}
+    td{padding:9px 10px;border-bottom:1px solid #ede9e3;color:#1a1612;}
+    tr:last-child td{border-bottom:none;}
+    .footer{margin-top:40px;font-size:11px;color:#9a9080;text-align:center;}
+  </style></head><body>
+  <h1>Mobbs Enterprise Sales Report</h1>
+  <div class="period">${bounds.label} · Generated ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-label">Revenue</div><div class="kpi-val">$${revenue.toFixed(2)}</div></div>
+    <div class="kpi"><div class="kpi-label">Profit</div><div class="kpi-val">$${profit.toFixed(2)}</div></div>
+    <div class="kpi"><div class="kpi-label">Units Sold</div><div class="kpi-val">${units}</div></div>
+    <div class="kpi"><div class="kpi-label">Margin</div><div class="kpi-val">${margin}%</div></div>
+  </div>
+  <h2>By Category</h2>
+  <table><thead><tr><th>Category</th><th>Units</th><th>Revenue</th><th>Profit</th><th>Margin</th></tr></thead><tbody>${catTable||'<tr><td colspan="5" style="color:#9a9080">No data</td></tr>'}</tbody></table>
+  <h2>Top Items</h2>
+  <table><thead><tr><th>Item</th><th>Units</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${itemTable||'<tr><td colspan="4" style="color:#9a9080">No data</td></tr>'}</tbody></table>
+  <div class="footer">Mobbs Enterprise · Booth Inventory &amp; Sales Tracker</div>
+  </body></html>`;
+
+  const win = window.open('','_blank');
+  if(win){ win.document.write(html); win.document.close(); setTimeout(()=>win.print(),600); }
+  else { showToast('Allow popups to export PDF'); }
+}
+
+// ═══════════════════════════════════════════════════════════
+// BACKUP & RESTORE
+// ═══════════════════════════════════════════════════════════
+
+let _pendingRestoreData = null; // holds parsed JSON awaiting user confirm
+
+let _cachedBackupTimestamp = null;
+
+async function getBackupTimestamp() {
+  try {
+    const res = await fetch(`${API}/backup-timestamp`);
+    const data = await res.json();
+    _cachedBackupTimestamp = data.timestamp || null;
+  } catch(e) { console.error('Get backup timestamp error', e); }
+  return _cachedBackupTimestamp;
+}
+
+async function setBackupTimestamp() {
+  const ts = new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  _cachedBackupTimestamp = ts;
+  fetch(`${API}/backup-timestamp`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({timestamp:ts}) }).catch(e=>console.error('Set backup timestamp error',e));
+  return ts;
+}
+
+async function updateBackupStatus() {
+  const ts = await getBackupTimestamp();
+  const label = ts ? `Last backup: ${ts}` : 'Last backup: never — back up now!';
+  const color = ts ? 'var(--text3)' : 'var(--danger)';
+  const statusEl = document.getElementById('backup-status');
+  const dateEl   = document.getElementById('backup-date');
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.style.color = color; }
+  if (dateEl)   dateEl.textContent = ts || 'never';
+}
+
+async function openBackupModal() {
+  // Populate counts
+  const salesCount = inventory.reduce((s,i)=>s+(i.sales||[]).length, 0);
+  const g = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  g('bk-inv-count',   inventory.length);
+  g('bk-exp-count',   expenses.length);
+  g('bk-loan-count',  loans.length);
+  g('bk-sales-count', salesCount);
+
+  const ts = await getBackupTimestamp();
+  const lastEl = document.getElementById('bk-last-backup');
+  if (lastEl) lastEl.textContent = ts ? `Last backup: ${ts}` : 'Last backup: never';
+
+  // Hide restore preview
+  const prev = document.getElementById('bk-preview');
+  if (prev) prev.style.display = 'none';
+  _pendingRestoreData = null;
+
+  document.getElementById('modal-backup').classList.add('open');
+}
+
+async function downloadBackup() {
+  const backup = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    inventory,
+    expenses,
+    loans,
+  };
+
+  const json = JSON.stringify(backup, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], {type:'application/json'}));
+  const date = new Date().toISOString().slice(0,10);
+  a.download = `mobbs-enterprise-backup-${date}.json`;
+  a.click();
+
+  const ts = await setBackupTimestamp();
+  const lastEl = document.getElementById('bk-last-backup');
+  if (lastEl) lastEl.textContent = `Last backup: ${ts}`;
+  updateBackupStatus();
+  showToast('✓ Backup downloaded');
+}
+
+function restoreBackup(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+
+      // Validate structure
+      if (!data.inventory || !Array.isArray(data.inventory)) {
+        showToast('⚠ Invalid backup file'); e.target.value=''; return;
+      }
+
+      _pendingRestoreData = data;
+
+      // Show preview
+      const salesCount = (data.inventory||[]).reduce((s,i)=>s+(i.sales||[]).length, 0);
+      const expDate = data.exportedAt
+        ? new Date(data.exportedAt).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})
+        : 'Unknown date';
+
+      const previewEl = document.getElementById('bk-preview-content');
+      if (previewEl) previewEl.innerHTML = `
+        <div class="pnl-row"><div class="pnl-row-label">Backup date</div><div style="font-family:var(--font-mono);font-size:13px;color:var(--text2)">${expDate}</div></div>
+        <div class="pnl-row"><div class="pnl-row-label">Inventory items</div><div class="pnl-row-val">${(data.inventory||[]).length}</div></div>
+        <div class="pnl-row"><div class="pnl-row-label">Sales records</div><div class="pnl-row-val">${salesCount}</div></div>
+        <div class="pnl-row"><div class="pnl-row-label">Expenses</div><div class="pnl-row-val">${(data.expenses||[]).length}</div></div>
+        <div class="pnl-row"><div class="pnl-row-label">Loans</div><div class="pnl-row-val">${(data.loans||[]).length}</div></div>
+      `;
+
+      const prev = document.getElementById('bk-preview');
+      if (prev) prev.style.display = 'block';
+
+    } catch {
+      showToast('⚠ Could not read backup file');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+async function confirmRestore() {
+  if (!_pendingRestoreData) return;
+
+  const ok = await showConfirm(
+    'Replace all data?',
+    'This will overwrite your current inventory, expenses, and loans with the backup. This cannot be undone.',
+    'Restore'
+  );
+  if (!ok) return;
+
+  // Apply the backup
+  inventory = _pendingRestoreData.inventory || [];
+  expenses  = _pendingRestoreData.expenses  || [];
+  loans     = _pendingRestoreData.loans     || [];
+
+  saveInventory();
+  saveExpenses();
+  saveLoans();
+
+  _pendingRestoreData = null;
+  closeModal('modal-backup');
+  renderList();
+  updateBackupStatus();
+  showToast('✓ Data restored from backup');
+}
+
+async function deleteAllData() {
+  const ok = await showConfirm(
+    'Delete all data?',
+    'This will permanently remove all inventory, sales, expenses, and loans from the server. Download a backup first. This cannot be undone.',
+    'Delete Everything'
+  );
+  if (!ok) return;
+
+  try {
+    showToast('Deleting…');
+    const res = await fetch(`${API}/reset`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+
+    // Reset in-memory state
+    inventory = [];
+    expenses  = [];
+    loans     = [];
+
+    closeModal('modal-backup');
+    renderList();
+    showToast('✓ All data deleted from server');
+  } catch (err) {
+    console.error('Delete all error:', err);
+    showToast('⚠ Delete failed — check connection');
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup'].forEach(initSwipeDismiss);
+  populateUnitSelect('print');
+  await loadAllData();
+  renderList();
+  updateBackupStatus();
+});
+</script>
+
+<!-- Add/Edit Expense Modal -->
+<div class="modal-overlay" id="modal-expense">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title" id="exp-modal-title">Add Expense</div><button class="modal-close" onclick="closeModal('modal-expense')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="exp-edit-id">
+      <div class="form-section">
+        <div class="form-section-title">Expense Details</div>
+        <div class="form-group"><label class="form-label">Expense Name</label><input class="form-input" type="text" id="e-name" placeholder="e.g. Booth Rent" autocomplete="off"></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select class="form-input" id="e-category">
+              <option value="Rent & Venue">Rent &amp; Venue</option>
+              <option value="Supplies">Supplies</option>
+              <option value="Packaging">Packaging</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Transportation">Transportation</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Software & Tools">Software &amp; Tools</option>
+              <option value="Insurance">Insurance</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Frequency</label>
+            <select class="form-input" id="e-frequency" onchange="updateExpenseCalc()">
+              <option value="Monthly">Monthly</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Annual">Annual</option>
+              <option value="Quarterly">Quarterly</option>
+              <option value="One-Time">One-Time</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Amount ($)</label><input class="form-input" type="number" id="e-amount" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateExpenseCalc()"></div>
+          <div class="form-group"><label class="form-label" id="e-due-label">Date Paid</label><input class="form-input" type="date" id="e-due"></div>
+        </div>
+        <!-- Recurring-only fields -->
+        <div id="e-recurring-fields">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Start Date</label><input class="form-input" type="date" id="e-start"></div>
+            <div class="form-group"><label class="form-label" id="e-payday-label">Payment Day</label><input class="form-input" type="number" id="e-payday" placeholder="e.g. 1" min="1" max="31" inputmode="numeric"></div>
+          </div>
+        </div>
+        <div class="form-group" id="e-status-wrap">
+          <label class="form-label">Status</label>
+          <select class="form-input" id="e-status">
+            <option value="Active">Active</option>
+            <option value="Paused">Paused</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="e-notes" placeholder="e.g. Paid on the 1st of each month" autocomplete="off"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Cost Projection</div>
+        <div class="calc-preview">
+          <div class="calc-item"><div class="calc-item-label">Per Month</div><div class="calc-item-val neg" id="ec-monthly">$0.00</div></div>
+          <div class="calc-item"><div class="calc-item-label">Per Quarter</div><div class="calc-item-val neg" id="ec-quarterly">$0.00</div></div>
+          <div class="calc-item"><div class="calc-item-label">Per Year</div><div class="calc-item-val neg" id="ec-annual">$0.00</div></div>
+        </div>
+      </div>
+      <button class="btn-save" onclick="saveExpense()">Save Expense</button>
+      <button class="btn-delete" id="btn-delete-expense" style="display:none" onclick="confirmDeleteExpense()">Delete Expense</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Expense Detail Modal -->
+<div class="modal-overlay" id="modal-expense-detail">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title" id="ed-name">Expense</div><button class="modal-close" onclick="closeModal('modal-expense-detail')">✕</button></div>
+    <div class="modal-body">
+      <div id="ed-hero" class="profit-summary" style="background:linear-gradient(135deg,rgba(201,48,48,.06),rgba(196,103,15,.04));border-color:rgba(201,48,48,.2);">
+        <div class="profit-label" style="color:var(--danger)" id="ed-hero-label">Amount</div>
+        <div class="profit-value" id="ed-amount" style="color:var(--danger)">$0.00</div>
+        <div class="profit-margin" id="ed-frequency">Monthly</div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-stat"><div class="detail-stat-label">Category</div><div class="detail-stat-value" style="font-size:14px;line-height:1.3" id="ed-category">—</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Status</div><div class="detail-stat-value" id="ed-status-val" style="font-size:16px">—</div></div>
+        <div class="detail-stat" id="ed-monthly-wrap"><div class="detail-stat-label">Monthly Cost</div><div class="detail-stat-value orange" id="ed-monthly">$0.00</div></div>
+        <div class="detail-stat" id="ed-annual-wrap"><div class="detail-stat-label">Annual Cost</div><div class="detail-stat-value orange" id="ed-annual">$0.00</div></div>
+      </div>
+
+      <!-- Recurring schedule info -->
+      <div id="ed-recurring-section">
+        <div class="detail-grid" style="margin-bottom:14px;">
+          <div class="detail-stat"><div class="detail-stat-label">Start Date</div><div class="detail-stat-value" style="font-size:14px" id="ed-start">—</div></div>
+          <div class="detail-stat"><div class="detail-stat-label">Payment Day</div><div class="detail-stat-value accent" id="ed-payday">—</div></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);">Payment Schedule</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--accent2)" id="ed-total-paid-label"></div>
+        </div>
+        <div id="ed-schedule" class="pnl-card"></div>
+      </div>
+
+      <!-- One-Time confirmation -->
+      <div id="ed-onetime-section" style="display:none;">
+        <div class="detail-grid">
+          <div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Date Paid</div><div class="detail-stat-value" style="font-size:16px" id="ed-due">—</div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent2);margin-bottom:6px;">✓ Recorded</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5;">This one-time expense was recorded on the date entered. No further payments needed.</div>
+        </div>
+      </div>
+
+      <button class="btn-save" onclick="editCurrentExpense()" style="margin-top:14px;">Edit Expense</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Backup & Restore Modal -->
+<div class="modal-overlay" id="modal-backup">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Backup &amp; Restore</div>
+      <button class="modal-close" onclick="closeModal('modal-backup')">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Last backup status -->
+      <div id="bk-status-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
+        <div style="font-size:28px;line-height:1;">🔒</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);">Data Protection</div>
+          <div style="font-size:12px;color:var(--text3);font-family:var(--font-mono);margin-top:2px;" id="bk-last-backup">Last backup: never</div>
+        </div>
+      </div>
+
+      <!-- Data summary -->
+      <div class="detail-grid" style="margin-bottom:20px;">
+        <div class="detail-stat"><div class="detail-stat-label">Inventory</div><div class="detail-stat-value" id="bk-inv-count">0</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Expenses</div><div class="detail-stat-value" id="bk-exp-count">0</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Loans</div><div class="detail-stat-value" id="bk-loan-count">0</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Sales Records</div><div class="detail-stat-value" id="bk-sales-count">0</div></div>
+      </div>
+
+      <!-- Backup -->
+      <div class="form-section" style="padding-top:0;border-bottom:none;margin-bottom:0;">
+        <div class="form-section-title">💾 Save Backup</div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px;">Download a complete snapshot of all your inventory, sales, expenses, and loans as a JSON file. Store it in iCloud Drive, Google Drive, or email it to yourself.</p>
+        <button class="btn-save" onclick="downloadBackup()">⬇ Download Backup (.json)</button>
+      </div>
+
+      <div style="height:16px;border-bottom:1px solid var(--border);margin-bottom:16px;"></div>
+
+      <!-- Restore -->
+      <div class="form-section" style="padding-top:0;border-bottom:none;margin-bottom:0;">
+        <div class="form-section-title" style="color:var(--danger);">⚠ Restore from Backup</div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px;">Load a previously saved <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:4px;">.json</code> backup file. <strong>This will replace all current data.</strong> Make sure to download a fresh backup first if you want to keep your current data.</p>
+        <button class="btn-delete" style="margin-top:0;" onclick="document.getElementById('restore-file').click()">⬆ Choose Backup File to Restore</button>
+      </div>
+
+      <!-- Restore preview (hidden until file chosen) -->
+      <div id="bk-preview" style="display:none;margin-top:16px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:10px;">Backup Preview</div>
+        <div class="pnl-card" id="bk-preview-content"></div>
+        <button class="btn-save" id="bk-confirm-restore" style="background:linear-gradient(135deg,var(--danger),#a02020);margin-top:12px;" onclick="confirmRestore()">Replace All Data with This Backup</button>
+      </div>
+
+      <!-- Danger Zone -->
+      <div style="margin-top:20px;border:1.5px solid var(--danger);border-radius:var(--radius-sm);padding:16px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--danger);margin-bottom:8px;">⚠ Danger Zone</div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px;">Permanently delete <strong>all data</strong> from the server — inventory, sales, expenses, and loans. This cannot be undone. Download a backup first.</p>
+        <button class="btn-delete" style="margin-top:0;" onclick="deleteAllData()">🗑 Delete All Data from Server</button>
+      </div>
+
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
