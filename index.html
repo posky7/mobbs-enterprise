@@ -458,6 +458,7 @@ select.form-input option { background:#fff; color:#1a1612; }
         <div class="form-row">
           <div class="form-group"><label class="form-label">Category</label>
             <select class="form-input" id="f-category" onchange="onCategoryChange()">
+              <option value="">Select category</option>
               <option value="Art">Art</option>
               <option value="Ceramic Tableware">Ceramic Tableware</option>
               <option value="Clear Glassware">Clear Glassware</option>
@@ -469,7 +470,7 @@ select.form-input option { background:#fff; color:#1a1612; }
           <div class="form-group"><label class="form-label">Unit Type</label><select class="form-input" id="f-unit"></select></div>
         </div>
         <div class="form-group"><label class="form-label">Quantity in Stock</label><input class="form-input" type="number" id="f-qty" placeholder="0" min="0" inputmode="numeric"></div>
-        <div class="reorder-row"><span class="reorder-label">🔔 Low stock alert when qty ≤</span><input class="reorder-input" type="number" id="f-reorder" value="5" min="0" inputmode="numeric"></div>
+        <div class="reorder-row"><span class="reorder-label">🔔 Low stock alert when qty ≤</span><input class="reorder-input" type="number" id="f-reorder" placeholder="Optional" min="0" inputmode="numeric"></div>
       </div>
       <div class="form-section">
         <div class="form-section-title">Pricing &amp; Costs</div>
@@ -521,7 +522,7 @@ select.form-input option { background:#fff; color:#1a1612; }
       <div class="form-row" style="margin-bottom:10px;">
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Qty Sold</label>
-          <input class="form-input" type="number" id="sale-qty" placeholder="1" min="1" inputmode="numeric" value="1">
+          <input class="form-input" type="number" id="sale-qty" placeholder="1" min="1" inputmode="numeric">
         </div>
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Sale Price ($)</label>
@@ -724,17 +725,22 @@ const CAT_UNITS = {
 const ALL_UNITS = ['piece','set','pair','bundle','jar','box','pack','collection','arrangement','nested set','print','canvas'];
 
 function populateUnitSelect(selected) {
-  const units = CAT_UNITS[document.getElementById('f-category').value] || ALL_UNITS;
+  const category = document.getElementById('f-category').value;
+  const units = category ? (CAT_UNITS[category] || ALL_UNITS) : ALL_UNITS;
   const sel = document.getElementById('f-unit');
-  sel.innerHTML = units.map(u=>`<option value="${u}"${u===selected?' selected':''}>${u}</option>`).join('');
+  const defaultSelected = selected || '';
+  sel.innerHTML = [
+    `<option value=""${defaultSelected===''?' selected':''}>Select unit</option>`,
+    ...units.map(u=>`<option value="${u}"${u===defaultSelected?' selected':''}>${u}</option>`),
+  ].join('');
   const extras = ALL_UNITS.filter(u=>!units.includes(u));
   if (extras.length) {
     const g = document.createElement('optgroup'); g.label='More units';
-    extras.forEach(u=>{ const o=document.createElement('option'); o.value=u; o.textContent=u; if(u===selected)o.selected=true; g.appendChild(o); });
+    extras.forEach(u=>{ const o=document.createElement('option'); o.value=u; o.textContent=u; if(u===defaultSelected)o.selected=true; g.appendChild(o); });
     sel.appendChild(g);
   }
 }
-function onCategoryChange() { populateUnitSelect(document.getElementById('f-unit').value); }
+function onCategoryChange() { populateUnitSelect(''); }
 
 // ── Swipe-to-dismiss modals (FIX #5) ──────────────────────
 function initSwipeDismiss(overlayId) {
@@ -816,11 +822,12 @@ function buildItemCard(item) {
   const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
   const tc=Number(item.cost)+Number(item.labor), profit=suggested-tc;
   const margin=suggested>0?Math.round((profit/suggested)*100):0;
-  const thresh=Number(item.reorderPt??5);
+  const hasThresh = item.reorderPt !== null && item.reorderPt !== undefined && !Number.isNaN(Number(item.reorderPt));
+  const thresh = hasThresh ? Number(item.reorderPt) : 0;
   return `<div class="inv-card" onclick="openDetail('${item.id}')">
     <div class="inv-card-header">
       <div><div class="inv-name">${esc(item.name)}</div><span class="category-chip">${esc(item.category)}</span></div>
-      <div class="inv-qty-badge ${item.qty<=thresh?'low':'ok'}">${item.qty} ${esc(item.unit||'units')}</div>
+      <div class="inv-qty-badge ${hasThresh&&item.qty<=thresh?'low':'ok'}">${item.qty} ${esc(item.unit||'units')}</div>
     </div>
     <div class="margin-bar"><div class="margin-fill" style="width:${Math.min(100,Math.max(0,margin))}%"></div></div>
     <div class="inv-metrics">
@@ -898,9 +905,9 @@ function updateCalc() {
 
 function openAddModal() {
   ['edit-id','f-name','f-qty','f-cost','f-labor','f-suggested-price','f-notes'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('f-reorder').value='5';
-  document.getElementById('f-category').value='Art';
-  populateUnitSelect('print');
+  document.getElementById('f-reorder').value='';
+  document.getElementById('f-category').value='';
+  populateUnitSelect('');
   document.getElementById('modal-title').textContent='Add Item';
   document.getElementById('btn-delete-item').style.display='none';
   updateCalc();
@@ -912,14 +919,14 @@ function openEditModal(id) {
   document.getElementById('modal-title').textContent='Edit Item';
   document.getElementById('edit-id').value=id;
   document.getElementById('f-name').value=item.name;
-  document.getElementById('f-category').value=item.category;
+  document.getElementById('f-category').value=item.category||'';
   document.getElementById('f-qty').value=item.qty;
-  document.getElementById('f-reorder').value=item.reorderPt??5;
+  document.getElementById('f-reorder').value=item.reorderPt??'';
   document.getElementById('f-cost').value=item.cost;
   document.getElementById('f-labor').value=item.labor;
   document.getElementById('f-suggested-price').value=item.suggestedPrice ?? item.salePrice ?? ''; // backward compat
   document.getElementById('f-notes').value=item.notes||'';
-  populateUnitSelect(item.unit);
+  populateUnitSelect(item.unit||'');
   document.getElementById('btn-delete-item').style.display='block';
   updateCalc();
   document.getElementById('modal-add').classList.add('open');
@@ -927,15 +934,21 @@ function openEditModal(id) {
 
 async function saveItem() {
   const name=document.getElementById('f-name').value.trim(); if(!name){document.getElementById('f-name').focus();return;}
+  const category=document.getElementById('f-category').value;
+  if(!category){document.getElementById('f-category').focus();return;}
+  const unit=document.getElementById('f-unit').value;
+  if(!unit){document.getElementById('f-unit').focus();return;}
+  const reorderRaw=document.getElementById('f-reorder').value.trim();
+  const reorderParsed=Number.parseInt(reorderRaw, 10);
   const editId=document.getElementById('edit-id').value;
   const existing=editId?inventory.find(i=>i.id===editId):null;
   const previousInventory = JSON.parse(JSON.stringify(inventory));
   const item={
     id:editId||uid(), name,
-    category:document.getElementById('f-category').value,
-    unit:document.getElementById('f-unit').value||'piece',
+    category,
+    unit,
     qty:parseInt(document.getElementById('f-qty').value)||0,
-    reorderPt:parseInt(document.getElementById('f-reorder').value)||5,
+    reorderPt:Number.isNaN(reorderParsed) ? null : reorderParsed,
     cost:parseFloat(document.getElementById('f-cost').value)||0,
     labor:parseFloat(document.getElementById('f-labor').value)||0,
     suggestedPrice:parseFloat(document.getElementById('f-suggested-price').value)||0,
@@ -991,10 +1004,10 @@ function renderDetail() {
   const nw=document.getElementById('detail-notes-wrap');
   if(item.notes){nw.style.display='block';document.getElementById('detail-notes').textContent=item.notes;}else nw.style.display='none';
 
-  // Pre-fill sale section with suggested price
-  document.getElementById('sale-qty').value='1';
-  document.getElementById('sale-price-override').value=suggested||'';
-  document.getElementById('sale-date').value=new Date().toISOString().split('T')[0];
+  // Clear sale inputs so nothing is prefilled by default
+  document.getElementById('sale-qty').value='';
+  document.getElementById('sale-price-override').value='';
+  document.getElementById('sale-date').value='';
 
   // Sale history
   const sales=[...(item.sales||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -1022,12 +1035,13 @@ function renderDetail() {
 
 async function recordSale() {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
-  const qty=parseInt(document.getElementById('sale-qty').value)||1;
-  const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
-  const priceEach=parseFloat(document.getElementById('sale-price-override').value)||suggested;
+  const qty=Number.parseInt(document.getElementById('sale-qty').value, 10);
+  const priceEach=Number.parseFloat(document.getElementById('sale-price-override').value);
   const date=document.getElementById('sale-date').value;
 
-  if(qty<=0){document.getElementById('sale-qty').focus();return;}
+  if(Number.isNaN(qty) || qty<=0){document.getElementById('sale-qty').focus();return;}
+  if(Number.isNaN(priceEach) || priceEach<0){document.getElementById('sale-price-override').focus();return;}
+  if(!date){document.getElementById('sale-date').focus();return;}
   if(qty>Number(item.qty)){
     showToast(`Only ${item.qty} in stock`); return;
   }
@@ -1823,7 +1837,7 @@ function editCurrentLoan() { closeModal('modal-loan-detail'); setTimeout(()=>ope
 // ── Export / Import CSV ────────────────────────────────────
 function exportCSV() {
   const rows=inventory.map(i=>[
-    i.name, i.category, i.unit, i.qty, i.reorderPt??5,
+    i.name, i.category, i.unit, i.qty, i.reorderPt??'',
     i.cost, i.labor,
     i.suggestedPrice??i.salePrice??0,
     i.notes||''
@@ -1852,10 +1866,11 @@ function importCSV(e) {
       // Support both new (SuggestedPrice col 7, Notes col 8) and
       // old format (InitPrice col 7, SalePrice col 8, Notes col 9)
       const isOldFormat = c.length >= 10;
+      const reorderParsed = Number.parseInt(c[4], 10);
       inventory.unshift({
         id:uid(),
-        name:c[0]||'', category:c[1]||'Art', unit:c[2]||'piece',
-        qty:parseInt(c[3])||0, reorderPt:parseInt(c[4])||5,
+        name:c[0]||'', category:c[1]||'', unit:c[2]||'',
+        qty:parseInt(c[3])||0, reorderPt:Number.isNaN(reorderParsed) ? null : reorderParsed,
         cost:parseFloat(c[5])||0, labor:parseFloat(c[6])||0,
         suggestedPrice: isOldFormat ? parseFloat(c[8])||0 : parseFloat(c[7])||0,
         notes: isOldFormat ? c[9]||'' : c[8]||'',
@@ -2340,7 +2355,7 @@ async function confirmRestore() {
 // ── Init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup'].forEach(initSwipeDismiss);
-  populateUnitSelect('print');
+  populateUnitSelect('');
   await loadAllData();
   renderList();
   updateBackupStatus();
