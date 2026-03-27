@@ -670,8 +670,6 @@ if (/iphone|ipad|ipod/i.test(navigator.userAgent) && /^((?!chrome|android).)*saf
 function dismissBanner() { document.getElementById('install-banner').classList.remove('show'); localStorage.setItem('sp_banner','1'); }
 
 // ── Data ───────────────────────────────────────────────────
-const DEFAULT_INVENTORY = [];
-
 let inventory = [];
 let loans = [];
 let currentLoanId = null, currentDetailId = null;
@@ -700,9 +698,17 @@ async function loadAllData() {
   }
 }
 
-function saveInventory() { fetch(`${API}/inventory`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(inventory) }).catch(e=>console.error('Save inventory error',e)); }
-function saveLoans()     { fetch(`${API}/loans`,     { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(loans)     }).catch(e=>console.error('Save loans error',e)); }
-function saveExpenses()  { fetch(`${API}/expenses`,  { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(expenses)  }).catch(e=>console.error('Save expenses error',e)); }
+async function putJSON(path, data, label) {
+  const res = await fetch(`${API}/${path}`, {
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Save ${label} failed (${res.status})`);
+}
+function saveInventory() { return putJSON('inventory', inventory, 'inventory'); }
+function saveLoans()     { return putJSON('loans', loans, 'loans'); }
+function saveExpenses()  { return putJSON('expenses', expenses, 'expenses'); }
 function loanPaid(l)    { return (l.payments||[]).reduce((s,p)=>s+Number(p.amount),0); }
 function loanBalance(l) { return Math.max(0, Number(l.amount)-loanPaid(l)); }
 
@@ -919,10 +925,11 @@ function openEditModal(id) {
   document.getElementById('modal-add').classList.add('open');
 }
 
-function saveItem() {
+async function saveItem() {
   const name=document.getElementById('f-name').value.trim(); if(!name){document.getElementById('f-name').focus();return;}
   const editId=document.getElementById('edit-id').value;
   const existing=editId?inventory.find(i=>i.id===editId):null;
+  const previousInventory = JSON.parse(JSON.stringify(inventory));
   const item={
     id:editId||uid(), name,
     category:document.getElementById('f-category').value,
@@ -936,15 +943,32 @@ function saveItem() {
     sales:existing?existing.sales||[]:[], // preserve sale history on edit
   };
   if(editId){const idx=inventory.findIndex(i=>i.id===editId);if(idx>-1)inventory[idx]=item;}else inventory.unshift(item);
-  saveInventory(); closeModal('modal-add'); renderList();
+  try {
+    await saveInventory();
+  } catch (e) {
+    inventory = previousInventory;
+    console.error('Save inventory error', e);
+    showToast('Could not save item. Try again.');
+    return;
+  }
+  closeModal('modal-add'); renderList();
   showToast(editId?'✓ Item updated':'✓ Item added');
 }
 
 async function confirmDeleteItem() {
   const ok=await showConfirm('Delete item?','This cannot be undone.'); if(!ok) return;
   const id=document.getElementById('edit-id').value;
+  const previousInventory = inventory;
   inventory=inventory.filter(i=>i.id!==id);
-  saveInventory(); closeModal('modal-add'); renderList(); showToast('Item deleted');
+  try {
+    await saveInventory();
+  } catch (e) {
+    inventory = previousInventory;
+    console.error('Save inventory error', e);
+    showToast('Could not delete item. Try again.');
+    return;
+  }
+  closeModal('modal-add'); renderList(); showToast('Item deleted');
 }
 
 // ── Item Detail ────────────────────────────────────────────
@@ -996,7 +1020,7 @@ function renderDetail() {
   }
 }
 
-function recordSale() {
+async function recordSale() {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
   const qty=parseInt(document.getElementById('sale-qty').value)||1;
   const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
@@ -1013,25 +1037,54 @@ function recordSale() {
   const profit=revenue-(qty*costEach);
 
   if(!item.sales)item.sales=[];
-  item.sales.push({sid:uid(),date,qty,priceEach,revenue,profit});
+  const addedSale = {sid:uid(),date,qty,priceEach,revenue,profit};
+  item.sales.push(addedSale);
   item.qty=Math.max(0,Number(item.qty)-qty);
 
-  saveInventory(); renderDetail(); renderList();
+  try {
+    await saveInventory();
+  } catch (e) {
+    item.sales = item.sales.filter(s=>s.sid!==addedSale.sid);
+    item.qty = Number(item.qty) + qty;
+    console.error('Save inventory error', e);
+    showToast('Could not record sale. Try again.');
+    return;
+  }
+  renderDetail(); renderList();
   showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(revenue)}`);
 }
 
-function removeSale(sid) {
+async function removeSale(sid) {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
   const sale=(item.sales||[]).find(s=>s.sid===sid); if(!sale) return;
   // Restore qty
   item.qty=Number(item.qty)+Number(sale.qty);
   item.sales=item.sales.filter(s=>s.sid!==sid);
-  saveInventory(); renderDetail(); renderList(); showToast('Sale removed');
+  try {
+    await saveInventory();
+  } catch (e) {
+    item.qty = Number(item.qty) - Number(sale.qty);
+    item.sales.push(sale);
+    console.error('Save inventory error', e);
+    showToast('Could not remove sale. Try again.');
+    return;
+  }
+  renderDetail(); renderList(); showToast('Sale removed');
 }
 
-function adjustQty(d) {
+async function adjustQty(d) {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
-  item.qty=Math.max(0,Number(item.qty)+d); saveInventory(); renderDetail(); renderList();
+  const prevQty = Number(item.qty);
+  item.qty=Math.max(0,Number(item.qty)+d);
+  try {
+    await saveInventory();
+  } catch (e) {
+    item.qty = prevQty;
+    console.error('Save inventory error', e);
+    showToast('Could not update quantity. Try again.');
+    return;
+  }
+  renderDetail(); renderList();
 }
 function editCurrentItem() { closeModal('modal-detail'); setTimeout(()=>openEditModal(currentDetailId),180); }
 
@@ -1534,7 +1587,7 @@ function saveExpense() {
   }
 
   if(editId){const idx=expenses.findIndex(e=>e.id===editId);if(idx>-1)expenses[idx]=exp;}else expenses.unshift(exp);
-  saveExpenses(); closeModal('modal-expense'); renderExpenses();
+  saveExpenses().catch(e=>console.error('Save expenses error',e)); closeModal('modal-expense'); renderExpenses();
   showToast(editId?'✓ Expense updated':'✓ Expense recorded');
 }
 
@@ -1542,7 +1595,7 @@ async function confirmDeleteExpense() {
   const ok=await showConfirm('Delete expense?','All payment history will be lost.'); if(!ok) return;
   const id=document.getElementById('exp-edit-id').value;
   expenses=expenses.filter(e=>e.id!==id);
-  saveExpenses(); closeModal('modal-expense'); renderExpenses(); showToast('Expense deleted');
+  saveExpenses().catch(e=>console.error('Save expenses error',e)); closeModal('modal-expense'); renderExpenses(); showToast('Expense deleted');
 }
 
 // ── Expense Detail ─────────────────────────────────────────
@@ -1700,14 +1753,14 @@ function saveLoan() {
   const existing=editId?loans.find(l=>l.id===editId):null;
   const loan={id:editId||uid(),name,dateReceived:document.getElementById('l-date').value,amount:parseFloat(document.getElementById('l-amount').value)||0,rate:parseFloat(document.getElementById('l-rate').value)||0,status:document.getElementById('l-status').value,notes:document.getElementById('l-notes').value.trim(),payments:existing?existing.payments:[]};
   if(editId){const idx=loans.findIndex(l=>l.id===editId);if(idx>-1)loans[idx]=loan;}else loans.unshift(loan);
-  saveLoans(); closeModal('modal-loan'); renderLoans();
+  saveLoans().catch(e=>console.error('Save loans error',e)); closeModal('modal-loan'); renderLoans();
   showToast(editId?'✓ Loan updated':'✓ Loan added');
 }
 async function confirmDeleteLoan() {
   const ok=await showConfirm('Delete loan?','All payment history will be lost.'); if(!ok) return;
   const id=document.getElementById('loan-edit-id').value;
   loans=loans.filter(l=>l.id!==id);
-  saveLoans(); closeModal('modal-loan'); renderLoans(); showToast('Loan deleted');
+  saveLoans().catch(e=>console.error('Save loans error',e)); closeModal('modal-loan'); renderLoans(); showToast('Loan deleted');
 }
 
 // ── Loan Detail ────────────────────────────────────────────
@@ -1755,7 +1808,7 @@ function addPayment() {
   if(loanBalance(loan)===0)loan.status='Paid Off';
   document.getElementById('p-amount').value='';
   document.getElementById('p-note').value='';
-  saveLoans(); renderLoanDetail(); renderLoans(); showToast('✓ Payment recorded');
+  saveLoans().catch(e=>console.error('Save loans error',e)); renderLoanDetail(); renderLoans(); showToast('✓ Payment recorded');
 }
 
 // FIX #9: remove by stable pid
@@ -1763,7 +1816,7 @@ function removePayment(pid) {
   const loan=loans.find(l=>l.id===currentLoanId); if(!loan) return;
   loan.payments=(loan.payments||[]).filter(p=>p.pid!==pid);
   if(loanBalance(loan)>0&&loan.status==='Paid Off')loan.status='Active';
-  saveLoans(); renderLoanDetail(); renderLoans(); showToast('Payment removed');
+  saveLoans().catch(e=>console.error('Save loans error',e)); renderLoanDetail(); renderLoans(); showToast('Payment removed');
 }
 function editCurrentLoan() { closeModal('modal-loan-detail'); setTimeout(()=>openEditLoanModal(currentLoanId),180); }
 
@@ -1790,6 +1843,7 @@ function importCSV(e) {
     if(!lines.length){showToast('No data in file');return;}
     const ok=await showConfirm('Import CSV?',`Add ${lines.length} item(s) to inventory?`,'Import');
     if(!ok){e.target.value='';return;}
+    const previousInventory = JSON.parse(JSON.stringify(inventory));
     let n=0;
     lines.forEach(line=>{
       const cols=line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)||[];
@@ -1809,7 +1863,16 @@ function importCSV(e) {
       });
       n++;
     });
-    saveInventory(); renderList(); showToast(`✓ ${n} item${n!==1?'s':''} imported`);
+    try {
+      await saveInventory();
+    } catch (err) {
+      inventory = previousInventory;
+      console.error('Save inventory error', err);
+      showToast('Could not import items. Try again.');
+      e.target.value='';
+      return;
+    }
+    renderList(); showToast(`✓ ${n} item${n!==1?'s':''} imported`);
     e.target.value='';
   };
   reader.readAsText(file);
@@ -2247,14 +2310,25 @@ async function confirmRestore() {
   );
   if (!ok) return;
 
+  const previousInventory = JSON.parse(JSON.stringify(inventory));
+  const previousExpenses  = JSON.parse(JSON.stringify(expenses));
+  const previousLoans     = JSON.parse(JSON.stringify(loans));
+
   // Apply the backup
   inventory = _pendingRestoreData.inventory || [];
   expenses  = _pendingRestoreData.expenses  || [];
   loans     = _pendingRestoreData.loans     || [];
 
-  saveInventory();
-  saveExpenses();
-  saveLoans();
+  try {
+    await Promise.all([saveInventory(), saveExpenses(), saveLoans()]);
+  } catch (e) {
+    inventory = previousInventory;
+    expenses  = previousExpenses;
+    loans     = previousLoans;
+    console.error('Restore save error', e);
+    showToast('Could not restore backup. Try again.');
+    return;
+  }
 
   _pendingRestoreData = null;
   closeModal('modal-backup');
