@@ -1,12 +1,6 @@
 # Mobbs Enterprise — Netlify config for reliable data persistence via Netlify Blobs
 # This forces fresh index.html/JS on every visit → prevents stale code
 
-# Allow function calls to pass through before the SPA catch-all
-[[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
 [[redirects]]
   from = "/*"
   to = "/index.html"
