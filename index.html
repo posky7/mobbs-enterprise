@@ -458,6 +458,7 @@ select.form-input option { background:#fff; color:#1a1612; }
         <div class="form-row">
           <div class="form-group"><label class="form-label">Category</label>
             <select class="form-input" id="f-category" onchange="onCategoryChange()">
+              <option value="">Select category</option>
               <option value="Art">Art</option>
               <option value="Ceramic Tableware">Ceramic Tableware</option>
               <option value="Clear Glassware">Clear Glassware</option>
@@ -469,7 +470,7 @@ select.form-input option { background:#fff; color:#1a1612; }
           <div class="form-group"><label class="form-label">Unit Type</label><select class="form-input" id="f-unit"></select></div>
         </div>
         <div class="form-group"><label class="form-label">Quantity in Stock</label><input class="form-input" type="number" id="f-qty" placeholder="0" min="0" inputmode="numeric"></div>
-        <div class="reorder-row"><span class="reorder-label">🔔 Low stock alert when qty ≤</span><input class="reorder-input" type="number" id="f-reorder" value="5" min="0" inputmode="numeric"></div>
+        <div class="reorder-row"><span class="reorder-label">🔔 Low stock alert when qty ≤</span><input class="reorder-input" type="number" id="f-reorder" placeholder="Optional" min="0" inputmode="numeric"></div>
       </div>
       <div class="form-section">
         <div class="form-section-title">Pricing &amp; Costs</div>
@@ -521,7 +522,7 @@ select.form-input option { background:#fff; color:#1a1612; }
       <div class="form-row" style="margin-bottom:10px;">
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Qty Sold</label>
-          <input class="form-input" type="number" id="sale-qty" placeholder="1" min="1" inputmode="numeric" value="1">
+          <input class="form-input" type="number" id="sale-qty" placeholder="1" min="1" inputmode="numeric">
         </div>
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Sale Price ($)</label>
@@ -693,16 +694,24 @@ async function loadAllData() {
     loans     = loansData || [];
     expenses  = expData   || [];
   } catch(e) {
-    console.error('Failed to load data from server, using defaults', e);
-    inventory = DEFAULT_INVENTORY.map(i=>({...i}));
+    console.error('Failed to load data from server, using empty inventory', e);
+    inventory = [];
     loans = [];
     expenses = [];
   }
 }
 
-function saveInventory() { fetch(`${API}/inventory`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(inventory) }).catch(e=>console.error('Save inventory error',e)); }
-function saveLoans()     { fetch(`${API}/loans`,     { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(loans)     }).catch(e=>console.error('Save loans error',e)); }
-function saveExpenses()  { fetch(`${API}/expenses`,  { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(expenses)  }).catch(e=>console.error('Save expenses error',e)); }
+async function putJSON(path, data, label) {
+  const res = await fetch(`${API}/${path}`, {
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Save ${label} failed (${res.status})`);
+}
+function saveInventory() { return putJSON('inventory', inventory, 'inventory'); }
+function saveLoans()     { return putJSON('loans', loans, 'loans'); }
+function saveExpenses()  { return putJSON('expenses', expenses, 'expenses'); }
 function loanPaid(l)    { return (l.payments||[]).reduce((s,p)=>s+Number(p.amount),0); }
 function loanBalance(l) { return Math.max(0, Number(l.amount)-loanPaid(l)); }
 
@@ -718,17 +727,22 @@ const CAT_UNITS = {
 const ALL_UNITS = ['piece','set','pair','bundle','jar','box','pack','collection','arrangement','nested set','print','canvas'];
 
 function populateUnitSelect(selected) {
-  const units = CAT_UNITS[document.getElementById('f-category').value] || ALL_UNITS;
+  const category = document.getElementById('f-category').value;
+  const units = category ? (CAT_UNITS[category] || ALL_UNITS) : ALL_UNITS;
   const sel = document.getElementById('f-unit');
-  sel.innerHTML = units.map(u=>`<option value="${u}"${u===selected?' selected':''}>${u}</option>`).join('');
+  const defaultSelected = selected || '';
+  sel.innerHTML = [
+    `<option value=""${defaultSelected===''?' selected':''}>Select unit</option>`,
+    ...units.map(u=>`<option value="${u}"${u===defaultSelected?' selected':''}>${u}</option>`),
+  ].join('');
   const extras = ALL_UNITS.filter(u=>!units.includes(u));
   if (extras.length) {
     const g = document.createElement('optgroup'); g.label='More units';
-    extras.forEach(u=>{ const o=document.createElement('option'); o.value=u; o.textContent=u; if(u===selected)o.selected=true; g.appendChild(o); });
+    extras.forEach(u=>{ const o=document.createElement('option'); o.value=u; o.textContent=u; if(u===defaultSelected)o.selected=true; g.appendChild(o); });
     sel.appendChild(g);
   }
 }
-function onCategoryChange() { populateUnitSelect(document.getElementById('f-unit').value); }
+function onCategoryChange() { populateUnitSelect(''); }
 
 // ── Swipe-to-dismiss modals (FIX #5) ──────────────────────
 function initSwipeDismiss(overlayId) {
@@ -810,11 +824,12 @@ function buildItemCard(item) {
   const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
   const tc=Number(item.cost)+Number(item.labor), profit=suggested-tc;
   const margin=suggested>0?Math.round((profit/suggested)*100):0;
-  const thresh=Number(item.reorderPt??5);
+  const hasThresh = item.reorderPt !== null && item.reorderPt !== undefined && !Number.isNaN(Number(item.reorderPt));
+  const thresh = hasThresh ? Number(item.reorderPt) : 0;
   return `<div class="inv-card" onclick="openDetail('${item.id}')">
     <div class="inv-card-header">
       <div><div class="inv-name">${esc(item.name)}</div><span class="category-chip">${esc(item.category)}</span></div>
-      <div class="inv-qty-badge ${item.qty<=thresh?'low':'ok'}">${item.qty} ${esc(item.unit||'units')}</div>
+      <div class="inv-qty-badge ${hasThresh&&item.qty<=thresh?'low':'ok'}">${item.qty} ${esc(item.unit||'units')}</div>
     </div>
     <div class="margin-bar"><div class="margin-fill" style="width:${Math.min(100,Math.max(0,margin))}%"></div></div>
     <div class="inv-metrics">
@@ -892,9 +907,9 @@ function updateCalc() {
 
 function openAddModal() {
   ['edit-id','f-name','f-qty','f-cost','f-labor','f-suggested-price','f-notes'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('f-reorder').value='5';
-  document.getElementById('f-category').value='Art';
-  populateUnitSelect('print');
+  document.getElementById('f-reorder').value='';
+  document.getElementById('f-category').value='';
+  populateUnitSelect('');
   document.getElementById('modal-title').textContent='Add Item';
   document.getElementById('btn-delete-item').style.display='none';
   updateCalc();
@@ -906,29 +921,36 @@ function openEditModal(id) {
   document.getElementById('modal-title').textContent='Edit Item';
   document.getElementById('edit-id').value=id;
   document.getElementById('f-name').value=item.name;
-  document.getElementById('f-category').value=item.category;
+  document.getElementById('f-category').value=item.category||'';
   document.getElementById('f-qty').value=item.qty;
-  document.getElementById('f-reorder').value=item.reorderPt??5;
+  document.getElementById('f-reorder').value=item.reorderPt??'';
   document.getElementById('f-cost').value=item.cost;
   document.getElementById('f-labor').value=item.labor;
   document.getElementById('f-suggested-price').value=item.suggestedPrice ?? item.salePrice ?? ''; // backward compat
   document.getElementById('f-notes').value=item.notes||'';
-  populateUnitSelect(item.unit);
+  populateUnitSelect(item.unit||'');
   document.getElementById('btn-delete-item').style.display='block';
   updateCalc();
   document.getElementById('modal-add').classList.add('open');
 }
 
-function saveItem() {
+async function saveItem() {
   const name=document.getElementById('f-name').value.trim(); if(!name){document.getElementById('f-name').focus();return;}
+  const category=document.getElementById('f-category').value;
+  if(!category){document.getElementById('f-category').focus();return;}
+  const unit=document.getElementById('f-unit').value;
+  if(!unit){document.getElementById('f-unit').focus();return;}
+  const reorderRaw=document.getElementById('f-reorder').value.trim();
+  const reorderParsed=Number.parseInt(reorderRaw, 10);
   const editId=document.getElementById('edit-id').value;
   const existing=editId?inventory.find(i=>i.id===editId):null;
+  const previousInventory = JSON.parse(JSON.stringify(inventory));
   const item={
     id:editId||uid(), name,
-    category:document.getElementById('f-category').value,
-    unit:document.getElementById('f-unit').value||'piece',
+    category,
+    unit,
     qty:parseInt(document.getElementById('f-qty').value)||0,
-    reorderPt:parseInt(document.getElementById('f-reorder').value)||5,
+    reorderPt:Number.isNaN(reorderParsed) ? null : reorderParsed,
     cost:parseFloat(document.getElementById('f-cost').value)||0,
     labor:parseFloat(document.getElementById('f-labor').value)||0,
     suggestedPrice:parseFloat(document.getElementById('f-suggested-price').value)||0,
@@ -936,15 +958,32 @@ function saveItem() {
     sales:existing?existing.sales||[]:[], // preserve sale history on edit
   };
   if(editId){const idx=inventory.findIndex(i=>i.id===editId);if(idx>-1)inventory[idx]=item;}else inventory.unshift(item);
-  saveInventory(); closeModal('modal-add'); renderList();
+  try {
+    await saveInventory();
+  } catch (e) {
+    inventory = previousInventory;
+    console.error('Save inventory error', e);
+    showToast('Could not save item. Try again.');
+    return;
+  }
+  closeModal('modal-add'); renderList();
   showToast(editId?'✓ Item updated':'✓ Item added');
 }
 
 async function confirmDeleteItem() {
   const ok=await showConfirm('Delete item?','This cannot be undone.'); if(!ok) return;
   const id=document.getElementById('edit-id').value;
+  const previousInventory = inventory;
   inventory=inventory.filter(i=>i.id!==id);
-  saveInventory(); closeModal('modal-add'); renderList(); showToast('Item deleted');
+  try {
+    await saveInventory();
+  } catch (e) {
+    inventory = previousInventory;
+    console.error('Save inventory error', e);
+    showToast('Could not delete item. Try again.');
+    return;
+  }
+  closeModal('modal-add'); renderList(); showToast('Item deleted');
 }
 
 // ── Item Detail ────────────────────────────────────────────
@@ -967,10 +1006,10 @@ function renderDetail() {
   const nw=document.getElementById('detail-notes-wrap');
   if(item.notes){nw.style.display='block';document.getElementById('detail-notes').textContent=item.notes;}else nw.style.display='none';
 
-  // Pre-fill sale section with suggested price
-  document.getElementById('sale-qty').value='1';
-  document.getElementById('sale-price-override').value=suggested||'';
-  document.getElementById('sale-date').value=new Date().toISOString().split('T')[0];
+  // Clear sale inputs so nothing is prefilled by default
+  document.getElementById('sale-qty').value='';
+  document.getElementById('sale-price-override').value='';
+  document.getElementById('sale-date').value='';
 
   // Sale history
   const sales=[...(item.sales||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -996,14 +1035,15 @@ function renderDetail() {
   }
 }
 
-function recordSale() {
+async function recordSale() {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
-  const qty=parseInt(document.getElementById('sale-qty').value)||1;
-  const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
-  const priceEach=parseFloat(document.getElementById('sale-price-override').value)||suggested;
+  const qty=Number.parseInt(document.getElementById('sale-qty').value, 10);
+  const priceEach=Number.parseFloat(document.getElementById('sale-price-override').value);
   const date=document.getElementById('sale-date').value;
 
-  if(qty<=0){document.getElementById('sale-qty').focus();return;}
+  if(Number.isNaN(qty) || qty<=0){document.getElementById('sale-qty').focus();return;}
+  if(Number.isNaN(priceEach) || priceEach<0){document.getElementById('sale-price-override').focus();return;}
+  if(!date){document.getElementById('sale-date').focus();return;}
   if(qty>Number(item.qty)){
     showToast(`Only ${item.qty} in stock`); return;
   }
@@ -1013,25 +1053,54 @@ function recordSale() {
   const profit=revenue-(qty*costEach);
 
   if(!item.sales)item.sales=[];
-  item.sales.push({sid:uid(),date,qty,priceEach,revenue,profit});
+  const addedSale = {sid:uid(),date,qty,priceEach,revenue,profit};
+  item.sales.push(addedSale);
   item.qty=Math.max(0,Number(item.qty)-qty);
 
-  saveInventory(); renderDetail(); renderList();
+  try {
+    await saveInventory();
+  } catch (e) {
+    item.sales = item.sales.filter(s=>s.sid!==addedSale.sid);
+    item.qty = Number(item.qty) + qty;
+    console.error('Save inventory error', e);
+    showToast('Could not record sale. Try again.');
+    return;
+  }
+  renderDetail(); renderList();
   showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(revenue)}`);
 }
 
-function removeSale(sid) {
+async function removeSale(sid) {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
   const sale=(item.sales||[]).find(s=>s.sid===sid); if(!sale) return;
   // Restore qty
   item.qty=Number(item.qty)+Number(sale.qty);
   item.sales=item.sales.filter(s=>s.sid!==sid);
-  saveInventory(); renderDetail(); renderList(); showToast('Sale removed');
+  try {
+    await saveInventory();
+  } catch (e) {
+    item.qty = Number(item.qty) - Number(sale.qty);
+    item.sales.push(sale);
+    console.error('Save inventory error', e);
+    showToast('Could not remove sale. Try again.');
+    return;
+  }
+  renderDetail(); renderList(); showToast('Sale removed');
 }
 
-function adjustQty(d) {
+async function adjustQty(d) {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
-  item.qty=Math.max(0,Number(item.qty)+d); saveInventory(); renderDetail(); renderList();
+  const prevQty = Number(item.qty);
+  item.qty=Math.max(0,Number(item.qty)+d);
+  try {
+    await saveInventory();
+  } catch (e) {
+    item.qty = prevQty;
+    console.error('Save inventory error', e);
+    showToast('Could not update quantity. Try again.');
+    return;
+  }
+  renderDetail(); renderList();
 }
 function editCurrentItem() { closeModal('modal-detail'); setTimeout(()=>openEditModal(currentDetailId),180); }
 
@@ -1534,7 +1603,7 @@ function saveExpense() {
   }
 
   if(editId){const idx=expenses.findIndex(e=>e.id===editId);if(idx>-1)expenses[idx]=exp;}else expenses.unshift(exp);
-  saveExpenses(); closeModal('modal-expense'); renderExpenses();
+  saveExpenses().catch(e=>console.error('Save expenses error',e)); closeModal('modal-expense'); renderExpenses();
   showToast(editId?'✓ Expense updated':'✓ Expense recorded');
 }
 
@@ -1542,7 +1611,7 @@ async function confirmDeleteExpense() {
   const ok=await showConfirm('Delete expense?','All payment history will be lost.'); if(!ok) return;
   const id=document.getElementById('exp-edit-id').value;
   expenses=expenses.filter(e=>e.id!==id);
-  saveExpenses(); closeModal('modal-expense'); renderExpenses(); showToast('Expense deleted');
+  saveExpenses().catch(e=>console.error('Save expenses error',e)); closeModal('modal-expense'); renderExpenses(); showToast('Expense deleted');
 }
 
 // ── Expense Detail ─────────────────────────────────────────
@@ -1700,14 +1769,14 @@ function saveLoan() {
   const existing=editId?loans.find(l=>l.id===editId):null;
   const loan={id:editId||uid(),name,dateReceived:document.getElementById('l-date').value,amount:parseFloat(document.getElementById('l-amount').value)||0,rate:parseFloat(document.getElementById('l-rate').value)||0,status:document.getElementById('l-status').value,notes:document.getElementById('l-notes').value.trim(),payments:existing?existing.payments:[]};
   if(editId){const idx=loans.findIndex(l=>l.id===editId);if(idx>-1)loans[idx]=loan;}else loans.unshift(loan);
-  saveLoans(); closeModal('modal-loan'); renderLoans();
+  saveLoans().catch(e=>console.error('Save loans error',e)); closeModal('modal-loan'); renderLoans();
   showToast(editId?'✓ Loan updated':'✓ Loan added');
 }
 async function confirmDeleteLoan() {
   const ok=await showConfirm('Delete loan?','All payment history will be lost.'); if(!ok) return;
   const id=document.getElementById('loan-edit-id').value;
   loans=loans.filter(l=>l.id!==id);
-  saveLoans(); closeModal('modal-loan'); renderLoans(); showToast('Loan deleted');
+  saveLoans().catch(e=>console.error('Save loans error',e)); closeModal('modal-loan'); renderLoans(); showToast('Loan deleted');
 }
 
 // ── Loan Detail ────────────────────────────────────────────
@@ -1755,7 +1824,7 @@ function addPayment() {
   if(loanBalance(loan)===0)loan.status='Paid Off';
   document.getElementById('p-amount').value='';
   document.getElementById('p-note').value='';
-  saveLoans(); renderLoanDetail(); renderLoans(); showToast('✓ Payment recorded');
+  saveLoans().catch(e=>console.error('Save loans error',e)); renderLoanDetail(); renderLoans(); showToast('✓ Payment recorded');
 }
 
 // FIX #9: remove by stable pid
@@ -1763,14 +1832,14 @@ function removePayment(pid) {
   const loan=loans.find(l=>l.id===currentLoanId); if(!loan) return;
   loan.payments=(loan.payments||[]).filter(p=>p.pid!==pid);
   if(loanBalance(loan)>0&&loan.status==='Paid Off')loan.status='Active';
-  saveLoans(); renderLoanDetail(); renderLoans(); showToast('Payment removed');
+  saveLoans().catch(e=>console.error('Save loans error',e)); renderLoanDetail(); renderLoans(); showToast('Payment removed');
 }
 function editCurrentLoan() { closeModal('modal-loan-detail'); setTimeout(()=>openEditLoanModal(currentLoanId),180); }
 
 // ── Export / Import CSV ────────────────────────────────────
 function exportCSV() {
   const rows=inventory.map(i=>[
-    i.name, i.category, i.unit, i.qty, i.reorderPt??5,
+    i.name, i.category, i.unit, i.qty, i.reorderPt??'',
     i.cost, i.labor,
     i.suggestedPrice??i.salePrice??0,
     i.notes||''
@@ -1790,6 +1859,7 @@ function importCSV(e) {
     if(!lines.length){showToast('No data in file');return;}
     const ok=await showConfirm('Import CSV?',`Add ${lines.length} item(s) to inventory?`,'Import');
     if(!ok){e.target.value='';return;}
+    const previousInventory = JSON.parse(JSON.stringify(inventory));
     let n=0;
     lines.forEach(line=>{
       const cols=line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)||[];
@@ -1798,10 +1868,11 @@ function importCSV(e) {
       // Support both new (SuggestedPrice col 7, Notes col 8) and
       // old format (InitPrice col 7, SalePrice col 8, Notes col 9)
       const isOldFormat = c.length >= 10;
+      const reorderParsed = Number.parseInt(c[4], 10);
       inventory.unshift({
         id:uid(),
-        name:c[0]||'', category:c[1]||'Art', unit:c[2]||'piece',
-        qty:parseInt(c[3])||0, reorderPt:parseInt(c[4])||5,
+        name:c[0]||'', category:c[1]||'', unit:c[2]||'',
+        qty:parseInt(c[3])||0, reorderPt:Number.isNaN(reorderParsed) ? null : reorderParsed,
         cost:parseFloat(c[5])||0, labor:parseFloat(c[6])||0,
         suggestedPrice: isOldFormat ? parseFloat(c[8])||0 : parseFloat(c[7])||0,
         notes: isOldFormat ? c[9]||'' : c[8]||'',
@@ -1809,7 +1880,16 @@ function importCSV(e) {
       });
       n++;
     });
-    saveInventory(); renderList(); showToast(`✓ ${n} item${n!==1?'s':''} imported`);
+    try {
+      await saveInventory();
+    } catch (err) {
+      inventory = previousInventory;
+      console.error('Save inventory error', err);
+      showToast('Could not import items. Try again.');
+      e.target.value='';
+      return;
+    }
+    renderList(); showToast(`✓ ${n} item${n!==1?'s':''} imported`);
     e.target.value='';
   };
   reader.readAsText(file);
@@ -2247,14 +2327,25 @@ async function confirmRestore() {
   );
   if (!ok) return;
 
+  const previousInventory = JSON.parse(JSON.stringify(inventory));
+  const previousExpenses  = JSON.parse(JSON.stringify(expenses));
+  const previousLoans     = JSON.parse(JSON.stringify(loans));
+
   // Apply the backup
   inventory = _pendingRestoreData.inventory || [];
   expenses  = _pendingRestoreData.expenses  || [];
   loans     = _pendingRestoreData.loans     || [];
 
-  saveInventory();
-  saveExpenses();
-  saveLoans();
+  try {
+    await Promise.all([saveInventory(), saveExpenses(), saveLoans()]);
+  } catch (e) {
+    inventory = previousInventory;
+    expenses  = previousExpenses;
+    loans     = previousLoans;
+    console.error('Restore save error', e);
+    showToast('Could not restore backup. Try again.');
+    return;
+  }
 
   _pendingRestoreData = null;
   closeModal('modal-backup');
@@ -2266,7 +2357,7 @@ async function confirmRestore() {
 // ── Init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup'].forEach(initSwipeDismiss);
-  populateUnitSelect('print');
+  populateUnitSelect('');
   await loadAllData();
   renderList();
   updateBackupStatus();
