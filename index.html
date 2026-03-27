@@ -670,14 +670,7 @@ if (/iphone|ipad|ipod/i.test(navigator.userAgent) && /^((?!chrome|android).)*saf
 function dismissBanner() { document.getElementById('install-banner').classList.remove('show'); localStorage.setItem('sp_banner','1'); }
 
 // ── Data ───────────────────────────────────────────────────
-const DEFAULT_INVENTORY = [
-  {id:uid(),name:'Botanical Watercolor Print', category:'Art',              unit:'print',  qty:15,reorderPt:5, cost:2.50, labor:1.00, suggestedPrice:20.00,notes:'8×10, unframed'},
-  {id:uid(),name:'Ceramic Pumpkin Trio',       category:'Seasonal',        unit:'set',    qty:18,reorderPt:5, cost:5.00, labor:2.00, suggestedPrice:22.00,notes:'Matte finish, fall decor'},
-  {id:uid(),name:'Crystal Bud Vase',           category:'Clear Glassware', unit:'piece',  qty:22,reorderPt:5, cost:3.00, labor:0.00, suggestedPrice:12.00,notes:'Mouth-blown, 6" tall'},
-  {id:uid(),name:'Dried Pampas Bundle',        category:'Self Filler',     unit:'bundle', qty:30,reorderPt:8, cost:2.50, labor:0.00, suggestedPrice:10.00,notes:'Natural dried pampas grass'},
-  {id:uid(),name:'Rattan Table Lamp',          category:'Lamps',           unit:'piece',  qty:6, reorderPt:2, cost:18.00,labor:0.00, suggestedPrice:58.00,notes:'Plug-in, linen shade'},
-  {id:uid(),name:'Speckled Stoneware Mug Set', category:'Ceramic Tableware',unit:'set',   qty:10,reorderPt:3, cost:9.00, labor:0.00, suggestedPrice:32.00,notes:'Set of 4, matte glaze'},
-];
+const DEFAULT_INVENTORY = [];
 
 let inventory = [];
 let loans = [];
@@ -696,14 +689,12 @@ async function loadAllData() {
     const invData  = await invRes.json();
     const loansData = await loansRes.json();
     const expData  = await expRes.json();
-    inventory = (invData && invData.length) ? invData : DEFAULT_INVENTORY;
+    inventory = (invData && invData.length) ? invData : [];
     loans     = loansData || [];
     expenses  = expData   || [];
-    // Seed default inventory into blobs if it was empty
-    if (!invData || !invData.length) saveInventory();
   } catch(e) {
-    console.error('Failed to load data from server, using defaults', e);
-    inventory = DEFAULT_INVENTORY.map(i=>({...i}));
+    console.error('Failed to load data from server, using empty inventory', e);
+    inventory = [];
     loans = [];
     expenses = [];
   }
