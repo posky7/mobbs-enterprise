@@ -1,6 +1,6 @@
 import { clearBlobStore, setBackupTimestamp } from './_blob-storage.mjs';
 
-export default async function handler(event, context) {
+export default async function handler(event) {
   const httpMethod = event.httpMethod;
 
   if (httpMethod !== 'POST' && httpMethod !== 'DELETE') {
@@ -14,13 +14,11 @@ export default async function handler(event, context) {
   try {
     console.log('Reset function called - clearing all data stores');
 
-    // Clear all main data stores
     await clearBlobStore('inventory');
     await clearBlobStore('locations');
     await clearBlobStore('expenses');
     await clearBlobStore('loans');
 
-    // Reset backup timestamp
     await setBackupTimestamp(null);
 
     return {

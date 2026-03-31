@@ -25,13 +25,19 @@ export default async function handler(event) {
 
     return {
       statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'Method not allowed' })
     };
+
   } catch (error) {
     console.error('Backup timestamp error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        details: error.message 
+      })
     };
   }
 }

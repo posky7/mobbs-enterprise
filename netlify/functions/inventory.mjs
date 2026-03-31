@@ -53,19 +53,31 @@ export default async function handler(event) {
       const { itemId, fromLocation, toLocation, quantity } = JSON.parse(event.body || '{}');
 
       if (!itemId || !fromLocation || !toLocation || !quantity) {
-        return { statusCode: 400, body: JSON.stringify({ error: 'Missing parameters' }) };
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Missing parameters' })
+        };
       }
 
       let inventory = await readBlobData('inventory');
       const item = inventory.find(i => i.id === itemId);
       if (!item) {
-        return { statusCode: 404, body: JSON.stringify({ error: 'Item not found' }) };
+        return {
+          statusCode: 404,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Item not found' })
+        };
       }
 
       if (!item.inventory) item.inventory = {};
       const fromQty = Number(item.inventory[fromLocation]?.qty || 0);
       if (fromQty < quantity) {
-        return { statusCode: 400, body: JSON.stringify({ error: 'Insufficient quantity' }) };
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Insufficient quantity' })
+        };
       }
 
       item.inventory[fromLocation] = { qty: fromQty - quantity, lastUpdated: new Date().toISOString() };
@@ -84,6 +96,7 @@ export default async function handler(event) {
 
     return {
       statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'Method not allowed' })
     };
 
@@ -92,7 +105,10 @@ export default async function handler(event) {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Internal server error', details: error.message })
+      body: JSON.stringify({ 
+        error: 'Internal server error', 
+        details: error.message 
+      })
     };
   }
 }

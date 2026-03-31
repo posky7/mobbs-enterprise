@@ -3,8 +3,8 @@ import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 // Monthly equivalent for any frequency
 function expMonthly(e) {
   if (e.frequency === 'One-Time') return 0;
-  const a = Number(e.amount)||0;
-  switch(e.frequency) {
+  const a = Number(e.amount) || 0;
+  switch (e.frequency) {
     case 'Weekly':    return a * 52 / 12;
     case 'Monthly':   return a;
     case 'Quarterly': return a / 3;
@@ -18,17 +18,17 @@ function expOccurrences(e, upTo) {
   if (e.frequency === 'One-Time' || !e.startDate) return [];
   const start  = new Date(e.startDate);
   const end    = upTo ? new Date(upTo) : new Date();
-  const payday = Math.max(1, parseInt(e.payday)||1);
+  const payday = Math.max(1, parseInt(e.payday) || 1);
   const dates  = [];
 
   const clampDay = (y, m, d) => {
-    const max = new Date(y, m+1, 0).getDate();
+    const max = new Date(y, m + 1, 0).getDate();
     return new Date(y, m, Math.min(d, max));
   };
 
   if (e.frequency === 'Weekly') {
     let cur = new Date(start);
-    while (cur <= end) { dates.push(new Date(cur)); cur.setDate(cur.getDate()+7); }
+    while (cur <= end) { dates.push(new Date(cur)); cur.setDate(cur.getDate() + 7); }
   } else if (e.frequency === 'Monthly') {
     let y = start.getFullYear(), m = start.getMonth();
     while (true) {
@@ -63,9 +63,8 @@ function expCostInPeriod(e, bounds) {
   if (e.frequency === 'One-Time') return 0;
   if (e.startDate) {
     const occ = expOccurrences(e, bounds.end).filter(d => d >= bounds.start && d <= bounds.end);
-    return occ.length * Number(e.amount||0);
+    return occ.length * Number(e.amount || 0);
   }
-  // Fallback: proportional calculation
   const days = Math.max(1, (bounds.end - bounds.start) / 86400000);
   const months = days / 30.44;
   return expMonthly(e) * months;
@@ -76,7 +75,7 @@ function expYTD(e) {
   if (e.frequency === 'One-Time') {
     if (!e.due) return 0;
     const d = new Date(e.due);
-    return d.getFullYear() === new Date().getFullYear() ? Number(e.amount||0) : 0;
+    return d.getFullYear() === new Date().getFullYear() ? Number(e.amount || 0) : 0;
   }
   const ytdBounds = {
     start: new Date(new Date().getFullYear(), 0, 1),
@@ -85,8 +84,9 @@ function expYTD(e) {
   return expCostInPeriod(e, ytdBounds);
 }
 
-export default async function handler(event, context) {
-  const { httpMethod, body, queryStringParameters } = event;
+export default async function handler(event) {
+  const httpMethod = event.httpMethod;
+  const body = event.body;
 
   try {
     if (httpMethod === 'GET') {
@@ -99,8 +99,8 @@ export default async function handler(event, context) {
     }
 
     if (httpMethod === 'PUT') {
-      const expenses = JSON.parse(body || '[]');
-      await writeBlobData('expenses', expenses);
+      const expensesData = JSON.parse(body || '[]');
+      await writeBlobData('expenses', expensesData);
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -110,6 +110,7 @@ export default async function handler(event, context) {
 
     return {
       statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'Method not allowed' })
     };
 
@@ -117,7 +118,11 @@ export default async function handler(event, context) {
     console.error('Expenses API error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        details: error.message 
+      })
     };
   }
 }
