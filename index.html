@@ -3510,21 +3510,23 @@ function updateMoveList() {
     return;
   }
 
-  // Get items that have stock at current filter location
+  // Get items that have stock at current filter location BUT NOT at destination
   let availableItems = [];
   if (inventoryLocationFilter === 'all') {
-    // Show all items with any stock
+    // Show all items with any stock, but exclude items already at destination
     availableItems = inventory.filter(item => {
       if (!item.inventory) return false;
       const hasStockSomewhere = item.totalQty > 0;
-      return hasStockSomewhere;
+      const hasStockAtDestination = Number(item.inventory[destination]?.qty || 0) > 0;
+      return hasStockSomewhere && !hasStockAtDestination;
     });
   } else {
-    // Show items with stock at the filtered location
+    // Show items with stock at the filtered location, but exclude items already at destination
     availableItems = inventory.filter(item => {
       if (!item.inventory) return false;
       const qtyAtFilter = Number(item.inventory[inventoryLocationFilter]?.qty || 0);
-      return qtyAtFilter > 0;
+      const hasStockAtDestination = Number(item.inventory[destination]?.qty || 0) > 0;
+      return qtyAtFilter > 0 && !hasStockAtDestination;
     });
   }
 
@@ -3721,7 +3723,7 @@ function updateMoveSummary() {
 
 async function executeMove() {
   const destination = document.getElementById('move-destination').value;
-  if (!destination) {
+  if (!destination || destination === "") {
     showToast('Select a destination location');
     return;
   }
