@@ -1073,7 +1073,7 @@ function renderSoldList(soldItems) {
         </div>
         <div style="text-align:right;">
           ${soldOutBadge
-            ? `<div style="background:#f0faf6;border:1.5px solid var(--accent2);border-radius:9px;padding:4px 10px;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--accent2);white-space:nowrap;">✓ Sold Out</div>`
+            ? `<div style="background:#f0faf6;border:1.5px solid var(--accent2);border-radius:9px;padding:4px 10px;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--accent2);white-space:nowrap;">${totalSoldQty} sold</div>`
             : `<div class="inv-qty-badge ok">${item.qty} left</div>`
           }
           <div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;">${lastSale?new Date(lastSale.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—'}</div>
@@ -1209,7 +1209,7 @@ function renderDetail() {
 
   // Pre-fill sale section with suggested price
   document.getElementById('sale-qty').value='1';
-  document.getElementById('sale-price-override').value=suggested||'';
+  document.getElementById('sale-price-override').value=suggested > 0 ? suggested.toFixed(2) : '';
   document.getElementById('sale-date').value=new Date().toISOString().split('T')[0];
 
   // Sale history
@@ -1252,8 +1252,21 @@ function recordSale() {
   const revenue=qty*priceEach;
   const profit=revenue-(qty*costEach);
 
+  // Determine the location where the sale occurred
+  // For now, use the first active location with available stock
+  let saleLocation = null;
+  if (item.inventory) {
+    const activeLocations = locations.filter(loc => loc.active);
+    for (const loc of activeLocations) {
+      if (item.inventory[loc.id] && Number(item.inventory[loc.id].qty) > 0) {
+        saleLocation = loc.id;
+        break;
+      }
+    }
+  }
+
   if(!item.sales)item.sales=[];
-  item.sales.push({sid:uid(),date,qty,priceEach,revenue,profit});
+  item.sales.push({sid:uid(),date,qty,priceEach,revenue,profit,location:saleLocation});
   item.qty=Math.max(0,Number(item.qty)-qty);
 
   saveInventory(); renderDetail(); renderList();
@@ -2432,9 +2445,7 @@ function renderReports() {
       ],
     },
     options: barOpts,
-  });
-
-  // ── Chart 4: Revenue vs Expenses (grouped bar) ────────────
+  });  // ── Chart 4: Revenue vs Expenses (grouped bar) ────────────
   const expPaid = expenses.reduce((s,e)=>{
     if (e.frequency==='One-Time') {
       if(!e.due) return s;
