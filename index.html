@@ -271,12 +271,28 @@ select.form-input option { background:#fff; color:#1a1612; }
       </div>
       <div class="header-title">Inventory</div>
     </div>
+    <!-- Location filter -->
+    <div style="padding:12px 16px 0;">
+      <div style="margin-bottom:12px;">
+        <label class="form-label" style="margin-bottom:8px;display:block;">Location</label>
+        <select class="form-input" id="inventory-location-filter" onchange="setInventoryLocationFilter()" style="max-width:300px;">
+          <option value="all">All Locations</option>
+        </select>
+      </div>
+    </div>
+
     <div class="summary-strip">
       <div class="stat-card purple"><div class="stat-label">In Stock</div><div class="stat-value" id="sum-items">0</div><div class="stat-sub">SKUs tracked</div></div>
       <div class="stat-card green"><div class="stat-label">Total Units</div><div class="stat-value" id="sum-units">0</div><div class="stat-sub">in stock</div></div>
       <div class="stat-card orange"><div class="stat-label">Cost Value</div><div class="stat-value" id="sum-cost">$0</div><div class="stat-sub">inventory cost</div></div>
       <div class="stat-card red"><div class="stat-label">Suggested Value</div><div class="stat-value" id="sum-retail">$0</div><div class="stat-sub">at suggested price</div></div>
     </div>
+
+    <!-- Last Updated timestamp -->
+    <div style="padding:16px;text-align:center;color:var(--text3);font-size:12px;font-family:var(--font-mono);">
+      Last updated: <span id="inventory-last-updated">—</span>
+    </div>
+
     <!-- Sold summary strip -->
     <div class="summary-strip" id="sold-summary-strip" style="padding-top:0;display:none;">
       <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Units Sold</div><div class="stat-value" id="sum-sold-units">0</div><div class="stat-sub">total sold</div></div>
@@ -717,6 +733,7 @@ let inventory = [];
 let locations = [];
 let loans = [];
 let currentLoanId = null, currentDetailId = null, currentLocationId = 'storage';
+let inventoryLocationFilter = 'all';
 
 // ── API helpers ──────────────────────────────────────────────
 const API = '/.netlify/functions';
@@ -863,6 +880,33 @@ function initSwipeDismiss(overlayId) {
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+// ── Inventory Location Filter ────────────────────────────────────
+function setInventoryLocationFilter() {
+  const select = document.getElementById('inventory-location-filter');
+  inventoryLocationFilter = select.value;
+  renderList();
+}
+
+function populateInventoryLocationFilter() {
+  const select = document.getElementById('inventory-location-filter');
+  if (!select) return;
+
+  // Clear existing options except "All Locations"
+  select.innerHTML = '<option value="all">All Locations</option>';
+
+  // Add active locations
+  const activeLocations = locations.filter(loc => loc.active);
+  activeLocations.forEach(loc => {
+    const option = document.createElement('option');
+    option.value = loc.id;
+    option.textContent = loc.name;
+    select.appendChild(option);
+  });
+
+  // Set current selection
+  select.value = inventoryLocationFilter;
+}
+
 // ── Location Management ────────────────────────────────────
 function addLocation() {
   const name = prompt('Enter location name (e.g., "Downtown Booth"):');
@@ -969,21 +1013,62 @@ function renderList() {
     item.totalQty = Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc.qty || 0), 0);
   });
 
+  // Filter items by selected location
+  let filteredItems = allMatch;
+  if (inventoryLocationFilter !== 'all') {
+    filteredItems = allMatch.filter(item => {
+      if (!item.inventory) return false;
+      return item.inventory[inventoryLocationFilter] && Number(item.inventory[inventoryLocationFilter].qty) > 0;
+    });
+  }
+
   // Split: in-stock = totalQty > 0, sold-out = totalQty === 0 AND has sales history
-  const inStock = allMatch.filter(i => Number(i.totalQty) > 0).sort((a,b)=>a.name.localeCompare(b.name));
-  const soldOut = allMatch.filter(i => Number(i.totalQty) === 0 && (i.sales||[]).length > 0).sort((a,b)=>a.name.localeCompare(b.name));
+  const inStock = filteredItems.filter(i => Number(i.totalQty) > 0).sort((a,b)=>a.name.localeCompare(b.name));
+  const soldOut = filteredItems.filter(i => Number(i.totalQty) === 0 && (i.sales||[]).length > 0).sort((a,b)=>a.name.localeCompare(b.name));
 
-  // Summary stats — in-stock only
+  // Summary stats — in-stock only, filtered by location
   const tot = (arr, fn) => arr.reduce(fn, 0);
-  document.getElementById('sum-items').textContent  = inStock.length;
-  document.getElementById('sum-units').textContent  = tot(inStock, (a,i)=>a+Number(i.totalQty));
-  document.getElementById('sum-cost').textContent   = fmtK(tot(inStock, (a,i)=>a+(Number(i.cost)+Number(i.labor))*Number(i.totalQty)));
-  document.getElementById('sum-retail').textContent = fmtK(tot(inStock, (a,i)=>a+Number(i.suggestedPrice??i.salePrice??0)*Number(i.totalQty)));
+  let totalUnits = 0;
+  let totalCost = 0;
+  let totalRetail = 0;
 
-  // Sold summary — across ALL items with any sales
-  const allSold = inventory.filter(i=>(i.sales||[]).length>0);
-  const totalSoldUnits   = allSold.reduce((s,i)=>(i.sales||[]).reduce((ss,sl)=>ss+Number(sl.qty),0)+s, 0);
-  const totalSoldRevenue = allSold.reduce((s,i)=>(i.sales||[]).reduce((ss,sl)=>ss+Number(sl.revenue),0)+s, 0);
+  inStock.forEach(item => {
+    let itemQty = Number(item.totalQty);
+    let itemCost = Number(item.cost) + Number(item.labor);
+    let itemRetail = Number(item.suggestedPrice ?? item.salePrice ?? 0);
+
+    if (inventoryLocationFilter !== 'all') {
+      // For specific location, use only that location's quantity
+      itemQty = Number(item.inventory[inventoryLocationFilter]?.qty || 0);
+    }
+
+    totalUnits += itemQty;
+    totalCost += itemCost * itemQty;
+    totalRetail += itemRetail * itemQty;
+  });
+
+  document.getElementById('sum-items').textContent  = inStock.length;
+  document.getElementById('sum-units').textContent  = totalUnits;
+  document.getElementById('sum-cost').textContent   = fmtK(totalCost);
+  document.getElementById('sum-retail').textContent = fmtK(totalRetail);
+
+  // Update last updated timestamp
+  document.getElementById('inventory-last-updated').textContent = new Date().toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true
+  });
+
+  // Sold summary — filtered by location
+  let soldItems = inventory.filter(i=>(i.sales||[]).length>0);
+  if (inventoryLocationFilter !== 'all') {
+    soldItems = soldItems.filter(item => {
+      // Filter sales by location - check if item has sales from the selected location
+      return (item.sales||[]).some(sale => sale.location === inventoryLocationFilter);
+    });
+  }
+
+  const totalSoldUnits   = soldItems.reduce((s,i)=>(i.sales||[]).reduce((ss,sl)=>ss+Number(sl.qty),0)+s, 0);
+  const totalSoldRevenue = soldItems.reduce((s,i)=>(i.sales||[]).reduce((ss,sl)=>ss+Number(sl.revenue),0)+s, 0);
   const soldStrip = document.getElementById('sold-summary-strip');
   if (totalSoldUnits > 0) {
     soldStrip.style.display = 'grid';
@@ -996,7 +1081,11 @@ function renderList() {
   // In-stock list
   const el = document.getElementById('inv-list');
   if (!inStock.length && !q) {
-    el.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No items in stock</div><div class="empty-sub">Tap + Add Item to get started</div></div>`;
+    if (inventoryLocationFilter === 'all' && locations.filter(loc => loc.active).length === 0) {
+      el.innerHTML=`<div class="empty-state"><div class="empty-icon">📍</div><div class="empty-text">No locations configured</div><div class="empty-sub">Go to Settings to add your first location</div></div>`;
+    } else {
+      el.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No items in stock</div><div class="empty-sub">Tap + Add Item to get started</div></div>`;
+    }
   } else if (!inStock.length && q) {
     el.innerHTML=`<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No matches</div><div class="empty-sub">Try a different search</div></div>`;
   } else {
@@ -1047,8 +1136,16 @@ function renderSoldList(soldItems) {
   const badge = document.getElementById('sold-count-badge');
   const arrow = document.getElementById('sold-toggle-arrow');
 
-  // Show sold section if any item has sales (even if still in stock)
-  const allWithSales = inventory.filter(i=>(i.sales||[]).length>0).sort((a,b)=>a.name.localeCompare(b.name));
+  // Filter items with sales by location
+  let allWithSales = inventory.filter(i=>(i.sales||[]).length>0);
+  if (inventoryLocationFilter !== 'all') {
+    allWithSales = allWithSales.filter(item => {
+      // Filter sales by location - check if item has sales from the selected location
+      return (item.sales||[]).some(sale => sale.location === inventoryLocationFilter);
+    });
+  }
+  allWithSales = allWithSales.sort((a,b)=>a.name.localeCompare(b.name));
+
   if (!allWithSales.length) { sec.style.display='none'; return; }
 
   sec.style.display = 'block';
@@ -1059,12 +1156,23 @@ function renderSoldList(soldItems) {
   if (!soldSectionOpen) return;
 
   list.innerHTML = allWithSales.map(item => {
-    const totalSoldQty = (item.sales||[]).reduce((s,sl)=>s+Number(sl.qty),0);
-    const totalRevenue = (item.sales||[]).reduce((s,sl)=>s+Number(sl.revenue),0);
-    const totalCostBasis = (item.sales||[]).reduce((s,sl)=>s+(Number(item.cost)+Number(item.labor))*Number(sl.qty),0);
+    // Filter sales by location for this item
+    let itemSales = item.sales || [];
+    if (inventoryLocationFilter !== 'all') {
+      itemSales = itemSales.filter(sale => sale.location === inventoryLocationFilter);
+    }
+
+    const totalSoldQty = itemSales.reduce((s,sl)=>s+Number(sl.qty),0);
+    const totalRevenue = itemSales.reduce((s,sl)=>s+Number(sl.revenue),0);
+    const totalCostBasis = itemSales.reduce((s,sl)=>s+(Number(item.cost)+Number(item.labor))*Number(sl.qty),0);
     const totalProfit = totalRevenue - totalCostBasis;
-    const lastSale = [...(item.sales||[])].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
-    const soldOutBadge = Number(item.qty)===0;
+
+    // Calculate net difference (Suggested Price - Revenue)
+    const suggestedPrice = Number(item.suggestedPrice ?? item.salePrice ?? 0);
+    const netDifference = suggestedPrice - (totalRevenue / Math.max(totalSoldQty, 1)); // per unit average
+
+    const lastSale = [...itemSales].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+    const soldOutBadge = Number(item.totalQty)===0;
     return `<div class="inv-card" onclick="openDetail('${item.id}')" style="opacity:${soldOutBadge?1:.85}">
       <div class="inv-card-header">
         <div style="flex:1;padding-right:10px;">
@@ -1072,9 +1180,12 @@ function renderSoldList(soldItems) {
           <span class="category-chip">${esc(item.category)}</span>
         </div>
         <div style="text-align:right;">
+          <div style="font-size:12px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;${netDifference>=0?'color:var(--accent2);':'color:var(--danger);'}">
+            ${netDifference>=0?'+':''}${fmt(netDifference)}
+          </div>
           ${soldOutBadge
             ? `<div style="background:#f0faf6;border:1.5px solid var(--accent2);border-radius:9px;padding:4px 10px;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--accent2);white-space:nowrap;">${totalSoldQty} sold</div>`
-            : `<div class="inv-qty-badge ok">${item.qty} left</div>`
+            : `<div class="inv-qty-badge ok">${item.totalQty} left</div>`
           }
           <div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;">${lastSale?new Date(lastSale.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—'}</div>
         </div>
@@ -1083,7 +1194,7 @@ function renderSoldList(soldItems) {
         <div class="inv-metric"><div class="inv-metric-label">Sold</div><div class="inv-metric-value price">${totalSoldQty} ${esc(item.unit||'units')}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(totalRevenue)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Profit</div><div class="inv-metric-value ${totalProfit>=0?'highlight':'cost'}">${fmt(totalProfit)}</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Suggested $</div><div class="inv-metric-value">${fmt(Number(item.suggestedPrice??item.salePrice??0))}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Suggested $</div><div class="inv-metric-value">${fmt(suggestedPrice)}</div></div>
       </div></div>`;
   }).join('');
 }
@@ -1119,6 +1230,12 @@ function openAddModal() {
   document.getElementById('f-category').value='Art';
   populateUnitSelect('print');
   populateLocationSelect();
+
+  // Pre-select the current location filter if it's not "all"
+  if (inventoryLocationFilter !== 'all') {
+    document.getElementById('f-location').value = inventoryLocationFilter;
+  }
+
   document.getElementById('modal-title').textContent='Add Item';
   document.getElementById('btn-delete-item').style.display='none';
   updateCalc();
@@ -2732,6 +2849,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup'].forEach(initSwipeDismiss);
   populateUnitSelect('print');
   await loadAllData();
+  populateInventoryLocationFilter();
   renderList();
   updateBackupStatus();
 });
