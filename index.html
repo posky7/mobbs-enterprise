@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Cheshire Closet">
+<meta name="apple-mobile-web-app-title" content="CHESHIRE CLOSET">
 <meta name="theme-color" content="#f5f2ee">
 <meta name="description" content="Home decor vendor booth inventory tracker">
-<title>Cheshire Closet — Booth Inventory</title>
+<title>CHESHIRE CLOSET — Booth Inventory</title>
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%235b4fcf'/%3E%3Ctext x='90' y='118' font-size='90' text-anchor='middle' font-family='system-ui'%3E📦%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -243,7 +243,7 @@ select.form-input option { background:#fff; color:#1a1612; }
 
 <div id="install-banner">
   <button class="install-close" onclick="dismissBanner()">✕</button>
-  <div class="install-title">📲 Add Cheshire Closet to your Home Screen</div>
+  <div class="install-title">📲 Add CHESHIRE CLOSET to your Home Screen</div>
   <div class="install-steps">Tap the <strong>Share</strong> button ( ⎙ ) in Safari's toolbar, then choose <strong>"Add to Home Screen"</strong> → tap <strong>Add</strong>.</div>
 </div>
 
@@ -266,7 +266,7 @@ select.form-input option { background:#fff; color:#1a1612; }
   <div id="tab-inventory" class="tab-content active">
     <div class="app-header">
       <div class="header-top">
-        <div class="app-logo">Cheshire Closet</div>
+        <div class="app-logo">CHESHIRE CLOSET</div>
         <div class="header-clock"><div class="header-clock-time" id="clock-time">—</div><div class="header-clock-date" id="clock-date">—</div></div>
       </div>
       <div class="header-title">Inventory</div>
@@ -313,7 +313,7 @@ select.form-input option { background:#fff; color:#1a1612; }
   <div id="tab-pnl" class="tab-content">
     <div class="app-header">
       <div class="header-top">
-        <div class="app-logo">Cheshire Closet</div>
+        <div class="app-logo">CHESHIRE CLOSET</div>
         <div class="header-clock"><div class="header-clock-time" id="pnl-clock">—</div><div class="header-clock-date" id="pnl-date">—</div></div>
       </div>
       <div class="header-title">Profit &amp; Loss</div>
@@ -335,7 +335,7 @@ select.form-input option { background:#fff; color:#1a1612; }
   <div id="tab-loans" class="tab-content">
     <div class="app-header">
       <div class="header-top">
-        <div class="app-logo">Cheshire Closet</div>
+        <div class="app-logo">CHESHIRE CLOSET</div>
         <div class="header-clock"><div class="header-clock-time" id="loans-clock">—</div><div class="header-clock-date" id="loans-date">—</div></div>
       </div>
       <div class="header-title">Loans</div>
@@ -355,7 +355,7 @@ select.form-input option { background:#fff; color:#1a1612; }
   <div id="tab-expenses" class="tab-content">
     <div class="app-header">
       <div class="header-top">
-        <div class="app-logo">Cheshire Closet</div>
+        <div class="app-logo">CHESHIRE CLOSET</div>
         <div class="header-clock"><div class="header-clock-time" id="exp-clock">—</div><div class="header-clock-date" id="exp-date">—</div></div>
       </div>
       <div class="header-title">Expenses</div>
@@ -375,7 +375,7 @@ select.form-input option { background:#fff; color:#1a1612; }
   <div id="tab-reports" class="tab-content">
     <div class="app-header">
       <div class="header-top">
-        <div class="app-logo">Cheshire Closet</div>
+        <div class="app-logo">CHESHIRE CLOSET</div>
         <div class="header-clock"><div class="header-clock-time" id="rpt-clock">—</div><div class="header-clock-date" id="rpt-date">—</div></div>
       </div>
       <div class="header-title">Reports</div>
@@ -2084,7 +2084,7 @@ function exportReportPDF() {
   const itemTable = Object.entries(byItem).sort((a,b)=>b[1].rev-a[1].rev).slice(0,10)
     .map(([name,d])=>`<tr><td>${name}</td><td>${d.units}</td><td>$${d.rev.toFixed(2)}</td><td>$${d.pft.toFixed(2)}</td></tr>`).join('');
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Cheshire Closet Report</title>
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>CHESHIRE CLOSET Report</title>
   <style>
     body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1612;padding:32px;max-width:720px;margin:0 auto;}
     h1{font-size:24px;font-weight:800;margin-bottom:4px;}
@@ -2100,7 +2100,7 @@ function exportReportPDF() {
     tr:last-child td{border-bottom:none;}
     .footer{margin-top:40px;font-size:11px;color:#9a9080;text-align:center;}
   </style></head><body>
-  <h1>Cheshire Closet Sales Report</h1>
+  <h1>CHESHIRE CLOSET Sales Report</h1>
   <div class="period">${bounds.label} · Generated ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
   <div class="kpis">
     <div class="kpi"><div class="kpi-label">Revenue</div><div class="kpi-val">$${revenue.toFixed(2)}</div></div>
@@ -2112,7 +2112,7 @@ function exportReportPDF() {
   <table><thead><tr><th>Category</th><th>Units</th><th>Revenue</th><th>Profit</th><th>Margin</th></tr></thead><tbody>${catTable||'<tr><td colspan="5" style="color:#9a9080">No data</td></tr>'}</tbody></table>
   <h2>Top Items</h2>
   <table><thead><tr><th>Item</th><th>Units</th><th>Revenue</th><th>Profit</th></tr></thead><tbody>${itemTable||'<tr><td colspan="4" style="color:#9a9080">No data</td></tr>'}</tbody></table>
-  <div class="footer">Cheshire Closet · Booth Inventory &amp; Sales Tracker</div>
+  <div class="footer">CHESHIRE CLOSET · Booth Inventory &amp; Sales Tracker</div>
   </body></html>`;
 
   const win = window.open('','_blank');
