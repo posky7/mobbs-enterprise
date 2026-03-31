@@ -1,114 +1,55 @@
 import { getStore } from '@netlify/blobs';
 
-// Blob store names for different data types
 const STORES = {
-  inventory: 'inventory-data',
-  locations: 'locations-data',
-  expenses: 'expenses-data',
-  loans: 'loans-data',
+  inventory: 'inventory',
+  locations: 'locations',
+  expenses: 'expenses',
+  loans: 'loans',
   backupTimestamp: 'backup-timestamp'
 };
 
-// Get a blob store instance
-function getBlobStore(storeName) {
+export async function getBlobStore(name) {
+  const storeName = STORES[name] || name;
+  return getStore({ name: storeName, consistency: 'strong' });
+}
+
+export async function readBlobData(key) {
   try {
-    return getStore(storeName);
+    const store = await getBlobStore(key);
+    const data = await store.get(key, { type: 'json' });
+    return data || [];
   } catch (error) {
-    console.error(`Failed to get blob store "${storeName}":`, error);
-    throw new Error(`Blob storage unavailable: ${error.message}`);
+    console.error(`Error reading blob ${key}:`, error);
+    return [];
   }
 }
 
-// Generic read function
-export async function readBlobData(storeName, key = 'data') {
+export async function writeBlobData(key, data) {
   try {
-    const store = getBlobStore(STORES[storeName]);
-    const data = await store.get(key);
-
-    if (!data) {
-      // Return default data based on store type
-      return getDefaultData(storeName);
-    }
-
-    return JSON.parse(data);
-  } catch (error) {
-    console.error(`Failed to read ${storeName} data:`, error);
-    // CRITICAL: DO NOT return default data on errors - this causes silent data loss!
-    // Let the calling code handle the error appropriately
-    throw error;
-  }
-}
-
-// Generic write function
-export async function writeBlobData(storeName, data, key = 'data') {
-  try {
-    const store = getBlobStore(STORES[storeName]);
-    await store.set(key, JSON.stringify(data, null, 2));
+    const store = await getBlobStore(key);
+    await store.setJSON(key, data);
     return true;
   } catch (error) {
-    console.error(`Failed to write ${storeName} data:`, error);
+    console.error(`Error writing blob ${key}:`, error);
     throw error;
   }
 }
 
-// Get default data for each store type
-function getDefaultData(storeName) {
-  switch (storeName) {
-    case 'inventory':
-      return [];
-    case 'locations':
-      return [
-        {
-          id: 'storage',
-          name: 'Storage',
-          type: 'storage',
-          active: true,
-          order: 0,
-          isWarehouse: false
-        }
-      ];
-    case 'expenses':
-      return [];
-    case 'loans':
-      return [];
-    case 'backupTimestamp':
-      return { timestamp: null };
-    default:
-      return null;
-  }
-}
-
-// Delete all data from a store (for reset operations)
-export async function clearBlobStore(storeName) {
+// Optional: backup helper used by reset.mjs
+export async function getBackupTimestamp() {
   try {
-    const store = getBlobStore(STORES[storeName]);
-    await store.delete();
-    return true;
-  } catch (error) {
-    console.error(`Failed to clear ${storeName} store:`, error);
-    throw error;
+    const store = await getBlobStore('backupTimestamp');
+    return await store.get('timestamp', { type: 'json' }) || null;
+  } catch {
+    return null;
   }
 }
 
-// List all stores (for debugging/admin purposes)
-export async function listBlobStores() {
-  const results = {};
-  for (const [key, storeName] of Object.entries(STORES)) {
-    try {
-      const store = getBlobStore(storeName);
-      const keys = await store.list();
-      results[key] = {
-        store: storeName,
-        keys: keys.length,
-        available: true
-      };
-    } catch (error) {
-      results[key] = {
-        store: storeName,
-        available: false,
-        error: error.message
-      };
-    }
+export async function setBackupTimestamp(timestamp) {
+  try {
+    const store = await getBlobStore('backupTimestamp');
+    await store.setJSON('timestamp', timestamp);
+  } catch (error) {
+    console.error('Error setting backup timestamp:', error);
   }
-  return results;
 }
