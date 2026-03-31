@@ -487,7 +487,8 @@ select.form-input option { background:#fff; color:#1a1612; }
           </div>
           <div class="form-group"><label class="form-label">Unit Type</label><select class="form-input" id="f-unit"></select></div>
         </div>
-        <div class="form-group"><label class="form-label">Quantity in Stock</label><input class="form-input" type="number" id="f-qty" placeholder="0" min="0" inputmode="numeric"></div>
+        <div class="form-group"><label class="form-label">Location *</label><select class="form-input" id="f-location" required></select></div>
+        <div class="form-group"><label class="form-label">Quantity at Location</label><input class="form-input" type="number" id="f-qty" placeholder="0" min="0" inputmode="numeric"></div>
         <div class="reorder-row"><span class="reorder-label">🔔 Low stock alert when qty ≤</span><input class="reorder-input" type="number" id="f-reorder" value="5" min="0" inputmode="numeric"></div>
       </div>
       <div class="form-section">
@@ -757,6 +758,45 @@ function populateUnitSelect(selected) {
 }
 function onCategoryChange() { populateUnitSelect(document.getElementById('f-unit').value); }
 
+// ── Location Setup Validation ────────────────────────────────────
+function showLocationSetupMessage() {
+  showConfirm(
+    'No Locations Configured',
+    'Please configure at least one location in Settings before adding inventory.',
+    'Go to Settings'
+  ).then(confirmed => {
+    if (confirmed) {
+      switchTab('settings');
+    }
+  });
+}
+
+function populateLocationSelect() {
+  const select = document.getElementById('f-location');
+  if (!select) return;
+
+  // Clear existing options
+  select.innerHTML = '';
+
+  // Add active locations
+  const activeLocations = locations.filter(loc => loc.active);
+  activeLocations.forEach(loc => {
+    const option = document.createElement('option');
+    option.value = loc.id;
+    option.textContent = loc.name;
+    select.appendChild(option);
+  });
+
+  // If no locations, add a disabled placeholder
+  if (activeLocations.length === 0) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No locations configured';
+    option.disabled = true;
+    select.appendChild(option);
+  }
+}
+
 // ── Swipe-to-dismiss modals (FIX #5) ──────────────────────
 function initSwipeDismiss(overlayId) {
   const overlay = document.getElementById(overlayId);
@@ -1020,10 +1060,18 @@ function updateCalc() {
 }
 
 function openAddModal() {
+  // Check if any active locations exist
+  const activeLocations = locations.filter(loc => loc.active);
+  if (activeLocations.length === 0) {
+    showLocationSetupMessage();
+    return;
+  }
+
   ['edit-id','f-name','f-qty','f-cost','f-labor','f-suggested-price','f-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-reorder').value='5';
   document.getElementById('f-category').value='Art';
   populateUnitSelect('print');
+  populateLocationSelect();
   document.getElementById('modal-title').textContent='Add Item';
   document.getElementById('btn-delete-item').style.display='none';
   updateCalc();
@@ -1050,13 +1098,15 @@ function openEditModal(id) {
 
 function saveItem() {
   const name=document.getElementById('f-name').value.trim(); if(!name){document.getElementById('f-name').focus();return;}
+  const location=document.getElementById('f-location').value; if(!location){document.getElementById('f-location').focus();return;}
   const editId=document.getElementById('edit-id').value;
   const existing=editId?inventory.find(i=>i.id===editId):null;
+  const qty=parseInt(document.getElementById('f-qty').value)||0;
+
   const item={
     id:editId||uid(), name,
     category:document.getElementById('f-category').value,
     unit:document.getElementById('f-unit').value||'piece',
-    qty:parseInt(document.getElementById('f-qty').value)||0,
     reorderPt:parseInt(document.getElementById('f-reorder').value)||5,
     cost:parseFloat(document.getElementById('f-cost').value)||0,
     labor:parseFloat(document.getElementById('f-labor').value)||0,
@@ -1064,6 +1114,16 @@ function saveItem() {
     notes:document.getElementById('f-notes').value.trim(),
     sales:existing?existing.sales||[]:[], // preserve sale history on edit
   };
+
+  // Initialize inventory object if it doesn't exist
+  if (!item.inventory) item.inventory = {};
+
+  // Set quantity for the selected location
+  item.inventory[location] = {
+    qty: qty,
+    lastUpdated: new Date().toISOString()
+  };
+
   if(editId){const idx=inventory.findIndex(i=>i.id===editId);if(idx>-1)inventory[idx]=item;}else inventory.unshift(item);
   saveInventory(); closeModal('modal-add'); renderList();
   showToast(editId?'✓ Item updated':'✓ Item added');
@@ -1166,11 +1226,15 @@ function adjustQty(d) {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
   if (!item.inventory) item.inventory = {};
 
-  // Default to adjusting storage location
-  const currentQty = Number(item.inventory['storage']?.qty || 0);
+  // For now, default to adjusting the first active location
+  // In a future enhancement, we could add location selection in the detail view
+  const activeLocations = locations.filter(loc => loc.active);
+  const defaultLocation = activeLocations.length > 0 ? activeLocations[0].id : 'storage';
+
+  const currentQty = Number(item.inventory[defaultLocation]?.qty || 0);
   const newQty = Math.max(0, currentQty + d);
 
-  item.inventory['storage'] = {
+  item.inventory[defaultLocation] = {
     qty: newQty,
     lastUpdated: new Date().toISOString()
   };
