@@ -298,7 +298,7 @@ select.form-input option { background:#fff; color:#1a1612; }
       <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Units Sold</div><div class="stat-value" id="sum-sold-units">0</div><div class="stat-sub">total sold</div></div>
       <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Revenue Earned</div><div class="stat-value" id="sum-sold-revenue">$0</div><div class="stat-sub">from sales</div></div>
     </div>
-    <div class="section-header"><div class="section-title">Items</div><button class="btn-add" onclick="openAddModal()">＋ Add Item</button></div>
+    <div class="section-header"><div class="section-title">Items</div><div style="display:flex;gap:8px;"><button class="btn-add" onclick="openMoveInventoryModal()">📦 Move Inventory</button><button class="btn-add" onclick="openAddModal()">＋ Add Item</button></div></div>
     <div class="search-wrap"><input class="search-input" type="search" placeholder="Search inventory…" id="search-box" oninput="renderList()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
     <div class="data-tools">
       <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
@@ -558,6 +558,34 @@ select.form-input option { background:#fff; color:#1a1612; }
       <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="f-notes" placeholder="Any additional details…" autocomplete="off"></div>
       <button class="btn-save" onclick="saveItem()">Save Item</button>
       <button class="btn-delete" id="btn-delete-item" style="display:none" onclick="confirmDeleteItem()">Delete Item</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Move Inventory Modal -->
+<div class="modal-overlay" id="modal-move-inventory">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title">Move Inventory</div><button class="modal-close" onclick="closeModal('modal-move-inventory')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Move to Location</label>
+        <select class="form-input" id="move-destination" onchange="updateMoveList()"></select>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin:16px 0 8px;">Select Items to Move</div>
+
+      <div id="move-inventory-list" style="max-height:400px;overflow-y:auto;margin-bottom:16px;">
+        <!-- Items will be populated here -->
+      </div>
+
+      <div id="move-summary" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;display:none;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;">Move Summary</div>
+        <div id="move-summary-content"></div>
+      </div>
+
+      <button class="btn-save" onclick="executeMove()" id="move-btn" disabled>Move Selected Items</button>
       <div style="height:12px"></div>
     </div>
   </div>
@@ -3030,9 +3058,275 @@ async function deleteAllData() {
   }
 }
 
+// ── Move Inventory ──────────────────────────────────────────
+let selectedItems = {}; // itemId -> quantity to move
+
+function openMoveInventoryModal() {
+  // Check if any active locations exist
+  const activeLocations = locations.filter(loc => loc.active);
+  if (activeLocations.length < 2) {
+    showToast('Need at least 2 locations to move inventory');
+    return;
+  }
+
+  // Reset selection
+  selectedItems = {};
+
+  // Populate destination dropdown (exclude current filter location)
+  const destSelect = document.getElementById('move-destination');
+  destSelect.innerHTML = '<option value="">Select destination…</option>';
+  activeLocations.forEach(loc => {
+    if (inventoryLocationFilter === 'all' || loc.id !== inventoryLocationFilter) {
+      const option = document.createElement('option');
+      option.value = loc.id;
+      option.textContent = loc.name;
+      destSelect.appendChild(option);
+    }
+  });
+
+  // Set default destination if there's a warehouse
+  const warehouse = locations.find(loc => loc.isWarehouse);
+  if (warehouse && warehouse.id !== inventoryLocationFilter) {
+    destSelect.value = warehouse.id;
+  }
+
+  updateMoveList();
+  document.getElementById('modal-move-inventory').classList.add('open');
+}
+
+function updateMoveList() {
+  const destSelect = document.getElementById('move-destination');
+  const destination = destSelect.value;
+  const listEl = document.getElementById('move-inventory-list');
+  const summaryEl = document.getElementById('move-summary');
+  const summaryContentEl = document.getElementById('move-summary-content');
+  const moveBtn = document.getElementById('move-btn');
+
+  if (!destination) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);font-size:14px;">Select a destination location above</div>';
+    summaryEl.style.display = 'none';
+    moveBtn.disabled = true;
+    return;
+  }
+
+  // Get items that have stock at current filter location
+  let availableItems = [];
+  if (inventoryLocationFilter === 'all') {
+    // Show all items with any stock
+    availableItems = inventory.filter(item => item.totalQty > 0);
+  } else {
+    // Show items with stock at the filtered location
+    availableItems = inventory.filter(item => {
+      if (!item.inventory) return false;
+      const qty = Number(item.inventory[inventoryLocationFilter]?.qty || 0);
+      return qty > 0;
+    });
+  }
+
+  if (!availableItems.length) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);font-size:14px;">No items available to move</div>';
+    summaryEl.style.display = 'none';
+    moveBtn.disabled = true;
+    return;
+  }
+
+  // Render items
+  listEl.innerHTML = availableItems.map(item => {
+    const currentQty = inventoryLocationFilter === 'all'
+      ? item.totalQty
+      : Number(item.inventory[inventoryLocationFilter]?.qty || 0);
+
+    const selectedQty = selectedItems[item.id] || 0;
+    const isSelected = selectedQty > 0;
+
+    return `<div class="inv-card" style="margin-bottom:8px;">
+      <div class="inv-card-header" style="padding:12px;">
+        <div style="flex:1;">
+          <div class="inv-name">${esc(item.name)}</div>
+          <span class="category-chip">${esc(item.category)}</span>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Available: ${currentQty} ${esc(item.unit || 'units')}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" class="form-input" style="width:80px;margin:0;" id="move-qty-${item.id}"
+                 value="${selectedQty}" min="0" max="${currentQty}" inputmode="numeric"
+                 onchange="updateItemSelection('${item.id}', this.value)">
+          <input type="checkbox" id="move-check-${item.id}" ${isSelected ? 'checked' : ''}
+                 onchange="toggleItemSelection('${item.id}')" style="width:18px;height:18px;">
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  updateMoveSummary();
+}
+
+function toggleItemSelection(itemId) {
+  const checkbox = document.getElementById(`move-check-${itemId}`);
+  const qtyInput = document.getElementById(`move-qty-${itemId}`);
+
+  if (checkbox.checked) {
+    const currentQty = getItemAvailableQty(itemId);
+    qtyInput.value = Math.min(1, currentQty); // Default to 1 or max available
+    updateItemSelection(itemId, qtyInput.value);
+  } else {
+    qtyInput.value = 0;
+    updateItemSelection(itemId, 0);
+  }
+}
+
+function updateItemSelection(itemId, qty) {
+  const quantity = parseInt(qty) || 0;
+  const checkbox = document.getElementById(`move-check-${itemId}`);
+  const maxQty = getItemAvailableQty(itemId);
+
+  if (quantity > maxQty) {
+    showToast(`Cannot move more than ${maxQty} units`);
+    document.getElementById(`move-qty-${itemId}`).value = maxQty;
+    selectedItems[itemId] = maxQty;
+  } else if (quantity > 0) {
+    selectedItems[itemId] = quantity;
+    checkbox.checked = true;
+  } else {
+    delete selectedItems[itemId];
+    checkbox.checked = false;
+  }
+
+  updateMoveSummary();
+}
+
+function getItemAvailableQty(itemId) {
+  const item = inventory.find(i => i.id === itemId);
+  if (!item) return 0;
+
+  if (inventoryLocationFilter === 'all') {
+    return item.totalQty || 0;
+  } else {
+    return Number(item.inventory[inventoryLocationFilter]?.qty || 0);
+  }
+}
+
+function updateMoveSummary() {
+  const summaryEl = document.getElementById('move-summary');
+  const summaryContentEl = document.getElementById('move-summary-content');
+  const moveBtn = document.getElementById('move-btn');
+
+  const selectedCount = Object.keys(selectedItems).length;
+  const totalUnits = Object.values(selectedItems).reduce((sum, qty) => sum + qty, 0);
+
+  if (selectedCount > 0) {
+    const destination = document.getElementById('move-destination').value;
+    const destName = locations.find(l => l.id === destination)?.name || destination;
+
+    summaryContentEl.innerHTML = `
+      <div class="pnl-row"><div class="pnl-row-label">Items selected</div><div class="pnl-row-val">${selectedCount}</div></div>
+      <div class="pnl-row"><div class="pnl-row-label">Total units</div><div class="pnl-row-val">${totalUnits}</div></div>
+      <div class="pnl-row"><div class="pnl-row-label">Destination</div><div class="pnl-row-val">${esc(destName)}</div></div>
+    `;
+    summaryEl.style.display = 'block';
+    moveBtn.disabled = false;
+    moveBtn.textContent = `Move ${totalUnits} Unit${totalUnits !== 1 ? 's' : ''}`;
+  } else {
+    summaryEl.style.display = 'none';
+    moveBtn.disabled = true;
+    moveBtn.textContent = 'Move Selected Items';
+  }
+}
+
+async function executeMove() {
+  const destination = document.getElementById('move-destination').value;
+  if (!destination) {
+    showToast('Select a destination location');
+    return;
+  }
+
+  const selectedItemIds = Object.keys(selectedItems);
+  if (selectedItemIds.length === 0) {
+    showToast('Select items to move');
+    return;
+  }
+
+  // Show loading state
+  const moveBtn = document.getElementById('move-btn');
+  const originalText = moveBtn.textContent;
+  moveBtn.disabled = true;
+  moveBtn.textContent = 'Moving…';
+
+  try {
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const itemId of selectedItemIds) {
+      const quantity = selectedItems[itemId];
+      const sourceLocation = inventoryLocationFilter === 'all' ? null : inventoryLocationFilter;
+
+      try {
+        // If source is "all", we need to determine the actual source location
+        // For now, we'll move from the first location that has stock
+        let actualSource = sourceLocation;
+        if (!actualSource) {
+          const item = inventory.find(i => i.id === itemId);
+          if (item && item.inventory) {
+            const locationsWithStock = Object.keys(item.inventory).filter(locId =>
+              Number(item.inventory[locId].qty) > 0
+            );
+            actualSource = locationsWithStock[0]; // Use first location with stock
+          }
+        }
+
+        if (!actualSource) {
+          console.error(`No source location found for item ${itemId}`);
+          errorCount++;
+          continue;
+        }
+
+        const response = await fetch(`${API}/inventory?action=transfer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            itemId,
+            fromLocation: actualSource,
+            toLocation: destination,
+            quantity
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Transfer failed');
+        }
+
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to move item ${itemId}:`, error);
+        errorCount++;
+      }
+    }
+
+    // Reload data to reflect changes
+    await loadAllData();
+    renderList();
+
+    // Close modal and show results
+    closeModal('modal-move-inventory');
+
+    if (successCount > 0) {
+      showToast(`✓ Moved ${successCount} item${successCount !== 1 ? 's' : ''} successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+    } else {
+      showToast('⚠ All transfers failed');
+    }
+
+  } catch (error) {
+    console.error('Move operation failed:', error);
+    showToast('⚠ Move operation failed');
+  } finally {
+    moveBtn.disabled = false;
+    moveBtn.textContent = originalText;
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup'].forEach(initSwipeDismiss);
+  ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup','modal-move-inventory'].forEach(initSwipeDismiss);
   populateUnitSelect('print');
   await loadAllData();
   populateInventoryLocationFilter();
