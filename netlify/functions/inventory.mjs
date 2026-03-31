@@ -49,10 +49,20 @@ export default async function handler(event, context) {
     if (httpMethod === 'POST' && queryStringParameters?.action === 'transfer') {
       const { itemId, fromLocation, toLocation, quantity } = JSON.parse(body || '{}');
 
+      // Validate required parameters
       if (!itemId || !fromLocation || !toLocation || !quantity || quantity <= 0) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Missing required parameters' })
+          body: JSON.stringify({ error: 'Missing or invalid required parameters: itemId, fromLocation, toLocation, and quantity (> 0) are required' })
+        };
+      }
+
+      // Validate quantity is a positive number
+      const transferQty = Number(quantity);
+      if (isNaN(transferQty) || transferQty <= 0 || !Number.isInteger(transferQty)) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: 'Quantity must be a positive integer' })
         };
       }
 
@@ -62,26 +72,38 @@ export default async function handler(event, context) {
       if (!item) {
         return {
           statusCode: 404,
-          body: JSON.stringify({ error: 'Item not found' })
+          body: JSON.stringify({ error: `Item with ID '${itemId}' not found` })
         };
       }
 
       // Initialize inventory object if it doesn't exist
       if (!item.inventory) item.inventory = {};
 
-      // Check if source location has enough quantity
+      // Check if source location exists and has enough quantity
       const sourceQty = Number(item.inventory[fromLocation]?.qty || 0);
-      if (sourceQty < quantity) {
+      if (sourceQty < transferQty) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Insufficient quantity in source location' })
+          body: JSON.stringify({
+            error: `Insufficient quantity in source location '${fromLocation}': ${sourceQty} available, ${transferQty} requested`
+          })
+        };
+      }
+
+      // Prevent negative inventory (extra safety check)
+      if (sourceQty - transferQty < 0) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({
+            error: `Transfer would result in negative inventory: ${sourceQty} - ${transferQty} = ${sourceQty - transferQty}`
+          })
         };
       }
 
       // Perform the transfer
-      const newSourceQty = Math.max(0, sourceQty - quantity);
+      const newSourceQty = sourceQty - transferQty;
       const targetQty = Number(item.inventory[toLocation]?.qty || 0);
-      const newTargetQty = targetQty + quantity;
+      const newTargetQty = targetQty + transferQty;
 
       // Update source location
       if (newSourceQty > 0) {
@@ -106,7 +128,15 @@ export default async function handler(event, context) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: true,
-          message: `Transferred ${quantity} units from ${fromLocation} to ${toLocation}`
+          message: `Successfully transferred ${transferQty} units from ${fromLocation} to ${toLocation}`,
+          details: {
+            itemId,
+            fromLocation,
+            toLocation,
+            quantity: transferQty,
+            newSourceQty,
+            newTargetQty
+          }
         })
       };
     }

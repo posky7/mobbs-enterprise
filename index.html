@@ -3304,19 +3304,59 @@ function updateMoveList() {
     const selectedQty = selectedItems[item.id] || 0;
     const isSelected = selectedQty > 0;
 
-    return `<div class="inv-card" style="margin-bottom:8px;">
+    // Show location breakdown when filter is "all"
+    let locationInfo = '';
+    let sourceLocationSelect = '';
+
+    if (inventoryLocationFilter === 'all' && item.inventory) {
+      const locationBreakdown = locations
+        .filter(loc => loc.active)
+        .map(loc => {
+          const qty = Number((item.inventory?.[loc.id]?.qty) || 0);
+          return qty > 0 ? `${loc.name}: ${qty}` : null;
+        })
+        .filter(Boolean)
+        .join(' · ');
+
+      if (locationBreakdown) {
+        locationInfo = `<div style="font-size:11px;color:var(--text3);margin-top:4px;">📍 ${esc(locationBreakdown)}</div>`;
+      }
+
+      // Add source location selector when filter is "all"
+      const locationsWithStock = locations
+        .filter(loc => loc.active && item.inventory?.[loc.id] && Number(item.inventory[loc.id].qty) > 0);
+
+      if (locationsWithStock.length > 0) {
+        const currentSourceLocation = selectedItems[item.id + '_source'] || locationsWithStock[0].id;
+        sourceLocationSelect = `
+          <div style="margin-top:8px;">
+            <label style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);display:block;margin-bottom:4px;">Move from:</label>
+            <select class="form-input" style="font-size:12px;padding:8px 10px;" id="move-source-${item.id}"
+                    onchange="updateSourceLocation('${item.id}', this.value)">
+              ${locationsWithStock.map(loc => `<option value="${loc.id}" ${loc.id === currentSourceLocation ? 'selected' : ''}>${esc(loc.name)} (${item.inventory[loc.id].qty} available)</option>`).join('')}
+            </select>
+          </div>
+        `;
+      }
+    }
+
+    return `<div class="inv-card" style="margin-bottom:8px;" data-item-id="${item.id}">
       <div class="inv-card-header" style="padding:12px;">
         <div style="flex:1;">
           <div class="inv-name">${esc(item.name)}</div>
           <span class="category-chip">${esc(item.category)}</span>
           <div style="font-size:11px;color:var(--text3);margin-top:4px;">Available: ${currentQty} ${esc(item.unit || 'units')}</div>
+          ${locationInfo}
+          ${sourceLocationSelect}
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="number" class="form-input" style="width:80px;margin:0;" id="move-qty-${item.id}"
-                 value="${selectedQty}" min="0" max="${currentQty}" inputmode="numeric"
-                 onchange="updateItemSelection('${item.id}', this.value)">
-          <input type="checkbox" id="move-check-${item.id}" ${isSelected ? 'checked' : ''}
-                 onchange="toggleItemSelection('${item.id}')" style="width:18px;height:18px;">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="number" class="form-input" style="width:80px;margin:0;" id="move-qty-${item.id}"
+                   value="${selectedQty}" min="0" max="${currentQty}" inputmode="numeric"
+                   onchange="updateItemSelection('${item.id}', this.value)">
+            <input type="checkbox" id="move-check-${item.id}" ${isSelected ? 'checked' : ''}
+                   onchange="toggleItemSelection('${item.id}')" style="width:18px;height:18px;">
+          </div>
         </div>
       </div>
     </div>`;
@@ -3370,13 +3410,45 @@ function getItemAvailableQty(itemId) {
   }
 }
 
+function updateSourceLocation(itemId, sourceLocation) {
+  // Store the selected source location for this item
+  selectedItems[itemId + '_source'] = sourceLocation;
+
+  // Update the data-source-location attribute on the item element
+  const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+  if (itemElement) {
+    itemElement.setAttribute('data-source-location', sourceLocation);
+  }
+
+  // If this item is selected, update the available quantity based on the new source
+  if (selectedItems[itemId]) {
+    const item = inventory.find(i => i.id === itemId);
+    const maxQty = Number(item?.inventory?.[sourceLocation]?.qty || 0);
+
+    // Adjust quantity if it exceeds available stock at new source
+    if (selectedItems[itemId] > maxQty) {
+      selectedItems[itemId] = maxQty;
+      document.getElementById(`move-qty-${itemId}`).value = maxQty;
+      if (maxQty === 0) {
+        // Deselect if no stock available
+        delete selectedItems[itemId];
+        document.getElementById(`move-check-${itemId}`).checked = false;
+      }
+    }
+  }
+
+  updateMoveSummary();
+}
+
 function updateMoveSummary() {
   const summaryEl = document.getElementById('move-summary');
   const summaryContentEl = document.getElementById('move-summary-content');
   const moveBtn = document.getElementById('move-btn');
 
-  const selectedCount = Object.keys(selectedItems).length;
-  const totalUnits = Object.values(selectedItems).reduce((sum, qty) => sum + qty, 0);
+  const selectedCount = Object.keys(selectedItems).filter(key => !key.endsWith('_source')).length;
+  const totalUnits = Object.keys(selectedItems)
+    .filter(key => !key.endsWith('_source'))
+    .reduce((sum, key) => sum + selectedItems[key], 0);
 
   if (selectedCount > 0) {
     const destination = document.getElementById('move-destination').value;
@@ -3419,37 +3491,91 @@ async function executeMove() {
   try {
     let successCount = 0;
     let errorCount = 0;
+    const failedItems = [];
 
+    // Validate all moves first
     for (const itemId of selectedItemIds) {
       const quantity = selectedItems[itemId];
-      const sourceLocation = inventoryLocationFilter === 'all' ? null : inventoryLocationFilter;
+      const item = inventory.find(i => i.id === itemId);
+
+      if (!item) {
+        errorCount++;
+        failedItems.push(`${itemId}: Item not found`);
+        continue;
+      }
+
+      // Determine source location
+      let sourceLocation;
+      if (inventoryLocationFilter === 'all') {
+        // When filter is "all", we need explicit source location from the item data
+        // This should be stored when the item was selected
+        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemElement) {
+          sourceLocation = itemElement.getAttribute('data-source-location');
+        }
+
+        // Fallback: find first location with sufficient stock
+        if (!sourceLocation && item.inventory) {
+          const locationsWithStock = Object.keys(item.inventory).filter(locId =>
+            Number(item.inventory[locId]?.qty || 0) >= quantity
+          );
+          sourceLocation = locationsWithStock[0];
+        }
+      } else {
+        sourceLocation = inventoryLocationFilter;
+      }
+
+      if (!sourceLocation) {
+        errorCount++;
+        failedItems.push(`${item.name}: No valid source location with sufficient stock`);
+        continue;
+      }
+
+      // Check if source has enough stock
+      const currentStock = Number(item.inventory?.[sourceLocation]?.qty || 0);
+      if (currentStock < quantity) {
+        errorCount++;
+        failedItems.push(`${item.name}: Insufficient stock (${currentStock} available, ${quantity} requested)`);
+        continue;
+      }
+    }
+
+    // If any validation failed, stop here
+    if (errorCount > 0) {
+      const errorMsg = errorCount === 1 ? failedItems[0] : `${errorCount} validation errors`;
+      showToast(`⚠ ${errorMsg}`);
+      return;
+    }
+
+    // Execute all transfers
+    for (const itemId of selectedItemIds) {
+      const quantity = selectedItems[itemId];
+      const item = inventory.find(i => i.id === itemId);
+
+      // Get source location (same logic as validation)
+      let sourceLocation;
+      if (inventoryLocationFilter === 'all') {
+        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemElement) {
+          sourceLocation = itemElement.getAttribute('data-source-location');
+        }
+        if (!sourceLocation && item.inventory) {
+          const locationsWithStock = Object.keys(item.inventory).filter(locId =>
+            Number(item.inventory[locId]?.qty || 0) >= quantity
+          );
+          sourceLocation = locationsWithStock[0];
+        }
+      } else {
+        sourceLocation = inventoryLocationFilter;
+      }
 
       try {
-        // If source is "all", we need to determine the actual source location
-        // For now, we'll move from the first location that has stock
-        let actualSource = sourceLocation;
-        if (!actualSource) {
-          const item = inventory.find(i => i.id === itemId);
-          if (item && item.inventory) {
-            const locationsWithStock = Object.keys(item.inventory).filter(locId =>
-              Number(item.inventory[locId].qty) > 0
-            );
-            actualSource = locationsWithStock[0]; // Use first location with stock
-          }
-        }
-
-        if (!actualSource) {
-          console.error(`No source location found for item ${itemId}`);
-          errorCount++;
-          continue;
-        }
-
         const response = await fetch(`${API}/inventory?action=transfer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             itemId,
-            fromLocation: actualSource,
+            fromLocation: sourceLocation,
             toLocation: destination,
             quantity
           })
@@ -3464,6 +3590,7 @@ async function executeMove() {
       } catch (error) {
         console.error(`Failed to move item ${itemId}:`, error);
         errorCount++;
+        failedItems.push(`${item.name}: ${error.message}`);
       }
     }
 
@@ -3474,15 +3601,17 @@ async function executeMove() {
     // Close modal and show results
     closeModal('modal-move-inventory');
 
-    if (successCount > 0) {
-      showToast(`✓ Moved ${successCount} item${successCount !== 1 ? 's' : ''} successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+    if (successCount > 0 && errorCount === 0) {
+      showToast(`✓ Successfully moved ${successCount} item${successCount !== 1 ? 's' : ''}`);
+    } else if (successCount > 0) {
+      showToast(`⚠ Moved ${successCount} item${successCount !== 1 ? 's' : ''}, ${errorCount} failed`);
     } else {
       showToast('⚠ All transfers failed');
     }
 
   } catch (error) {
     console.error('Move operation failed:', error);
-    showToast('⚠ Move operation failed');
+    showToast('⚠ Move operation failed - check console for details');
   } finally {
     moveBtn.disabled = false;
     moveBtn.textContent = originalText;
