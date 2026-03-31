@@ -789,21 +789,47 @@ async function loadAllData() {
       fetch(`${API}/expenses`),
       fetch(`${API}/locations`),
     ]);
+
+    // Check for server errors
+    if (!invRes.ok) {
+      const errorData = await invRes.json().catch(() => ({}));
+      throw new Error(`Inventory API error: ${errorData.error || invRes.statusText}`);
+    }
+    if (!loansRes.ok) {
+      const errorData = await loansRes.json().catch(() => ({}));
+      throw new Error(`Loans API error: ${errorData.error || loansRes.statusText}`);
+    }
+    if (!expRes.ok) {
+      const errorData = await expRes.json().catch(() => ({}));
+      throw new Error(`Expenses API error: ${errorData.error || expRes.statusText}`);
+    }
+    if (!locRes.ok) {
+      const errorData = await locRes.json().catch(() => ({}));
+      throw new Error(`Locations API error: ${errorData.error || locRes.statusText}`);
+    }
+
     let invData;
     try { invData = await invRes.json(); } catch { invData = null; }
     const loansData = await loansRes.json();
     const expData   = await expRes.json();
     const locData   = await locRes.json();
+
     inventory = Array.isArray(invData) ? invData : [];
     loans     = loansData || [];
     expenses  = expData   || [];
     locations = Array.isArray(locData) ? locData : [];
   } catch(e) {
     console.error('Failed to load data from server', e);
-    inventory = [];
-    loans = [];
-    expenses = [];
-    locations = [];
+    showToast('⚠ Failed to load data from server. Please check your connection and try refreshing the page.');
+    // Don't reset data to empty arrays - keep existing data if available
+    // This prevents data loss when there are temporary server issues
+    if (inventory.length === 0 && locations.length === 0) {
+      // Only show setup message if we truly have no data
+      inventory = [];
+      loans = [];
+      expenses = [];
+      locations = [];
+    }
   }
 }
 

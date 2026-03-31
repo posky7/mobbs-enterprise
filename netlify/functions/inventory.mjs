@@ -22,12 +22,31 @@ export default async function handler(event, context) {
 
   try {
     if (httpMethod === 'GET') {
-      let inventory = await readBlobData('inventory');
+      let inventory;
+      try {
+        inventory = await readBlobData('inventory');
+      } catch (readError) {
+        console.error('Failed to read inventory data:', readError);
+        return {
+          statusCode: 500,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Failed to read inventory data',
+            details: 'Unable to access stored inventory. Please try again or contact support if the problem persists.',
+            code: 'READ_ERROR'
+          })
+        };
+      }
 
       // Migrate any old-format items on read
       inventory = inventory.map(migrateItem);
       if (inventory.some(item => !item.inventory)) {
-        await writeBlobData('inventory', inventory); // Save migrated data
+        try {
+          await writeBlobData('inventory', inventory); // Save migrated data
+        } catch (migrationError) {
+          console.error('Failed to save migrated inventory data:', migrationError);
+          // Continue with response even if migration save fails
+        }
       }
 
       return {

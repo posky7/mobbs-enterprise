@@ -33,8 +33,9 @@ export async function readBlobData(storeName, key = 'data') {
     return JSON.parse(data);
   } catch (error) {
     console.error(`Failed to read ${storeName} data:`, error);
-    // Return default data on error
-    return getDefaultData(storeName);
+    // CRITICAL: DO NOT return default data on errors - this causes silent data loss!
+    // Let the calling code handle the error appropriately
+    throw error;
   }
 }
 
