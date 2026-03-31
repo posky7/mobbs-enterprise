@@ -3482,7 +3482,7 @@ async function executeMove() {
     return;
   }
 
-  const selectedItemIds = Object.keys(selectedItems);
+  const selectedItemIds = Object.keys(selectedItems).filter(key => !key.endsWith('_source'));
   if (selectedItemIds.length === 0) {
     showToast('Select items to move');
     return;
@@ -3498,8 +3498,9 @@ async function executeMove() {
     let successCount = 0;
     let errorCount = 0;
     const failedItems = [];
+    const successfulMoves = [];
 
-    // Validate all moves first
+    // Execute transfers one by one (each is atomic with rollback)
     for (const itemId of selectedItemIds) {
       const quantity = selectedItems[itemId];
       const item = inventory.find(i => i.id === itemId);
@@ -3511,50 +3512,6 @@ async function executeMove() {
       }
 
       // Determine source location
-      let sourceLocation;
-      if (inventoryLocationFilter === 'all') {
-        // When filter is "all", use the explicitly selected source location
-        sourceLocation = selectedItems[itemId + '_source'];
-
-        // If no explicit source was selected, find the first location with sufficient stock
-        if (!sourceLocation && item.inventory) {
-          const locationsWithStock = Object.keys(item.inventory).filter(locId =>
-            Number(item.inventory[locId]?.qty || 0) >= quantity
-          );
-          sourceLocation = locationsWithStock[0];
-        }
-      } else {
-        sourceLocation = inventoryLocationFilter;
-      }
-
-      if (!sourceLocation) {
-        errorCount++;
-        failedItems.push(`${item.name}: No valid source location with sufficient stock`);
-        continue;
-      }
-
-      // Check if source has enough stock
-      const currentStock = Number(item.inventory?.[sourceLocation]?.qty || 0);
-      if (currentStock < quantity) {
-        errorCount++;
-        failedItems.push(`${item.name}: Insufficient stock at ${locations.find(l => l.id === sourceLocation)?.name || sourceLocation} (${currentStock} available, ${quantity} requested)`);
-        continue;
-      }
-    }
-
-    // If any validation failed, stop here
-    if (errorCount > 0) {
-      const errorMsg = errorCount === 1 ? failedItems[0] : `${errorCount} validation errors`;
-      showToast(`⚠ ${errorMsg}`);
-      return;
-    }
-
-    // Execute all transfers
-    for (const itemId of selectedItemIds) {
-      const quantity = selectedItems[itemId];
-      const item = inventory.find(i => i.id === itemId);
-
-      // Get source location (same logic as validation)
       let sourceLocation;
       if (inventoryLocationFilter === 'all') {
         // Use the explicitly selected source location from the UI
@@ -3590,19 +3547,55 @@ async function executeMove() {
           })
         });
 
+        const result = await response.json();
+
         if (!response.ok) {
-          let errorMessage = 'Transfer failed';
-          try {
-            const error = await response.json();
-            errorMessage = error.error || errorMessage;
-          } catch (parseError) {
-            // If we can't parse the error response, use the HTTP status
-            errorMessage = `Server error (${response.status})`;
+          // Extract detailed error information
+          const errorCode = result.code || 'UNKNOWN_ERROR';
+          let errorMessage = result.error || 'Transfer failed';
+
+          // Provide user-friendly error messages based on error codes
+          switch (errorCode) {
+            case 'MISSING_PARAMETERS':
+              errorMessage = 'Missing transfer information';
+              break;
+            case 'INVALID_QUANTITY':
+              errorMessage = 'Invalid quantity specified';
+              break;
+            case 'SAME_LOCATION':
+              errorMessage = 'Source and destination must be different';
+              break;
+            case 'ITEM_NOT_FOUND':
+              errorMessage = 'Item no longer exists';
+              break;
+            case 'INSUFFICIENT_QUANTITY':
+              errorMessage = result.details || `Not enough stock (${result.available || 0} available)`;
+              break;
+            case 'READ_ERROR':
+              errorMessage = 'Unable to read current inventory';
+              break;
+            case 'SAVE_ERROR':
+              errorMessage = 'Failed to save changes (data was preserved)';
+              break;
+            case 'TRANSFER_ERROR':
+              errorMessage = result.details || 'Transfer failed unexpectedly';
+              break;
+            default:
+              errorMessage = result.details || result.error || 'Transfer failed';
           }
+
           throw new Error(errorMessage);
         }
 
+        // Success - track the successful move
         successCount++;
+        successfulMoves.push({
+          itemName: result.details?.itemName || item.name,
+          quantity: result.details?.quantity || quantity,
+          fromLocation: result.details?.fromLocation || sourceLocation,
+          toLocation: result.details?.toLocation || destination
+        });
+
       } catch (error) {
         console.error(`Failed to move item ${itemId}:`, error);
         errorCount++;
@@ -3611,23 +3604,39 @@ async function executeMove() {
       }
     }
 
-    // Refresh local data and UI
-    renderList();
+    // Always refresh local data and UI, even if some transfers failed
+    // This ensures the UI reflects any successful transfers
+    try {
+      const updatedInventory = await (await fetch(`${API}/inventory`)).json();
+      inventory = Array.isArray(updatedInventory) ? updatedInventory : [];
+      renderList();
+    } catch (refreshError) {
+      console.error('Failed to refresh inventory after moves:', refreshError);
+      // Continue with local render even if refresh fails
+      renderList();
+    }
 
-    // Close modal and show results
+    // Close modal
     closeModal('modal-move-inventory');
 
+    // Show appropriate success/error messages
     if (successCount > 0 && errorCount === 0) {
-      showToast(`✓ Successfully moved ${successCount} item${successCount !== 1 ? 's' : ''}`);
-    } else if (successCount > 0) {
-      showToast(`⚠ Moved ${successCount} item${successCount !== 1 ? 's' : ''}, ${errorCount} failed`);
-    } else {
-      showToast('⚠ All transfers failed');
+      // All successful
+      const totalUnits = successfulMoves.reduce((sum, move) => sum + move.quantity, 0);
+      showToast(`✓ Successfully moved ${totalUnits} unit${totalUnits !== 1 ? 's' : ''} to ${locations.find(l => l.id === destination)?.name || destination}`);
+    } else if (successCount > 0 && errorCount > 0) {
+      // Partial success
+      const totalUnits = successfulMoves.reduce((sum, move) => sum + move.quantity, 0);
+      showToast(`⚠ Moved ${totalUnits} unit${totalUnits !== 1 ? 's' : ''}, but ${errorCount} transfer${errorCount !== 1 ? 's' : ''} failed`);
+    } else if (errorCount > 0) {
+      // All failed
+      const primaryError = failedItems.length > 0 ? failedItems[0] : 'All transfers failed';
+      showToast(`⚠ ${primaryError}`);
     }
 
   } catch (error) {
     console.error('Move operation failed:', error);
-    showToast('⚠ Move operation failed - check console for details');
+    showToast('⚠ Move operation failed - check connection and try again');
   } finally {
     moveBtn.disabled = false;
     moveBtn.textContent = originalText;

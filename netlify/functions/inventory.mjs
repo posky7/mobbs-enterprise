@@ -54,7 +54,12 @@ export default async function handler(event, context) {
       if (!itemId || !fromLocation || !toLocation || !quantity) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Missing required parameters: itemId, fromLocation, toLocation, and quantity are required' })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Missing required parameters',
+            details: 'itemId, fromLocation, toLocation, and quantity are required',
+            code: 'MISSING_PARAMETERS'
+          })
         };
       }
 
@@ -63,7 +68,12 @@ export default async function handler(event, context) {
       if (isNaN(transferQty) || transferQty <= 0 || !Number.isInteger(transferQty)) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Quantity must be a positive integer' })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Invalid quantity',
+            details: 'Quantity must be a positive integer',
+            code: 'INVALID_QUANTITY'
+          })
         };
       }
 
@@ -71,17 +81,42 @@ export default async function handler(event, context) {
       if (fromLocation === toLocation) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Source and destination locations must be different' })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Invalid transfer',
+            details: 'Source and destination locations must be different',
+            code: 'SAME_LOCATION'
+          })
         };
       }
 
-      const inventory = await readBlobData('inventory');
+      let inventory;
+      try {
+        inventory = await readBlobData('inventory');
+      } catch (readError) {
+        console.error('Failed to read inventory data:', readError);
+        return {
+          statusCode: 500,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Failed to read inventory data',
+            details: 'Unable to access current inventory state',
+            code: 'READ_ERROR'
+          })
+        };
+      }
+
       const itemIndex = inventory.findIndex(i => i.id === itemId);
 
       if (itemIndex === -1) {
         return {
           statusCode: 404,
-          body: JSON.stringify({ error: `Item with ID '${itemId}' not found` })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Item not found',
+            details: `Item with ID '${itemId}' not found in inventory`,
+            code: 'ITEM_NOT_FOUND'
+          })
         };
       }
 
@@ -97,13 +132,21 @@ export default async function handler(event, context) {
       if (sourceQty < transferQty) {
         return {
           statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            error: `Insufficient quantity in source location '${fromLocation}': ${sourceQty} available, ${transferQty} requested`
+            error: 'Insufficient quantity',
+            details: `Only ${sourceQty} units available at source location '${fromLocation}', but ${transferQty} requested`,
+            code: 'INSUFFICIENT_QUANTITY',
+            available: sourceQty,
+            requested: transferQty
           })
         };
       }
 
-      // Perform the transfer atomically
+      // Create a backup of the original inventory state for rollback
+      const originalInventory = JSON.parse(JSON.stringify(inventory));
+
+      // Perform the transfer atomically with rollback capability
       try {
         const newSourceQty = sourceQty - transferQty;
         const targetQty = Number(item.inventory[toLocation]?.qty || 0);
@@ -126,7 +169,27 @@ export default async function handler(event, context) {
         };
 
         // Save the updated inventory
-        await writeBlobData('inventory', inventory);
+        try {
+          await writeBlobData('inventory', inventory);
+        } catch (writeError) {
+          console.error('Failed to save inventory after transfer:', writeError);
+          // Rollback: restore original inventory state
+          try {
+            await writeBlobData('inventory', originalInventory);
+          } catch (rollbackError) {
+            console.error('CRITICAL: Failed to rollback inventory after write failure:', rollbackError);
+          }
+
+          return {
+            statusCode: 500,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              error: 'Failed to save inventory changes',
+              details: 'Transfer was rolled back to prevent data loss',
+              code: 'SAVE_ERROR'
+            })
+          };
+        }
 
         return {
           statusCode: 200,
@@ -136,6 +199,7 @@ export default async function handler(event, context) {
             message: `Successfully transferred ${transferQty} units from ${fromLocation} to ${toLocation}`,
             details: {
               itemId,
+              itemName: item.name,
               fromLocation,
               toLocation,
               quantity: transferQty,
@@ -146,9 +210,23 @@ export default async function handler(event, context) {
         };
       } catch (transferError) {
         console.error('Transfer operation failed:', transferError);
+
+        // Ensure rollback on any unexpected error
+        try {
+          await writeBlobData('inventory', originalInventory);
+          console.log('Successfully rolled back inventory after transfer error');
+        } catch (rollbackError) {
+          console.error('CRITICAL: Failed to rollback inventory after transfer error:', rollbackError);
+        }
+
         return {
           statusCode: 500,
-          body: JSON.stringify({ error: 'Transfer operation failed due to server error' })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Transfer operation failed',
+            details: transferError.message || 'An unexpected error occurred during transfer',
+            code: 'TRANSFER_ERROR'
+          })
         };
       }
     }
