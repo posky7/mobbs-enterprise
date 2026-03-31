@@ -1,5 +1,7 @@
 import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
+export const config = { runtime: 'nodejs' };
+
 // Helper functions for loan calculations
 function loanPaid(loan) {
   return (loan.payments || []).reduce((s, p) => s + Number(p.amount), 0);

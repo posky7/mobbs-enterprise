@@ -1,5 +1,7 @@
 import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
+export const config = { runtime: 'nodejs' };
+
 export default async function handler(event) {
   const httpMethod = event.httpMethod;
   const body = event.body;

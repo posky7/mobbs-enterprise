@@ -1,11 +1,14 @@
-# Mobbs Enterprise — Netlify configuration
+# Mobbs Enterprise — Netlify configuration for craft booth app
+# No build step needed — pure static site + functions
 
 [build]
+  # Leave command empty or use a no-op so it doesn't fail
+  command = ""
   publish = "."
-  command = "npm run build"   # or leave empty if no build step
 
+# Force esbuild bundler for stable ESM function handling
 [functions]
-  node_bundler = "esbuild"    # ← This is the key line for ESM stability
+  node_bundler = "esbuild"
 
 # Clean function URLs
 [[redirects]]
@@ -33,12 +36,13 @@
   to = "/.netlify/functions/backup-timestamp"
   status = 200
 
-# SPA fallback
+# SPA fallback for the frontend
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
+# Prevent caching of index.html
 [[headers]]
   for = "/index.html"
   [headers.values]

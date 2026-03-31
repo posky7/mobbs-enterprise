@@ -1,5 +1,7 @@
 import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
+export const config = { runtime: 'nodejs' };
+
 const MIGRATION_VERSION = 1;
 
 function migrateItem(item) {

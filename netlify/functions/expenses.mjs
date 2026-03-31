@@ -1,5 +1,7 @@
 import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
+export const config = { runtime: 'nodejs' };
+
 // Monthly equivalent for any frequency
 function expMonthly(e) {
   if (e.frequency === 'One-Time') return 0;
