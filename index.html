@@ -923,6 +923,8 @@ function addLocation() {
   locations.push(location);
   saveLocations();
   renderLocationSettings();
+  populateInventoryLocationFilter(); // Update inventory filter
+  populatePnLLocationFilter(); // Update P&L filter
   showToast('✓ Location added');
 }
 
@@ -933,6 +935,8 @@ function toggleLocationActive(id) {
   saveLocations();
   renderLocationSettings();
   renderList(); // Refresh inventory display
+  populateInventoryLocationFilter(); // Update inventory filter
+  populatePnLLocationFilter(); // Update P&L filter
 }
 
 function deleteLocation(id) {
@@ -958,6 +962,8 @@ function deleteLocation(id) {
   saveLocations();
   renderLocationSettings();
   renderList();
+  populateInventoryLocationFilter(); // Update inventory filter
+  populatePnLLocationFilter(); // Update P&L filter
   showToast('✓ Location deleted');
 }
 
@@ -993,6 +999,7 @@ function switchTab(n) {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+n).classList.add('active');
   document.getElementById('nav-'+n).classList.add('active');
+  if(n==='inventory') populateInventoryLocationFilter();
   if(n==='pnl')      renderPnL();
   if(n==='loans')    renderLoans();
   if(n==='expenses') renderExpenses();
