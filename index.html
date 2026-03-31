@@ -675,8 +675,8 @@ function updateClock() {
   const now  = new Date();
   const time = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
   const date = now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-  ['clock-time','pnl-clock','loans-clock','exp-clock','rpt-clock'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=time; });
-  ['clock-date','pnl-date','loans-date','exp-date','rpt-date'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=date; });
+  ['clock-time','pnl-clock','loans-clock','exp-clock','rpt-clock','settings-clock'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=time; });
+  ['clock-date','pnl-date','loans-date','exp-date','rpt-date','settings-date'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=date; });
 }
 updateClock();
 setInterval(updateClock, 10000);
