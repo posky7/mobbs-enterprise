@@ -797,6 +797,32 @@ function populateLocationSelect() {
   }
 }
 
+function populateExpenseLocationSelect() {
+  const select = document.getElementById('e-location');
+  if (!select) return;
+
+  // Clear existing options
+  select.innerHTML = '';
+
+  // Add active locations
+  const activeLocations = locations.filter(loc => loc.active);
+  activeLocations.forEach(loc => {
+    const option = document.createElement('option');
+    option.value = loc.id;
+    option.textContent = loc.name;
+    select.appendChild(option);
+  });
+
+  // If no locations, add a disabled placeholder
+  if (activeLocations.length === 0) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No locations configured';
+    option.disabled = true;
+    select.appendChild(option);
+  }
+}
+
 // ── Swipe-to-dismiss modals (FIX #5) ──────────────────────
 function initSwipeDismiss(overlayId) {
   const overlay = document.getElementById(overlayId);
@@ -1610,6 +1636,7 @@ function renderExpenses() {
     const annual=expAnnual(exp);
     const paused=exp.status==='Paused';
     const ytd=expYTD(exp);
+    const locationName = locations.find(l => l.id === exp.location)?.name || 'Unknown';
     return`<div class="inv-card" onclick="openExpenseDetail('${exp.id}')" style="${paused&&!isOneTime?'opacity:.65':''}">
       <div class="inv-card-header">
         <div style="flex:1;padding-right:10px;">
@@ -1623,6 +1650,7 @@ function renderExpenses() {
           </div>
         </div>
       </div>
+      ${locationName !== 'Unknown' ? `<div style="font-size:11px;color:var(--text3);padding:0 14px 8px;margin-top:-4px;">📍 ${esc(locationName)}</div>` : ''}
       <div class="inv-metrics">
         ${isOneTime
           ?`<div class="inv-metric" style="grid-column:span 2"><div class="inv-metric-label">Date Paid</div><div class="inv-metric-value">${exp.due?new Date(exp.due).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}</div></div>
@@ -1672,6 +1700,13 @@ function updateExpenseCalc() {
 }
 
 function openAddExpenseModal() {
+  // Check if any active locations exist
+  const activeLocations = locations.filter(loc => loc.active);
+  if (activeLocations.length === 0) {
+    showLocationSetupMessage();
+    return;
+  }
+
   document.getElementById('exp-modal-title').textContent = 'Add Expense';
   document.getElementById('exp-edit-id').value = '';
   ['e-name','e-amount','e-notes','e-payday'].forEach(id => {
@@ -1684,6 +1719,7 @@ function openAddExpenseModal() {
   const dueEl   = document.getElementById('e-due');        if (dueEl)   dueEl.value   = today;
   const startEl = document.getElementById('e-start');      if (startEl) startEl.value = today;
   const delBtn  = document.getElementById('btn-delete-expense'); if (delBtn) delBtn.style.display = 'none';
+  populateExpenseLocationSelect();
   updateExpenseCalc();
   document.getElementById('modal-expense').classList.add('open');
 }
@@ -1712,6 +1748,7 @@ function openEditExpenseModal(id) {
 
 function saveExpense() {
   const name=document.getElementById('e-name').value.trim(); if(!name){document.getElementById('e-name').focus();return;}
+  const location=document.getElementById('e-location').value; if(!location){document.getElementById('e-location').focus();return;}
   const editId=document.getElementById('exp-edit-id').value;
   const existing=editId?expenses.find(e=>e.id===editId):null;
   const freq=document.getElementById('e-frequency').value;
@@ -1725,6 +1762,7 @@ function saveExpense() {
     frequency:freq,
     amount,
     due,
+    location,
     startDate: isOneTime ? due : (document.getElementById('e-start').value || new Date().toISOString().split('T')[0]),
     payday:    isOneTime ? null : (parseInt(document.getElementById('e-payday').value)||1),
     status: isOneTime ? 'Active' : document.getElementById('e-status').value,
@@ -2548,6 +2586,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="form-group"><label class="form-label">Amount ($)</label><input class="form-input" type="number" id="e-amount" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateExpenseCalc()"></div>
           <div class="form-group"><label class="form-label" id="e-due-label">Date Paid</label><input class="form-input" type="date" id="e-due"></div>
         </div>
+        <div class="form-group"><label class="form-label">Location *</label><select class="form-input" id="e-location" required></select></div>
         <!-- Recurring-only fields -->
         <div id="e-recurring-fields">
           <div class="form-row">
