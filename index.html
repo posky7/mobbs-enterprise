@@ -779,56 +779,229 @@ let currentLoanId = null, currentDetailId = null, currentLocationId = 'storage';
 let inventoryLocationFilter = 'all';
 
 // ── API helpers ──────────────────────────────────────────────
-const API = '/.netlify/functions';
+const getApiBaseUrl = () => {
+  const hostname = window.location.hostname;
+
+  // Local development
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return '/.netlify/functions';
+  }
+
+  // Production - use relative path (Netlify handles routing)
+  // Log for debugging production issues
+  const apiPath = '/.netlify/functions';
+  console.log('Using API base URL:', apiPath, 'for hostname:', hostname);
+  return apiPath;
+};
+
+const API = getApiBaseUrl();
+
+// Add timeout and retry logic for production reliability
+const fetchWithTimeout = (url, options = {}, timeout = 15000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  return fetch(url, {
+    ...options,
+    signal: controller.signal
+  }).finally(() => {
+    clearTimeout(timeoutId);
+  });
+};
+
+// Retry logic for transient failures
+const fetchWithRetry = async (url, options = {}, maxRetries = 2) => {
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetchWithTimeout(url, options);
+      return response;
+    } catch (error) {
+      lastError = error;
+      console.warn(`API request attempt ${attempt + 1} failed:`, error.message);
+
+      // Don't retry on client errors (4xx) or specific errors
+      if (error.name === 'AbortError' || (error.message && error.message.includes('4'))) {
+        throw error;
+      }
+
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+
+  throw lastError;
+};
 
 async function loadAllData() {
+  const startTime = Date.now();
+  let loadErrors = [];
+  let partialSuccess = false;
+
   try {
+    // Use retry logic for production reliability
     const [invRes, loansRes, expRes, locRes] = await Promise.all([
-      fetch(`${API}/inventory`),
-      fetch(`${API}/loans`),
-      fetch(`${API}/expenses`),
-      fetch(`${API}/locations`),
+      fetchWithRetry(`${API}/inventory`),
+      fetchWithRetry(`${API}/loans`),
+      fetchWithRetry(`${API}/expenses`),
+      fetchWithRetry(`${API}/locations`),
     ]);
 
-    // Check for server errors
-    if (!invRes.ok) {
-      const errorData = await invRes.json().catch(() => ({}));
-      throw new Error(`Inventory API error: ${errorData.error || invRes.statusText}`);
-    }
-    if (!loansRes.ok) {
-      const errorData = await loansRes.json().catch(() => ({}));
-      throw new Error(`Loans API error: ${errorData.error || loansRes.statusText}`);
-    }
-    if (!expRes.ok) {
-      const errorData = await expRes.json().catch(() => ({}));
-      throw new Error(`Expenses API error: ${errorData.error || expRes.statusText}`);
-    }
-    if (!locRes.ok) {
-      const errorData = await locRes.json().catch(() => ({}));
-      throw new Error(`Locations API error: ${errorData.error || locRes.statusText}`);
+    // Enhanced error checking with detailed logging
+    const checkResponse = async (response, endpoint) => {
+      if (!response.ok) {
+        let errorDetails = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorDetails = `${errorData.error}${errorData.details ? ` - ${errorData.details}` : ''}`;
+          }
+        } catch (jsonError) {
+          // Response wasn't JSON, use status text
+        }
+
+        const error = new Error(`${endpoint} failed: ${errorDetails}`);
+        error.endpoint = endpoint;
+        error.status = response.status;
+        loadErrors.push(error);
+        throw error;
+      }
+      return response;
+    };
+
+    // Load each data type with individual error handling
+    let invData = null;
+    try {
+      await checkResponse(invRes, 'Inventory API');
+      invData = await invRes.json();
+      if (!Array.isArray(invData)) {
+        throw new Error('Inventory API returned invalid data format');
+      }
+      inventory = invData;
+      partialSuccess = true;
+      console.log(`✓ Loaded ${invData.length} inventory items`);
+    } catch (error) {
+      console.error('Inventory load failed:', error);
+      loadErrors.push(error);
+      // Keep existing inventory data if available
+      if (inventory.length === 0) {
+        inventory = [];
+      }
     }
 
-    let invData;
-    try { invData = await invRes.json(); } catch { invData = null; }
-    const loansData = await loansRes.json();
-    const expData   = await expRes.json();
-    const locData   = await locRes.json();
+    try {
+      await checkResponse(loansRes, 'Loans API');
+      const loansData = await loansRes.json();
+      loans = Array.isArray(loansData) ? loansData : [];
+      partialSuccess = true;
+      console.log(`✓ Loaded ${loans.length} loans`);
+    } catch (error) {
+      console.error('Loans load failed:', error);
+      loadErrors.push(error);
+      // Keep existing loans data
+      if (loans.length === 0) {
+        loans = [];
+      }
+    }
 
-    inventory = Array.isArray(invData) ? invData : [];
-    loans     = loansData || [];
-    expenses  = expData   || [];
-    locations = Array.isArray(locData) ? locData : [];
-  } catch(e) {
-    console.error('Failed to load data from server', e);
-    showToast('⚠ Failed to load data from server. Please check your connection and try refreshing the page.');
-    // Don't reset data to empty arrays - keep existing data if available
-    // This prevents data loss when there are temporary server issues
-    if (inventory.length === 0 && locations.length === 0) {
-      // Only show setup message if we truly have no data
+    try {
+      await checkResponse(expRes, 'Expenses API');
+      const expData = await expRes.json();
+      expenses = Array.isArray(expData) ? expData : [];
+      partialSuccess = true;
+      console.log(`✓ Loaded ${expenses.length} expenses`);
+    } catch (error) {
+      console.error('Expenses load failed:', error);
+      loadErrors.push(error);
+      // Keep existing expenses data
+      if (expenses.length === 0) {
+        expenses = [];
+      }
+    }
+
+    try {
+      await checkResponse(locRes, 'Locations API');
+      const locData = await locRes.json();
+      if (!Array.isArray(locData)) {
+        throw new Error('Locations API returned invalid data format');
+      }
+      locations = locData;
+      partialSuccess = true;
+      console.log(`✓ Loaded ${locData.length} locations`);
+    } catch (error) {
+      console.error('Locations load failed:', error);
+      loadErrors.push(error);
+      // Keep existing locations data if available
+      if (locations.length === 0) {
+        locations = [];
+      }
+    }
+
+    const loadTime = Date.now() - startTime;
+    console.log(`Data load completed in ${loadTime}ms`);
+
+    // Show appropriate user feedback
+    if (loadErrors.length === 0) {
+      // All successful - no toast needed for normal operation
+      console.log('✓ All data loaded successfully');
+    } else if (partialSuccess) {
+      // Partial success
+      showToast(`⚠ Some data failed to load (${loadErrors.length} errors). Using cached data where available.`);
+    } else {
+      // Complete failure
+      throw new Error('All data loading failed');
+    }
+
+  } catch (e) {
+    const loadTime = Date.now() - startTime;
+    console.error(`Data load failed after ${loadTime}ms:`, {
+      error: e.message,
+      stack: e.stack,
+      errors: loadErrors.map(err => ({
+        endpoint: err.endpoint,
+        status: err.status,
+        message: err.message
+      })),
+      url: window.location.href,
+      apiBase: API,
+      timestamp: new Date().toISOString()
+    });
+
+    // Determine if this is a network/connectivity issue
+    const isNetworkError = e.message.includes('fetch') ||
+                          e.message.includes('network') ||
+                          e.message.includes('timeout') ||
+                          e.name === 'TypeError';
+
+    const isOnline = navigator.onLine;
+
+    let userMessage;
+    if (!isOnline) {
+      userMessage = '📶 No internet connection. Using cached data.';
+    } else if (isNetworkError) {
+      userMessage = '⚠ Connection failed. Please check your internet and try refreshing.';
+    } else {
+      userMessage = '⚠ Server error loading data. Please try refreshing the page.';
+    }
+
+    showToast(userMessage);
+
+    // Only reset to empty arrays if we truly have no data at all
+    // This preserves existing data during temporary outages
+    const hasAnyData = inventory.length > 0 || locations.length > 0 ||
+                      loans.length > 0 || expenses.length > 0;
+
+    if (!hasAnyData) {
+      console.log('No existing data found, initializing empty arrays');
       inventory = [];
       loans = [];
       expenses = [];
       locations = [];
+    } else {
+      console.log('Preserving existing data during load failure');
     }
   }
 }
