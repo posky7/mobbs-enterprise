@@ -4,16 +4,17 @@ import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 function migrateItem(item) {
   if (item.inventory) return item; // Already migrated
 
-  // Create inventory object with default location
-  const migrated = { ...item };
-  migrated.inventory = {
-    'storage': {
-      qty: item.qty || 0,
-      lastUpdated: new Date().toISOString()
-    }
+  // Create inventory object with default location, preserving all other item properties
+  return {
+    ...item,
+    inventory: {
+      'storage': {
+        qty: item.qty || 0,
+        lastUpdated: new Date().toISOString()
+      }
+    },
+    qty: undefined // Remove old qty field
   };
-  delete migrated.qty; // Remove old qty field
-  return migrated;
 }
 
 export default async function handler(event, context) {
@@ -50,14 +51,14 @@ export default async function handler(event, context) {
       const { itemId, fromLocation, toLocation, quantity } = JSON.parse(body || '{}');
 
       // Validate required parameters
-      if (!itemId || !fromLocation || !toLocation || !quantity || quantity <= 0) {
+      if (!itemId || !fromLocation || !toLocation || !quantity) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Missing or invalid required parameters: itemId, fromLocation, toLocation, and quantity (> 0) are required' })
+          body: JSON.stringify({ error: 'Missing required parameters: itemId, fromLocation, toLocation, and quantity are required' })
         };
       }
 
-      // Validate quantity is a positive number
+      // Validate quantity is a positive integer
       const transferQty = Number(quantity);
       if (isNaN(transferQty) || transferQty <= 0 || !Number.isInteger(transferQty)) {
         return {
@@ -66,18 +67,30 @@ export default async function handler(event, context) {
         };
       }
 
-      const inventory = await readBlobData('inventory');
-      const item = inventory.find(i => i.id === itemId);
+      // Validate locations are different
+      if (fromLocation === toLocation) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: 'Source and destination locations must be different' })
+        };
+      }
 
-      if (!item) {
+      const inventory = await readBlobData('inventory');
+      const itemIndex = inventory.findIndex(i => i.id === itemId);
+
+      if (itemIndex === -1) {
         return {
           statusCode: 404,
           body: JSON.stringify({ error: `Item with ID '${itemId}' not found` })
         };
       }
 
-      // Initialize inventory object if it doesn't exist
-      if (!item.inventory) item.inventory = {};
+      const item = inventory[itemIndex];
+
+      // Ensure inventory object exists
+      if (!item.inventory) {
+        item.inventory = {};
+      }
 
       // Check if source location exists and has enough quantity
       const sourceQty = Number(item.inventory[fromLocation]?.qty || 0);
@@ -90,55 +103,54 @@ export default async function handler(event, context) {
         };
       }
 
-      // Prevent negative inventory (extra safety check)
-      if (sourceQty - transferQty < 0) {
-        return {
-          statusCode: 400,
-          body: JSON.stringify({
-            error: `Transfer would result in negative inventory: ${sourceQty} - ${transferQty} = ${sourceQty - transferQty}`
-          })
-        };
-      }
+      // Perform the transfer atomically
+      try {
+        const newSourceQty = sourceQty - transferQty;
+        const targetQty = Number(item.inventory[toLocation]?.qty || 0);
+        const newTargetQty = targetQty + transferQty;
 
-      // Perform the transfer
-      const newSourceQty = sourceQty - transferQty;
-      const targetQty = Number(item.inventory[toLocation]?.qty || 0);
-      const newTargetQty = targetQty + transferQty;
+        // Update source location
+        if (newSourceQty > 0) {
+          item.inventory[fromLocation] = {
+            qty: newSourceQty,
+            lastUpdated: new Date().toISOString()
+          };
+        } else {
+          delete item.inventory[fromLocation];
+        }
 
-      // Update source location
-      if (newSourceQty > 0) {
-        item.inventory[fromLocation] = {
-          qty: newSourceQty,
+        // Update target location
+        item.inventory[toLocation] = {
+          qty: newTargetQty,
           lastUpdated: new Date().toISOString()
         };
-      } else {
-        delete item.inventory[fromLocation];
+
+        // Save the updated inventory
+        await writeBlobData('inventory', inventory);
+
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            message: `Successfully transferred ${transferQty} units from ${fromLocation} to ${toLocation}`,
+            details: {
+              itemId,
+              fromLocation,
+              toLocation,
+              quantity: transferQty,
+              newSourceQty,
+              newTargetQty
+            }
+          })
+        };
+      } catch (transferError) {
+        console.error('Transfer operation failed:', transferError);
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ error: 'Transfer operation failed due to server error' })
+        };
       }
-
-      // Update target location
-      item.inventory[toLocation] = {
-        qty: newTargetQty,
-        lastUpdated: new Date().toISOString()
-      };
-
-      await writeBlobData('inventory', inventory);
-
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          success: true,
-          message: `Successfully transferred ${transferQty} units from ${fromLocation} to ${toLocation}`,
-          details: {
-            itemId,
-            fromLocation,
-            toLocation,
-            quantity: transferQty,
-            newSourceQty,
-            newTargetQty
-          }
-        })
-      };
     }
 
     return {

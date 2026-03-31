@@ -3557,10 +3557,10 @@ async function executeMove() {
       // Get source location (same logic as validation)
       let sourceLocation;
       if (inventoryLocationFilter === 'all') {
-        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
-        if (itemElement) {
-          sourceLocation = itemElement.getAttribute('data-source-location');
-        }
+        // Use the explicitly selected source location from the UI
+        sourceLocation = selectedItems[itemId + '_source'];
+
+        // Fallback: find first location with sufficient stock
         if (!sourceLocation && item.inventory) {
           const locationsWithStock = Object.keys(item.inventory).filter(locId =>
             Number(item.inventory[locId]?.qty || 0) >= quantity
@@ -3569,6 +3569,13 @@ async function executeMove() {
         }
       } else {
         sourceLocation = inventoryLocationFilter;
+      }
+
+      // Validate source location exists
+      if (!sourceLocation) {
+        errorCount++;
+        failedItems.push(`${item.name}: No valid source location found`);
+        continue;
       }
 
       try {
@@ -3604,8 +3611,7 @@ async function executeMove() {
       }
     }
 
-    // Reload data to reflect changes
-    await loadAllData();
+    // Refresh local data and UI
     renderList();
 
     // Close modal and show results
