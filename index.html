@@ -1439,7 +1439,11 @@ function renderPnL() {
   };
 
   // Projected (in-stock items only, period-independent, filtered by location)
-  const inStock = filterItemsByLocation(inventory.filter(i => Number(i.qty) > 0));
+  const inStock = inventory.filter(i => {
+    if (pnlLocationFilter === 'all') return Number(i.qty) > 0;
+    // For specific location, check if item has inventory at that location with qty > 0
+    return i.inventory && i.inventory[pnlLocationFilter] && Number(i.inventory[pnlLocationFilter].qty) > 0;
+  });
   const totCost = inStock.reduce((a,i)=>a+(Number(i.cost)+Number(i.labor))*Number(i.qty), 0);
   const totSugg = inStock.reduce((a,i)=>a+sp(i)*Number(i.qty), 0);
   const labor   = inStock.reduce((a,i)=>a+Number(i.labor)*Number(i.qty), 0);
@@ -1448,7 +1452,12 @@ function renderPnL() {
   const margin  = totSugg > 0 ? (gross/totSugg*100).toFixed(1) : 0;
 
   // ── Expense calculations split by type ───────────────────
-  const recurringActive = expenses.filter(e => e.status==='Active' && e.frequency!=='One-Time');
+  const recurringActive = expenses.filter(e => {
+    if (e.status !== 'Active' || e.frequency === 'One-Time') return false;
+    // Filter by location if not 'all'
+    if (pnlLocationFilter === 'all') return true;
+    return e.location === pnlLocationFilter;
+  });
   const monthlyExp = recurringActive.reduce((s,e)=>s+expMonthly(e), 0);
 
   // Recurring: count actual scheduled occurrences within the period (schedule-based)
