@@ -1,28 +1,4 @@
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-
-const DATA_FILE = join(process.cwd(), 'data', 'inventory.json');
-
-// Ensure data directory exists
-import { mkdirSync } from 'fs';
-try {
-  mkdirSync(join(process.cwd(), 'data'), { recursive: true });
-} catch (e) {}
-
-// Helper to read inventory
-function readInventory() {
-  try {
-    const data = readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(data) || [];
-  } catch (e) {
-    return [];
-  }
-}
-
-// Helper to write inventory
-function writeInventory(inventory) {
-  writeFileSync(DATA_FILE, JSON.stringify(inventory, null, 2));
-}
+import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
 // Migration helper: convert old single-qty items to multi-location format
 function migrateItem(item) {
@@ -45,11 +21,13 @@ export default async function handler(event, context) {
 
   try {
     if (httpMethod === 'GET') {
-      let inventory = readInventory();
+      let inventory = await readBlobData('inventory');
 
       // Migrate any old-format items on read
       inventory = inventory.map(migrateItem);
-      writeInventory(inventory); // Save migrated data
+      if (inventory.some(item => !item.inventory)) {
+        await writeBlobData('inventory', inventory); // Save migrated data
+      }
 
       return {
         statusCode: 200,
@@ -60,7 +38,7 @@ export default async function handler(event, context) {
 
     if (httpMethod === 'PUT') {
       const inventory = JSON.parse(body || '[]');
-      writeInventory(inventory);
+      await writeBlobData('inventory', inventory);
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -78,7 +56,7 @@ export default async function handler(event, context) {
         };
       }
 
-      const inventory = readInventory();
+      const inventory = await readBlobData('inventory');
       const item = inventory.find(i => i.id === itemId);
 
       if (!item) {
@@ -121,7 +99,7 @@ export default async function handler(event, context) {
         lastUpdated: new Date().toISOString()
       };
 
-      writeInventory(inventory);
+      await writeBlobData('inventory', inventory);
 
       return {
         statusCode: 200,

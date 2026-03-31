@@ -303,6 +303,7 @@ select.form-input option { background:#fff; color:#1a1612; }
     <div class="data-tools">
       <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
       <button class="btn-tool" onclick="document.getElementById('import-file').click()">⬆ Import CSV</button>
+      <button class="btn-tool" onclick="openResetInventoryModal()" style="color:var(--danger);border-color:var(--danger);">🔄 Reset Inventory</button>
       <button class="btn-tool" onclick="openBackupModal()" style="color:var(--accent);border-color:var(--accent);">🔒 Backup</button>
       <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
@@ -3058,6 +3059,170 @@ async function deleteAllData() {
   }
 }
 
+// ── Reset Inventory ──────────────────────────────────────────
+function openResetInventoryModal() {
+  // Populate location checkboxes
+  const locationOptionsEl = document.getElementById('reset-location-options');
+  const activeLocations = locations.filter(loc => loc.active);
+
+  if (activeLocations.length === 0) {
+    locationOptionsEl.innerHTML = '<div style="grid-column:span 2;text-align:center;padding:20px;color:var(--text3);font-size:14px;">No active locations configured</div>';
+    document.getElementById('reset-confirm-btn').disabled = true;
+    document.getElementById('modal-reset-inventory').classList.add('open');
+    return;
+  }
+
+  locationOptionsEl.innerHTML = activeLocations.map(loc => `
+    <label style="display:flex;align-items:center;gap:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;">
+      <input type="checkbox" class="location-checkbox" value="${loc.id}" onchange="updateResetPreview()" style="width:16px;height:16px;">
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;color:var(--text);">${esc(loc.name)}</div>
+        <div style="font-size:11px;color:var(--text3);">${loc.type === 'storage' ? 'Storage' : 'Retail Booth'}${loc.isWarehouse ? ' · 🏭 Warehouse' : ''}</div>
+      </div>
+    </label>
+  `).join('');
+
+  // Reset checkboxes and options
+  document.getElementById('reset-all-locations').checked = false;
+  document.getElementById('reset-only-zero-stock').checked = true;
+  document.getElementById('reset-preview').style.display = 'none';
+  document.getElementById('reset-confirm-btn').disabled = true;
+
+  document.getElementById('modal-reset-inventory').classList.add('open');
+}
+
+function toggleAllLocations() {
+  const allCheckbox = document.getElementById('reset-all-locations');
+  const locationCheckboxes = document.querySelectorAll('.location-checkbox');
+
+  locationCheckboxes.forEach(checkbox => {
+    checkbox.checked = allCheckbox.checked;
+  });
+
+  updateResetPreview();
+}
+
+function updateResetPreview() {
+  const selectedLocations = Array.from(document.querySelectorAll('.location-checkbox:checked')).map(cb => cb.value);
+  const onlyZeroStock = document.getElementById('reset-only-zero-stock').checked;
+
+  if (selectedLocations.length === 0) {
+    document.getElementById('reset-preview').style.display = 'none';
+    document.getElementById('reset-confirm-btn').disabled = true;
+    return;
+  }
+
+  // Calculate what will be reset
+  let itemsToReset = [];
+  let totalUnitsToReset = 0;
+
+  inventory.forEach(item => {
+    if (!item.inventory) return;
+
+    selectedLocations.forEach(locationId => {
+      const locationQty = Number(item.inventory[locationId]?.qty || 0);
+      if (locationQty > 0) {
+        // Check if we should only reset zero stock items
+        if (!onlyZeroStock || locationQty === 0) {
+          itemsToReset.push({
+            itemId: item.id,
+            itemName: item.name,
+            locationId: locationId,
+            locationName: locations.find(l => l.id === locationId)?.name || locationId,
+            currentQty: locationQty
+          });
+          totalUnitsToReset += locationQty;
+        }
+      }
+    });
+  });
+
+  // Show preview
+  const previewContentEl = document.getElementById('reset-preview-content');
+  if (itemsToReset.length === 0) {
+    previewContentEl.innerHTML = '<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">No items match the selected criteria</div>';
+  } else {
+    previewContentEl.innerHTML = `
+      <div class="pnl-row"><div class="pnl-row-label">Items affected</div><div class="pnl-row-val">${itemsToReset.length}</div></div>
+      <div class="pnl-row"><div class="pnl-row-label">Total units to reset</div><div class="pnl-row-val">${totalUnitsToReset}</div></div>
+      <div style="margin-top:12px;font-size:11px;color:var(--text3);line-height:1.5;">
+        This will set inventory quantities to zero for the selected items at the chosen locations. Sales history will be preserved.
+      </div>
+    `;
+  }
+
+  document.getElementById('reset-preview').style.display = 'block';
+  document.getElementById('reset-confirm-btn').disabled = itemsToReset.length === 0;
+}
+
+async function confirmResetInventory() {
+  const selectedLocations = Array.from(document.querySelectorAll('.location-checkbox:checked')).map(cb => cb.value);
+  const onlyZeroStock = document.getElementById('reset-only-zero-stock').checked;
+
+  if (selectedLocations.length === 0) {
+    showToast('Select at least one location');
+    return;
+  }
+
+  // Count affected items
+  let affectedItems = 0;
+  let affectedUnits = 0;
+
+  inventory.forEach(item => {
+    if (!item.inventory) return;
+    selectedLocations.forEach(locationId => {
+      const qty = Number(item.inventory[locationId]?.qty || 0);
+      if (qty > 0 && (!onlyZeroStock || qty === 0)) {
+        affectedItems++;
+        affectedUnits += qty;
+      }
+    });
+  });
+
+  if (affectedItems === 0) {
+    showToast('No items match the selected criteria');
+    return;
+  }
+
+  const locationNames = selectedLocations.map(id => locations.find(l => l.id === id)?.name || id).join(', ');
+  const confirmMsg = `Reset ${affectedUnits} units across ${affectedItems} item${affectedItems !== 1 ? 's' : ''} at: ${locationNames}? This cannot be undone.`;
+
+  const ok = await showConfirm('Reset Inventory?', confirmMsg, 'Reset');
+  if (!ok) return;
+
+  // Perform the reset
+  try {
+    showToast('Resetting inventory…');
+
+    // Update inventory in memory
+    inventory.forEach(item => {
+      if (!item.inventory) return;
+      selectedLocations.forEach(locationId => {
+        const currentQty = Number(item.inventory[locationId]?.qty || 0);
+        if (currentQty > 0 && (!onlyZeroStock || currentQty === 0)) {
+          item.inventory[locationId] = {
+            qty: 0,
+            lastUpdated: new Date().toISOString()
+          };
+        }
+      });
+    });
+
+    // Save to server
+    await saveInventory();
+
+    // Close modal and refresh display
+    closeModal('modal-reset-inventory');
+    renderList();
+
+    showToast(`✓ Reset ${affectedUnits} units across ${affectedItems} item${affectedItems !== 1 ? 's' : ''}`);
+
+  } catch (error) {
+    console.error('Reset inventory error:', error);
+    showToast('⚠ Reset failed — check connection');
+  }
+}
+
 // ── Move Inventory ──────────────────────────────────────────
 let selectedItems = {}; // itemId -> quantity to move
 
@@ -3455,12 +3620,60 @@ document.addEventListener('DOMContentLoaded', async () => {
   </div>
 </div>
 
+<!-- Reset Inventory Modal -->
+<div class="modal-overlay" id="modal-reset-inventory">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Reset Inventory</div>
+      <button class="modal-close" onclick="closeModal('modal-reset-inventory')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:linear-gradient(135deg,rgba(201,48,48,.08),rgba(196,103,15,.04));border:1px solid rgba(201,48,48,.25);border-radius:var(--radius-sm);padding:16px;margin-bottom:20px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:8px;">⚠️</div>
+        <div style="font-size:14px;font-weight:700;color:var(--danger);margin-bottom:4px;">Dangerous Operation</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.5;">This will permanently remove inventory quantities from selected locations. Sales history will be preserved, but stock levels will be reset to zero.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Select Location(s) to Reset</label>
+        <div id="reset-location-options" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <!-- Location checkboxes will be populated here -->
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Reset Options</label>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-top:8px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <input type="checkbox" id="reset-all-locations" onchange="toggleAllLocations()" style="width:16px;height:16px;">
+            <label for="reset-all-locations" style="font-size:13px;color:var(--text2);margin:0;">Reset all locations</label>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="reset-only-zero-stock" checked style="width:16px;height:16px;">
+            <label for="reset-only-zero-stock" style="font-size:13px;color:var(--text2);margin:0;">Only reset items with zero stock (sold out items)</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview of what will be reset -->
+      <div id="reset-preview" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:16px;display:none;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:10px;">Items to be Reset</div>
+        <div id="reset-preview-content"></div>
+      </div>
+
+      <button class="btn-delete" onclick="confirmResetInventory()" id="reset-confirm-btn" disabled style="margin-top:20px;">Reset Selected Inventory</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Backup & Restore Modal -->
 <div class="modal-overlay" id="modal-backup">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-header">
-      <div class="modal-title">Backup &amp; Restore</div>
+      <div class="modal-title">Backup & Restore</div>
       <button class="modal-close" onclick="closeModal('modal-backup')">✕</button>
     </div>
     <div class="modal-body">

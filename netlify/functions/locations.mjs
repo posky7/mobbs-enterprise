@@ -1,45 +1,11 @@
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-
-const DATA_FILE = join(process.cwd(), 'data', 'locations.json');
-
-// Ensure data directory exists
-import { mkdirSync } from 'fs';
-try {
-  mkdirSync(join(process.cwd(), 'data'), { recursive: true });
-} catch (e) {}
-
-// Helper to read locations
-function readLocations() {
-  try {
-    const data = readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(data) || [];
-  } catch (e) {
-    // Return default locations if file doesn't exist
-    return [
-      {
-        id: 'storage',
-        name: 'Storage',
-        type: 'storage',
-        active: true,
-        order: 0,
-        isWarehouse: false
-      }
-    ];
-  }
-}
-
-// Helper to write locations
-function writeLocations(locations) {
-  writeFileSync(DATA_FILE, JSON.stringify(locations, null, 2));
-}
+import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
 export default async function handler(event, context) {
   const { httpMethod, body, queryStringParameters } = event;
 
   try {
     if (httpMethod === 'GET') {
-      const locations = readLocations();
+      const locations = await readBlobData('locations');
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -49,7 +15,7 @@ export default async function handler(event, context) {
 
     if (httpMethod === 'PUT') {
       const locations = JSON.parse(body || '[]');
-      writeLocations(locations);
+      await writeBlobData('locations', locations);
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
