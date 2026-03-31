@@ -35,7 +35,19 @@ export async function writeBlobData(key, data) {
   }
 }
 
-// Optional: backup helper used by reset.mjs
+export async function clearBlobStore(key) {
+  try {
+    const store = await getBlobStore(key);
+    const result = await store.deleteAll();
+    console.log(`Cleared blob store '${key}': ${result.deletedBlobs} blobs deleted`);
+    return result.deletedBlobs || 0;
+  } catch (error) {
+    console.error(`Error clearing blob store ${key}:`, error);
+    throw error;
+  }
+}
+
+// Optional helpers
 export async function getBackupTimestamp() {
   try {
     const store = await getBlobStore('backupTimestamp');

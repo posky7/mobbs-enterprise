@@ -1,43 +1,46 @@
-import { clearBlobStore } from './_blob-storage.mjs';
+import { clearBlobStore, setBackupTimestamp } from './_blob-storage.mjs';
 
 export default async function handler(event, context) {
-  const { httpMethod, queryStringParameters } = event;
+  const httpMethod = event.httpMethod;
 
-  try {
-    if (httpMethod === 'DELETE') {
-      // Clear all data stores
-      const stores = ['inventory', 'locations', 'expenses', 'loans', 'backupTimestamp'];
-
-      for (const store of stores) {
-        try {
-          await clearBlobStore(store);
-        } catch (error) {
-          console.error(`Failed to clear ${store} store:`, error);
-          // Continue with other stores even if one fails
-        }
-      }
-
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: 'All data has been permanently deleted from blob storage',
-          success: true,
-          warning: 'This action cannot be undone'
-        })
-      };
-    }
-
+  if (httpMethod !== 'POST' && httpMethod !== 'DELETE') {
     return {
       statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed. Use DELETE to reset all data.' })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
+
+  try {
+    console.log('Reset function called - clearing all data stores');
+
+    // Clear all main data stores
+    await clearBlobStore('inventory');
+    await clearBlobStore('locations');
+    await clearBlobStore('expenses');
+    await clearBlobStore('loans');
+
+    // Reset backup timestamp
+    await setBackupTimestamp(null);
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        success: true, 
+        message: 'All data has been reset successfully' 
+      })
     };
 
   } catch (error) {
-    console.error('Reset API error:', error);
+    console.error('Reset function error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error during reset' })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Failed to reset data', 
+        details: error.message 
+      })
     };
   }
 }
