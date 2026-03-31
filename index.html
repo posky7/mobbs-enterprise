@@ -291,7 +291,7 @@ select.form-input option { background:#fff; color:#1a1612; }
       <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
     </div>
-    <div id="backup-status" style="padding:0 16px 10px;font-size:11px;color:var(--text3);font-family:var(--font-mono);display:none;">
+    <div id="backup-status" style="padding:0 16px 10px;font-size:11px;color:var(--text3);font-family:var(--font-mono);display:none;text-align:center;">
       Last backup: <span id="backup-date">never</span>
     </div>
     <div class="inv-list" id="inv-list"></div>
@@ -2433,7 +2433,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <!-- Last backup status -->
       <div id="bk-status-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
         <div style="font-size:28px;line-height:1;">🔒</div>
-        <div>
+        <div style="flex:1;text-align:center;">
           <div style="font-size:13px;font-weight:700;color:var(--text);">Data Protection</div>
           <div style="font-size:12px;color:var(--text3);font-family:var(--font-mono);margin-top:2px;" id="bk-last-backup">Last backup: never</div>
         </div>
