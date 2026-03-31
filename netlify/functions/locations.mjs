@@ -6,7 +6,7 @@ export default async function handler(event) {
 
   try {
     if (httpMethod === 'GET') {
-      let locations = await readBlobData('locations');
+      const locations = await readBlobData('locations');
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -24,7 +24,6 @@ export default async function handler(event) {
       };
     }
 
-    // Default for unsupported methods
     return {
       statusCode: 405,
       headers: { 'Content-Type': 'application/json' },
