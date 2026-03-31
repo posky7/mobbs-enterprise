@@ -3279,8 +3279,8 @@ async function confirmResetInventory() {
   }
 }
 
-// ── Move Inventory ──────────────────────────────────────────
 let selectedItems = {}; // itemId -> quantity to move
+let moveOperationInProgress = false; // Prevent concurrent operations
 
 function openMoveInventoryModal() {
   // Check if any active locations exist
@@ -3290,8 +3290,15 @@ function openMoveInventoryModal() {
     return;
   }
 
-  // Reset selection
+  // Prevent opening if operation in progress
+  if (moveOperationInProgress) {
+    showToast('Move operation in progress, please wait…');
+    return;
+  }
+
+  // Reset selection and clear any previous state
   selectedItems = {};
+  moveOperationInProgress = false;
 
   // Populate destination dropdown (exclude current filter location)
   const destSelect = document.getElementById('move-destination');
@@ -3444,10 +3451,19 @@ function updateItemSelection(itemId, qty) {
   const checkbox = document.getElementById(`move-check-${itemId}`);
   const maxQty = getItemAvailableQty(itemId);
 
-  if (quantity > maxQty) {
+  // Input validation
+  if (quantity < 0) {
+    showToast('Quantity cannot be negative');
+    document.getElementById(`move-qty-${itemId}`).value = 0;
+    delete selectedItems[itemId];
+    checkbox.checked = false;
+  } else if (quantity > maxQty) {
     showToast(`Cannot move more than ${maxQty} units`);
     document.getElementById(`move-qty-${itemId}`).value = maxQty;
     selectedItems[itemId] = maxQty;
+    if (maxQty > 0) {
+      checkbox.checked = true;
+    }
   } else if (quantity > 0) {
     selectedItems[itemId] = quantity;
     checkbox.checked = true;
@@ -3543,6 +3559,14 @@ async function executeMove() {
     return;
   }
 
+  // Prevent concurrent operations
+  if (moveOperationInProgress) {
+    showToast('Move operation already in progress');
+    return;
+  }
+
+  moveOperationInProgress = true;
+
   // Show loading state
   const moveBtn = document.getElementById('move-btn');
   const originalText = moveBtn.textContent;
@@ -3555,39 +3579,60 @@ async function executeMove() {
     const failedItems = [];
     const successfulMoves = [];
 
-    // Execute transfers one by one (each is atomic with rollback)
+    // Pre-validate all transfers before executing any
+    const validationErrors = [];
     for (const itemId of selectedItemIds) {
       const quantity = selectedItems[itemId];
       const item = inventory.find(i => i.id === itemId);
 
       if (!item) {
-        errorCount++;
-        failedItems.push(`${itemId}: Item not found`);
+        validationErrors.push(`${itemId}: Item not found`);
         continue;
       }
 
-      // Determine source location
+      // Determine and validate source location
       let sourceLocation;
       if (inventoryLocationFilter === 'all') {
-        // Use the explicitly selected source location from the UI
         sourceLocation = selectedItems[itemId + '_source'];
-
-        // Fallback: find first location with sufficient stock
-        if (!sourceLocation && item.inventory) {
-          const locationsWithStock = Object.keys(item.inventory).filter(locId =>
-            Number(item.inventory[locId]?.qty || 0) >= quantity
-          );
-          sourceLocation = locationsWithStock[0];
+        if (!sourceLocation) {
+          validationErrors.push(`${item.name}: No source location selected`);
+          continue;
         }
       } else {
         sourceLocation = inventoryLocationFilter;
       }
 
-      // Validate source location exists
-      if (!sourceLocation) {
-        errorCount++;
-        failedItems.push(`${item.name}: No valid source location found`);
+      // Validate source location has sufficient stock
+      const availableQty = Number(item.inventory?.[sourceLocation]?.qty || 0);
+      if (availableQty < quantity) {
+        validationErrors.push(`${item.name}: Only ${availableQty} units available at source`);
         continue;
+      }
+
+      // Validate destination is different from source
+      if (sourceLocation === destination) {
+        validationErrors.push(`${item.name}: Source and destination must be different`);
+        continue;
+      }
+    }
+
+    // If validation failed, show errors and stop
+    if (validationErrors.length > 0) {
+      showToast(`⚠ Validation failed: ${validationErrors[0]}`);
+      return;
+    }
+
+    // Execute transfers one by one (each is atomic with rollback)
+    for (const itemId of selectedItemIds) {
+      const quantity = selectedItems[itemId];
+      const item = inventory.find(i => i.id === itemId);
+
+      // Determine source location (already validated)
+      let sourceLocation;
+      if (inventoryLocationFilter === 'all') {
+        sourceLocation = selectedItems[itemId + '_source'];
+      } else {
+        sourceLocation = inventoryLocationFilter;
       }
 
       try {
@@ -3659,20 +3704,32 @@ async function executeMove() {
       }
     }
 
-    // Always refresh local data and UI, even if some transfers failed
-    // This ensures the UI reflects any successful transfers
+    // Mandatory data refresh - this is critical for consistency
+    let refreshSuccessful = false;
     try {
-      const updatedInventory = await (await fetch(`${API}/inventory`)).json();
-      inventory = Array.isArray(updatedInventory) ? updatedInventory : [];
-      renderList();
+      const response = await fetch(`${API}/inventory`);
+      if (response.ok) {
+        const updatedInventory = await response.json();
+        inventory = Array.isArray(updatedInventory) ? updatedInventory : inventory; // Keep existing if invalid
+        refreshSuccessful = true;
+      } else {
+        console.error('Server returned error during refresh:', response.status);
+      }
     } catch (refreshError) {
       console.error('Failed to refresh inventory after moves:', refreshError);
-      // Continue with local render even if refresh fails
-      renderList();
     }
 
-    // Close modal
-    closeModal('modal-move-inventory');
+    // Always re-render the list to reflect any changes
+    renderList();
+
+    // Close modal only if refresh was successful or we had some successes
+    if (refreshSuccessful || successCount > 0) {
+      closeModal('modal-move-inventory');
+    }
+
+    // Clear selections after operation
+    selectedItems = {};
+    moveOperationInProgress = false;
 
     // Show appropriate success/error messages
     if (successCount > 0 && errorCount === 0) {
@@ -3695,6 +3752,7 @@ async function executeMove() {
   } finally {
     moveBtn.disabled = false;
     moveBtn.textContent = originalText;
+    moveOperationInProgress = false;
   }
 }
 
