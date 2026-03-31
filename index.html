@@ -3274,17 +3274,23 @@ function updateMoveList() {
     return;
   }
 
-  // Get items that have stock at current filter location
+  // Get items that have stock at current filter location but NOT at destination
   let availableItems = [];
   if (inventoryLocationFilter === 'all') {
-    // Show all items with any stock
-    availableItems = inventory.filter(item => item.totalQty > 0);
-  } else {
-    // Show items with stock at the filtered location
+    // Show all items with any stock, but exclude items already at destination
     availableItems = inventory.filter(item => {
       if (!item.inventory) return false;
-      const qty = Number(item.inventory[inventoryLocationFilter]?.qty || 0);
-      return qty > 0;
+      const hasStockSomewhere = item.totalQty > 0;
+      const hasStockAtDestination = Number(item.inventory[destination]?.qty || 0) > 0;
+      return hasStockSomewhere && !hasStockAtDestination;
+    });
+  } else {
+    // Show items with stock at the filtered location, but exclude items already at destination
+    availableItems = inventory.filter(item => {
+      if (!item.inventory) return false;
+      const qtyAtFilter = Number(item.inventory[inventoryLocationFilter]?.qty || 0);
+      const hasStockAtDestination = Number(item.inventory[destination]?.qty || 0) > 0;
+      return qtyAtFilter > 0 && !hasStockAtDestination;
     });
   }
 
@@ -3507,14 +3513,10 @@ async function executeMove() {
       // Determine source location
       let sourceLocation;
       if (inventoryLocationFilter === 'all') {
-        // When filter is "all", we need explicit source location from the item data
-        // This should be stored when the item was selected
-        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
-        if (itemElement) {
-          sourceLocation = itemElement.getAttribute('data-source-location');
-        }
+        // When filter is "all", use the explicitly selected source location
+        sourceLocation = selectedItems[itemId + '_source'];
 
-        // Fallback: find first location with sufficient stock
+        // If no explicit source was selected, find the first location with sufficient stock
         if (!sourceLocation && item.inventory) {
           const locationsWithStock = Object.keys(item.inventory).filter(locId =>
             Number(item.inventory[locId]?.qty || 0) >= quantity
@@ -3535,7 +3537,7 @@ async function executeMove() {
       const currentStock = Number(item.inventory?.[sourceLocation]?.qty || 0);
       if (currentStock < quantity) {
         errorCount++;
-        failedItems.push(`${item.name}: Insufficient stock (${currentStock} available, ${quantity} requested)`);
+        failedItems.push(`${item.name}: Insufficient stock at ${locations.find(l => l.id === sourceLocation)?.name || sourceLocation} (${currentStock} available, ${quantity} requested)`);
         continue;
       }
     }
@@ -3582,15 +3584,23 @@ async function executeMove() {
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Transfer failed');
+          let errorMessage = 'Transfer failed';
+          try {
+            const error = await response.json();
+            errorMessage = error.error || errorMessage;
+          } catch (parseError) {
+            // If we can't parse the error response, use the HTTP status
+            errorMessage = `Server error (${response.status})`;
+          }
+          throw new Error(errorMessage);
         }
 
         successCount++;
       } catch (error) {
         console.error(`Failed to move item ${itemId}:`, error);
         errorCount++;
-        failedItems.push(`${item.name}: ${error.message}`);
+        const locationName = locations.find(l => l.id === sourceLocation)?.name || sourceLocation;
+        failedItems.push(`${item.name} from ${locationName}: ${error.message}`);
       }
     }
 
