@@ -3,27 +3,21 @@ import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 const MIGRATION_VERSION = 1;
 
 function migrateItem(item) {
-  // Add any data migration logic here if needed in the future
   if (!item.version) {
     item.version = MIGRATION_VERSION;
-    // Example: add missing fields with defaults
     if (typeof item.quantity === 'undefined') item.quantity = 0;
     if (typeof item.price === 'undefined') item.price = 0;
   }
   return item;
 }
 
-export default async function handler(event, context) {
-  const httpMethod = event.httpMethod;
+export default async function handler(event) {
+  const httpMethod = event.httpMethod || 'GET';
 
   try {
     if (httpMethod === 'GET') {
       let inventory = await readBlobData('inventory');
-      
-      // Run migration on every load (safe and idempotent)
       inventory = inventory.map(migrateItem);
-      
-      // Write back migrated data
       await writeBlobData('inventory', inventory);
 
       return {
@@ -34,19 +28,14 @@ export default async function handler(event, context) {
     }
 
     if (httpMethod === 'PUT' || httpMethod === 'POST') {
-      const data = JSON.parse(event.body);
-      
-      // Optional: run migration on incoming data too
-      const migratedData = Array.isArray(data) 
-        ? data.map(migrateItem) 
-        : data;
-
-      await writeBlobData('inventory', migratedData);
+      const data = JSON.parse(event.body || '[]');
+      const migrated = Array.isArray(data) ? data.map(migrateItem) : data;
+      await writeBlobData('inventory', migrated);
 
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true, message: 'Inventory updated' })
+        body: JSON.stringify({ success: true })
       };
     }
 
@@ -55,7 +44,41 @@ export default async function handler(event, context) {
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true, message: 'Inventory cleared' })
+        body: JSON.stringify({ success: true })
+      };
+    }
+
+    // Transfer action (used by Move Inventory)
+    if (httpMethod === 'POST' && event.queryStringParameters?.action === 'transfer') {
+      const { itemId, fromLocation, toLocation, quantity } = JSON.parse(event.body || '{}');
+
+      if (!itemId || !fromLocation || !toLocation || !quantity) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Missing parameters' }) };
+      }
+
+      let inventory = await readBlobData('inventory');
+      const item = inventory.find(i => i.id === itemId);
+      if (!item) {
+        return { statusCode: 404, body: JSON.stringify({ error: 'Item not found' }) };
+      }
+
+      if (!item.inventory) item.inventory = {};
+      const fromQty = Number(item.inventory[fromLocation]?.qty || 0);
+      if (fromQty < quantity) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Insufficient quantity' }) };
+      }
+
+      item.inventory[fromLocation] = { qty: fromQty - quantity, lastUpdated: new Date().toISOString() };
+      if (!item.inventory[toLocation]) item.inventory[toLocation] = { qty: 0 };
+      item.inventory[toLocation].qty += quantity;
+      item.inventory[toLocation].lastUpdated = new Date().toISOString();
+
+      await writeBlobData('inventory', inventory);
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: true })
       };
     }
 
@@ -65,7 +88,7 @@ export default async function handler(event, context) {
     };
 
   } catch (error) {
-    console.error('Inventory function error:', error);
+    console.error('Inventory handler error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
