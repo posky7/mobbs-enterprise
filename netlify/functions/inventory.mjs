@@ -41,7 +41,7 @@ function migrateItem(item) {
 }
 
 export default async function handler(event, context) {
-  const { httpMethod, body } = event;
+  const { httpMethod, body, queryStringParameters } = event;
 
   try {
     if (httpMethod === 'GET') {
@@ -65,6 +65,71 @@ export default async function handler(event, context) {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ success: true })
+      };
+    }
+
+    if (httpMethod === 'POST' && queryStringParameters?.action === 'transfer') {
+      const { itemId, fromLocation, toLocation, quantity } = JSON.parse(body || '{}');
+
+      if (!itemId || !fromLocation || !toLocation || !quantity || quantity <= 0) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: 'Missing required parameters' })
+        };
+      }
+
+      const inventory = readInventory();
+      const item = inventory.find(i => i.id === itemId);
+
+      if (!item) {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ error: 'Item not found' })
+        };
+      }
+
+      // Initialize inventory object if it doesn't exist
+      if (!item.inventory) item.inventory = {};
+
+      // Check if source location has enough quantity
+      const sourceQty = Number(item.inventory[fromLocation]?.qty || 0);
+      if (sourceQty < quantity) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: 'Insufficient quantity in source location' })
+        };
+      }
+
+      // Perform the transfer
+      const newSourceQty = Math.max(0, sourceQty - quantity);
+      const targetQty = Number(item.inventory[toLocation]?.qty || 0);
+      const newTargetQty = targetQty + quantity;
+
+      // Update source location
+      if (newSourceQty > 0) {
+        item.inventory[fromLocation] = {
+          qty: newSourceQty,
+          lastUpdated: new Date().toISOString()
+        };
+      } else {
+        delete item.inventory[fromLocation];
+      }
+
+      // Update target location
+      item.inventory[toLocation] = {
+        qty: newTargetQty,
+        lastUpdated: new Date().toISOString()
+      };
+
+      writeInventory(inventory);
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          message: `Transferred ${quantity} units from ${fromLocation} to ${toLocation}`
+        })
       };
     }
 

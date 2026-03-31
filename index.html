@@ -526,6 +526,20 @@ select.form-input option { background:#fff; color:#1a1612; }
         </div>
         <div class="form-group"><label class="form-label">Location *</label><select class="form-input" id="f-location" required></select></div>
         <div class="form-group"><label class="form-label">Quantity at Location</label><input class="form-input" type="number" id="f-qty" placeholder="0" min="0" inputmode="numeric"></div>
+
+        <!-- Warehouse Transfer Option -->
+        <div class="form-group" id="warehouse-transfer-section" style="display:none;">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="f-transfer-from-warehouse" onchange="toggleWarehouseTransfer()" style="width:16px;height:16px;">
+            Transfer from warehouse
+          </label>
+          <div id="warehouse-info" style="display:none;margin-top:8px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Warehouse inventory for this item:</div>
+            <div style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text);" id="warehouse-qty">0 units</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;" id="warehouse-transfer-note">Select quantity to transfer below</div>
+          </div>
+        </div>
+
         <div class="reorder-row"><span class="reorder-label">🔔 Low stock alert when qty ≤</span><input class="reorder-input" type="number" id="f-reorder" value="5" min="0" inputmode="numeric"></div>
       </div>
       <div class="form-section">
@@ -796,6 +810,123 @@ function populateUnitSelect(selected) {
 }
 function onCategoryChange() { populateUnitSelect(document.getElementById('f-unit').value); }
 
+function toggleWarehouseTransfer() {
+  const checkbox = document.getElementById('f-transfer-from-warehouse');
+  const warehouseSection = document.getElementById('warehouse-transfer-section');
+  const warehouseInfo = document.getElementById('warehouse-info');
+
+  if (checkbox.checked) {
+    warehouseSection.style.display = 'block';
+    updateWarehouseInfo();
+  } else {
+    warehouseSection.style.display = 'none';
+    warehouseInfo.style.display = 'none';
+  }
+}
+
+function showWarehouseTransferSection() {
+  const warehouse = locations.find(loc => loc.isWarehouse);
+  const section = document.getElementById('warehouse-transfer-section');
+
+  if (warehouse && locations.filter(loc => loc.active).length > 1) {
+    section.style.display = 'block';
+  } else {
+    section.style.display = 'none';
+  }
+}
+
+// Show warehouse transfer section when modal opens
+function openAddModal() {
+  // Check if any active locations exist
+  const activeLocations = locations.filter(loc => loc.active);
+  if (activeLocations.length === 0) {
+    showLocationSetupMessage();
+    return;
+  }
+
+  ['edit-id','f-name','f-qty','f-cost','f-labor','f-suggested-price','f-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-reorder').value='5';
+  document.getElementById('f-category').value='Art';
+  populateUnitSelect('print');
+  populateLocationSelect();
+
+  // Pre-select the current location filter if it's not "all"
+  if (inventoryLocationFilter !== 'all') {
+    document.getElementById('f-location').value = inventoryLocationFilter;
+  }
+
+  // Reset warehouse transfer checkbox
+  document.getElementById('f-transfer-from-warehouse').checked = false;
+  toggleWarehouseTransfer();
+
+  // Show warehouse transfer section if warehouse exists and multiple locations
+  showWarehouseTransferSection();
+
+  // Add event listener for item name to update warehouse info
+  const nameInput = document.getElementById('f-name');
+  nameInput.addEventListener('input', updateWarehouseInfo);
+
+  document.getElementById('modal-title').textContent='Add Item';
+  document.getElementById('btn-delete-item').style.display='none';
+  updateCalc();
+  document.getElementById('modal-add').classList.add('open');
+}
+
+async function updateWarehouseInfo() {
+  const itemName = document.getElementById('f-name').value.trim();
+  const warehouseInfo = document.getElementById('warehouse-info');
+  const warehouseQty = document.getElementById('warehouse-qty');
+  const warehouseNote = document.getElementById('warehouse-transfer-note');
+
+  if (!itemName) {
+    warehouseInfo.style.display = 'none';
+    return;
+  }
+
+  // Find warehouse location
+  const warehouse = locations.find(loc => loc.isWarehouse);
+  if (!warehouse) {
+    warehouseQty.textContent = 'No warehouse configured';
+    warehouseNote.textContent = 'Set up a warehouse in Settings first';
+    warehouseInfo.style.display = 'block';
+    return;
+  }
+
+  // Find item in inventory to check warehouse stock
+  const item = inventory.find(i => i.name.toLowerCase() === itemName.toLowerCase());
+  const warehouseStock = item?.inventory?.[warehouse.id]?.qty || 0;
+
+  warehouseQty.textContent = `${warehouseStock} units`;
+  warehouseNote.textContent = warehouseStock > 0 ? 'Select quantity to transfer below' : 'No stock available in warehouse';
+  warehouseInfo.style.display = 'block';
+}
+
+async function performWarehouseTransfer(itemId, toLocation, quantity) {
+  const warehouse = locations.find(loc => loc.isWarehouse);
+  if (!warehouse) {
+    throw new Error('No warehouse configured');
+  }
+
+  const response = await fetch(`${API}/inventory?action=transfer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      itemId,
+      fromLocation: warehouse.id,
+      toLocation,
+      quantity: parseInt(quantity)
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Transfer failed');
+  }
+
+  const result = await response.json();
+  return result;
+}
+
 // ── Location Setup Validation ────────────────────────────────────
 function showLocationSetupMessage() {
   showConfirm(
@@ -917,7 +1048,8 @@ function addLocation() {
     name: name.trim(),
     type: 'retail',
     active: true,
-    order: locations.length
+    order: locations.length,
+    isWarehouse: false
   };
 
   locations.push(location);
@@ -937,6 +1069,26 @@ function toggleLocationActive(id) {
   renderList(); // Refresh inventory display
   populateInventoryLocationFilter(); // Update inventory filter
   populatePnLLocationFilter(); // Update P&L filter
+}
+
+function setWarehouse(id) {
+  const loc = locations.find(l => l.id === id);
+  if (!loc) return;
+
+  // If this location is already the warehouse, unset it
+  if (loc.isWarehouse) {
+    loc.isWarehouse = false;
+    showToast('✓ Warehouse designation removed');
+  } else {
+    // Unset any existing warehouse
+    locations.forEach(l => l.isWarehouse = false);
+    // Set this location as warehouse
+    loc.isWarehouse = true;
+    showToast('✓ Warehouse set to ' + loc.name);
+  }
+
+  saveLocations();
+  renderLocationSettings();
 }
 
 function deleteLocation(id) {
@@ -971,14 +1123,21 @@ function renderLocationSettings() {
   const container = document.getElementById('location-settings-list');
   if (!container) return;
 
+  // Find current warehouse
+  const currentWarehouse = locations.find(loc => loc.isWarehouse);
+
   container.innerHTML = locations.map(loc => `
     <div class="inv-card" style="cursor:default;">
       <div class="inv-card-header">
         <div>
           <div class="inv-name">${esc(loc.name)}</div>
-          <span class="category-chip">${loc.type === 'storage' ? 'Storage' : 'Retail Booth'}</span>
+          <span class="category-chip">${loc.type === 'storage' ? 'Storage' : 'Retail Booth'}${loc.isWarehouse ? ' · 🏭 Warehouse' : ''}</span>
         </div>
         <div style="display:flex;gap:8px;">
+          ${loc.active ? `<button onclick="setWarehouse('${loc.id}')"
+                  style="background:${loc.isWarehouse ? 'var(--accent3)' : 'var(--text3)'};color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+            ${loc.isWarehouse ? 'Warehouse' : 'Set as Warehouse'}
+          </button>` : ''}
           <button onclick="toggleLocationActive('${loc.id}')"
                   style="background:${loc.active ? 'var(--accent2)' : 'var(--text3)'};color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
             ${loc.active ? 'Active' : 'Inactive'}
@@ -1243,6 +1402,14 @@ function openAddModal() {
     document.getElementById('f-location').value = inventoryLocationFilter;
   }
 
+  // Reset warehouse transfer checkbox
+  document.getElementById('f-transfer-from-warehouse').checked = false;
+  toggleWarehouseTransfer();
+
+  // Add event listener for item name to update warehouse info
+  const nameInput = document.getElementById('f-name');
+  nameInput.addEventListener('input', updateWarehouseInfo);
+
   document.getElementById('modal-title').textContent='Add Item';
   document.getElementById('btn-delete-item').style.display='none';
   updateCalc();
@@ -1267,12 +1434,13 @@ function openEditModal(id) {
   document.getElementById('modal-add').classList.add('open');
 }
 
-function saveItem() {
+async function saveItem() {
   const name=document.getElementById('f-name').value.trim(); if(!name){document.getElementById('f-name').focus();return;}
   const location=document.getElementById('f-location').value; if(!location){document.getElementById('f-location').focus();return;}
   const editId=document.getElementById('edit-id').value;
   const existing=editId?inventory.find(i=>i.id===editId):null;
   const qty=parseInt(document.getElementById('f-qty').value)||0;
+  const transferFromWarehouse = document.getElementById('f-transfer-from-warehouse').checked;
 
   const item={
     id:editId||uid(), name,
@@ -1289,11 +1457,22 @@ function saveItem() {
   // Initialize inventory object if it doesn't exist
   if (!item.inventory) item.inventory = {};
 
-  // Set quantity for the selected location
-  item.inventory[location] = {
-    qty: qty,
-    lastUpdated: new Date().toISOString()
-  };
+  // Handle warehouse transfer
+  if (transferFromWarehouse && qty > 0) {
+    try {
+      await performWarehouseTransfer(item.id, location, qty);
+      showToast(`✓ Transferred ${qty} units from warehouse to ${locations.find(l => l.id === location)?.name || location}`);
+    } catch (error) {
+      showToast('⚠ Transfer failed: ' + error.message);
+      return;
+    }
+  } else {
+    // Set quantity for the selected location (regular add)
+    item.inventory[location] = {
+      qty: qty,
+      lastUpdated: new Date().toISOString()
+    };
+  }
 
   if(editId){const idx=inventory.findIndex(i=>i.id===editId);if(idx>-1)inventory[idx]=item;}else inventory.unshift(item);
   saveInventory(); closeModal('modal-add'); renderList();

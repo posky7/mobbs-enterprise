@@ -22,7 +22,8 @@ function readLocations() {
         name: 'Storage',
         type: 'storage',
         active: true,
-        order: 0
+        order: 0,
+        isWarehouse: false
       }
     ];
   }
