@@ -371,6 +371,25 @@ select.form-input option { background:#fff; color:#1a1612; }
     <div class="inv-list" id="exp-list"></div>
   </div>
 
+  <!-- Settings Tab -->
+  <div id="tab-settings" class="tab-content">
+    <div class="app-header">
+      <div class="header-top">
+        <div class="app-logo">Lenore's Closet</div>
+        <div class="header-clock"><div class="header-clock-time" id="settings-clock">—</div><div class="header-clock-date" id="settings-date">—</div></div>
+      </div>
+      <div class="header-title">Settings</div>
+    </div>
+
+    <!-- Location Management -->
+    <div class="section-header"><div class="section-title">Locations</div><button class="btn-add" onclick="addLocation()">＋ Add Location</button></div>
+    <div class="inv-list" id="location-settings-list"></div>
+
+    <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px;">
+      Manage your retail booth locations and storage facility. Each location can track inventory separately.
+    </div>
+  </div>
+
   <!-- Reports Tab -->
   <div id="tab-reports" class="tab-content">
     <div class="app-header">
@@ -439,9 +458,9 @@ select.form-input option { background:#fff; color:#1a1612; }
   <nav class="bottom-nav">
     <button class="nav-btn active" id="nav-inventory" onclick="switchTab('inventory')"><span class="nav-icon">📦</span><span class="nav-label">Inventory</span></button>
     <button class="nav-btn" id="nav-expenses" onclick="switchTab('expenses')"><span class="nav-icon">💸</span><span class="nav-label">Expenses</span></button>
-    <button class="nav-btn" id="nav-pnl" onclick="switchTab('pnl')"><span class="nav-icon">📊</span><span class="nav-label">P&amp;L</span></button>
+    <button class="nav-btn" id="nav-pnl" onclick="switchTab('pnl')"><span class="nav-icon">📊</span><span class="nav-label">P&L</span></button>
     <button class="nav-btn" id="nav-loans" onclick="switchTab('loans')"><span class="nav-icon">🏦</span><span class="nav-label">Loans</span></button>
-    <button class="nav-btn" id="nav-reports" onclick="switchTab('reports')"><span class="nav-icon">📈</span><span class="nav-label">Reports</span></button>
+    <button class="nav-btn" id="nav-settings" onclick="switchTab('settings')"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></button>
   </nav>
 </div>
 
@@ -673,33 +692,40 @@ function dismissBanner() { document.getElementById('install-banner').classList.r
 // Inventory is server-backed only — never seed demo rows; empty API / invalid JSON must stay [].
 
 let inventory = [];
+let locations = [];
 let loans = [];
-let currentLoanId = null, currentDetailId = null;
+let currentLoanId = null, currentDetailId = null, currentLocationId = 'storage';
 
 // ── API helpers ──────────────────────────────────────────────
 const API = '/.netlify/functions';
 
 async function loadAllData() {
   try {
-    const [invRes, loansRes, expRes] = await Promise.all([
+    const [invRes, loansRes, expRes, locRes] = await Promise.all([
       fetch(`${API}/inventory`),
       fetch(`${API}/loans`),
       fetch(`${API}/expenses`),
+      fetch(`${API}/locations`),
     ]);
     let invData;
     try { invData = await invRes.json(); } catch { invData = null; }
     const loansData = await loansRes.json();
-    const expData  = await expRes.json();
+    const expData   = await expRes.json();
+    const locData   = await locRes.json();
     inventory = Array.isArray(invData) ? invData : [];
     loans     = loansData || [];
     expenses  = expData   || [];
+    locations = Array.isArray(locData) ? locData : [];
   } catch(e) {
     console.error('Failed to load data from server', e);
     inventory = [];
     loans = [];
     expenses = [];
+    locations = [];
   }
 }
+
+function saveLocations() { fetch(`${API}/locations`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(locations) }).catch(e=>console.error('Save locations error',e)); }
 
 function saveInventory() { fetch(`${API}/inventory`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(inventory) }).catch(e=>console.error('Save inventory error',e)); }
 function saveLoans()     { fetch(`${API}/loans`,     { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(loans)     }).catch(e=>console.error('Save loans error',e)); }
@@ -750,6 +776,86 @@ function initSwipeDismiss(overlayId) {
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+// ── Location Management ────────────────────────────────────
+function addLocation() {
+  const name = prompt('Enter location name (e.g., "Downtown Booth"):');
+  if (!name || !name.trim()) return;
+
+  const location = {
+    id: 'location-' + Date.now(),
+    name: name.trim(),
+    type: 'retail',
+    active: true,
+    order: locations.length
+  };
+
+  locations.push(location);
+  saveLocations();
+  renderLocationSettings();
+  showToast('✓ Location added');
+}
+
+function toggleLocationActive(id) {
+  const loc = locations.find(l => l.id === id);
+  if (!loc) return;
+  loc.active = !loc.active;
+  saveLocations();
+  renderLocationSettings();
+  renderList(); // Refresh inventory display
+}
+
+function deleteLocation(id) {
+  if (locations.length <= 1) {
+    showToast('Cannot delete the last location');
+    return;
+  }
+
+  const loc = locations.find(l => l.id === id);
+  if (!loc) return;
+
+  // Check if location has inventory
+  const hasInventory = inventory.some(item =>
+    item.inventory && item.inventory[id] && item.inventory[id].qty > 0
+  );
+
+  if (hasInventory) {
+    showToast('Cannot delete location with existing inventory');
+    return;
+  }
+
+  locations = locations.filter(l => l.id !== id);
+  saveLocations();
+  renderLocationSettings();
+  renderList();
+  showToast('✓ Location deleted');
+}
+
+function renderLocationSettings() {
+  const container = document.getElementById('location-settings-list');
+  if (!container) return;
+
+  container.innerHTML = locations.map(loc => `
+    <div class="inv-card" style="cursor:default;">
+      <div class="inv-card-header">
+        <div>
+          <div class="inv-name">${esc(loc.name)}</div>
+          <span class="category-chip">${loc.type === 'storage' ? 'Storage' : 'Retail Booth'}</span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="toggleLocationActive('${loc.id}')"
+                  style="background:${loc.active ? 'var(--accent2)' : 'var(--text3)'};color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+            ${loc.active ? 'Active' : 'Inactive'}
+          </button>
+          ${loc.type !== 'storage' ? `<button onclick="deleteLocation('${loc.id}')"
+                  style="background:var(--danger);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+            Delete
+          </button>` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
 // ── Tabs ───────────────────────────────────────────────────
 function switchTab(n) {
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
@@ -760,6 +866,7 @@ function switchTab(n) {
   if(n==='loans')    renderLoans();
   if(n==='expenses') renderExpenses();
   if(n==='reports')  renderReports();
+  if(n==='settings') renderLocationSettings();
 }
 
 // ── Render Inventory ───────────────────────────────────────
@@ -769,16 +876,22 @@ function renderList() {
   const q = (document.getElementById('search-box').value||'').toLowerCase();
   const allMatch = inventory.filter(i=>i.name.toLowerCase().includes(q)||i.category.toLowerCase().includes(q));
 
-  // Split: in-stock = qty > 0, sold-out = qty === 0 AND has sales history
-  const inStock = allMatch.filter(i => Number(i.qty) > 0).sort((a,b)=>a.name.localeCompare(b.name));
-  const soldOut = allMatch.filter(i => Number(i.qty) === 0 && (i.sales||[]).length > 0).sort((a,b)=>a.name.localeCompare(b.name));
+  // Calculate totals across all locations for each item
+  allMatch.forEach(item => {
+    if (!item.inventory) item.inventory = {};
+    item.totalQty = Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc.qty || 0), 0);
+  });
+
+  // Split: in-stock = totalQty > 0, sold-out = totalQty === 0 AND has sales history
+  const inStock = allMatch.filter(i => Number(i.totalQty) > 0).sort((a,b)=>a.name.localeCompare(b.name));
+  const soldOut = allMatch.filter(i => Number(i.totalQty) === 0 && (i.sales||[]).length > 0).sort((a,b)=>a.name.localeCompare(b.name));
 
   // Summary stats — in-stock only
   const tot = (arr, fn) => arr.reduce(fn, 0);
   document.getElementById('sum-items').textContent  = inStock.length;
-  document.getElementById('sum-units').textContent  = tot(inStock, (a,i)=>a+Number(i.qty));
-  document.getElementById('sum-cost').textContent   = fmtK(tot(inStock, (a,i)=>a+(Number(i.cost)+Number(i.labor))*Number(i.qty)));
-  document.getElementById('sum-retail').textContent = fmtK(tot(inStock, (a,i)=>a+Number(i.suggestedPrice??i.salePrice??0)*Number(i.qty)));
+  document.getElementById('sum-units').textContent  = tot(inStock, (a,i)=>a+Number(i.totalQty));
+  document.getElementById('sum-cost').textContent   = fmtK(tot(inStock, (a,i)=>a+(Number(i.cost)+Number(i.labor))*Number(i.totalQty)));
+  document.getElementById('sum-retail').textContent = fmtK(tot(inStock, (a,i)=>a+Number(i.suggestedPrice??i.salePrice??0)*Number(i.totalQty)));
 
   // Sold summary — across ALL items with any sales
   const allSold = inventory.filter(i=>(i.sales||[]).length>0);
@@ -812,11 +925,26 @@ function buildItemCard(item) {
   const tc=Number(item.cost)+Number(item.labor), profit=suggested-tc;
   const margin=suggested>0?Math.round((profit/suggested)*100):0;
   const thresh=Number(item.reorderPt??5);
+
+  // Calculate total quantity across all locations
+  const totalQty = item.totalQty || 0;
+
+  // Show location breakdown for mobile
+  const locationBreakdown = locations
+    .filter(loc => loc.active)
+    .map(loc => {
+      const qty = Number((item.inventory?.[loc.id]?.qty) || 0);
+      return qty > 0 ? `${loc.name}: ${qty}` : null;
+    })
+    .filter(Boolean)
+    .join(' · ');
+
   return `<div class="inv-card" onclick="openDetail('${item.id}')">
     <div class="inv-card-header">
       <div><div class="inv-name">${esc(item.name)}</div><span class="category-chip">${esc(item.category)}</span></div>
-      <div class="inv-qty-badge ${item.qty<=thresh?'low':'ok'}">${item.qty} ${esc(item.unit||'units')}</div>
+      <div class="inv-qty-badge ${totalQty<=thresh?'low':'ok'}">${totalQty} ${esc(item.unit||'units')}</div>
     </div>
+    ${locationBreakdown ? `<div style="font-size:11px;color:var(--text3);padding:0 14px 8px;margin-top:-4px;">${esc(locationBreakdown)}</div>` : ''}
     <div class="margin-bar"><div class="margin-fill" style="width:${Math.min(100,Math.max(0,margin))}%"></div></div>
     <div class="inv-metrics">
       <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(item.cost)}</div></div>
@@ -955,16 +1083,20 @@ function renderDetail() {
   const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
   const tc=Number(item.cost)+Number(item.labor), profit=suggested-tc;
   const margin=suggested>0?(profit/suggested*100).toFixed(1):0;
+
+  // Calculate total quantity across all locations
+  const totalQty = item.totalQty || 0;
+
   document.getElementById('detail-name').textContent=item.name;
   document.getElementById('detail-cat').textContent=item.category;
-  document.getElementById('detail-qty').textContent=item.qty;
+  document.getElementById('detail-qty').textContent=totalQty;
   document.getElementById('detail-unit').textContent=item.unit||'units';
   document.getElementById('detail-profit').textContent=fmt(profit);
   document.getElementById('detail-margin').textContent=margin+'% margin';
   document.getElementById('dd-cost').textContent=fmt(item.cost);
   document.getElementById('dd-labor').textContent=fmt(item.labor);
   document.getElementById('dd-suggested-price').textContent=fmt(suggested);
-  document.getElementById('dd-total-val').textContent=fmt(suggested*Number(item.qty));
+  document.getElementById('dd-total-val').textContent=fmt(suggested*totalQty);
   const nw=document.getElementById('detail-notes-wrap');
   if(item.notes){nw.style.display='block';document.getElementById('detail-notes').textContent=item.notes;}else nw.style.display='none';
 
@@ -1032,7 +1164,18 @@ function removeSale(sid) {
 
 function adjustQty(d) {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
-  item.qty=Math.max(0,Number(item.qty)+d); saveInventory(); renderDetail(); renderList();
+  if (!item.inventory) item.inventory = {};
+
+  // Default to adjusting storage location
+  const currentQty = Number(item.inventory['storage']?.qty || 0);
+  const newQty = Math.max(0, currentQty + d);
+
+  item.inventory['storage'] = {
+    qty: newQty,
+    lastUpdated: new Date().toISOString()
+  };
+
+  saveInventory(); renderDetail(); renderList();
 }
 function editCurrentItem() { closeModal('modal-detail'); setTimeout(()=>openEditModal(currentDetailId),180); }
 
