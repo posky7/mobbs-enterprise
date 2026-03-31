@@ -3631,6 +3631,8 @@ function updateItemSelection(itemId, qty) {
     showToast('Quantity cannot be negative');
     document.getElementById(`move-qty-${itemId}`).value = 0;
     delete selectedItems[itemId];
+    // Also clear the source location when deselecting
+    delete selectedItems[itemId + '_source'];
     checkbox.checked = false;
   } else if (quantity > maxQty) {
     showToast(`Cannot move more than ${maxQty} units`);
@@ -3638,12 +3640,47 @@ function updateItemSelection(itemId, qty) {
     selectedItems[itemId] = maxQty;
     if (maxQty > 0) {
       checkbox.checked = true;
+      // Ensure source location is set when in "All Locations" mode
+      if (inventoryLocationFilter === 'all' && !selectedItems[itemId + '_source']) {
+        const item = inventory.find(i => i.id === itemId);
+        if (item && item.inventory) {
+          const locationsWithStock = locations
+            .filter(loc => loc.active && item.inventory[loc.id] && Number(item.inventory[loc.id].qty) > 0);
+          if (locationsWithStock.length > 0) {
+            selectedItems[itemId + '_source'] = locationsWithStock[0].id;
+            // Also update the dropdown to reflect this selection
+            const sourceSelect = document.getElementById(`move-source-${itemId}`);
+            if (sourceSelect) {
+              sourceSelect.value = locationsWithStock[0].id;
+            }
+          }
+        }
+      }
     }
   } else if (quantity > 0) {
     selectedItems[itemId] = quantity;
     checkbox.checked = true;
+
+    // Ensure source location is set when in "All Locations" mode
+    if (inventoryLocationFilter === 'all' && !selectedItems[itemId + '_source']) {
+      const item = inventory.find(i => i.id === itemId);
+      if (item && item.inventory) {
+        const locationsWithStock = locations
+          .filter(loc => loc.active && item.inventory[loc.id] && Number(item.inventory[loc.id].qty) > 0);
+        if (locationsWithStock.length > 0) {
+          selectedItems[itemId + '_source'] = locationsWithStock[0].id;
+          // Also update the dropdown to reflect this selection
+          const sourceSelect = document.getElementById(`move-source-${itemId}`);
+          if (sourceSelect) {
+            sourceSelect.value = locationsWithStock[0].id;
+          }
+        }
+      }
+    }
   } else {
     delete selectedItems[itemId];
+    // Also clear the source location when deselecting
+    delete selectedItems[itemId + '_source'];
     checkbox.checked = false;
   }
 
