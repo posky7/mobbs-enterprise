@@ -1481,18 +1481,48 @@ async function saveItem() {
     suggestedPrice:parseFloat(document.getElementById('f-suggested-price').value)||0,
     notes:document.getElementById('f-notes').value.trim(),
     sales:existing?existing.sales||[]:[], // preserve sale history on edit
+    inventory: existing ? existing.inventory || {} : {}, // preserve existing inventory
   };
 
-  // Initialize inventory object if it doesn't exist
-  if (!item.inventory) item.inventory = {};
+  // Handle warehouse transfer for new items - save first so item exists on server
+  if (transferFromWarehouse && qty > 0 && !editId) {
+    // Save item first so it exists on the server
+    inventory.unshift(item);
+    await new Promise(resolve => { saveInventory(); setTimeout(resolve, 500); });
+  }
 
   // Handle warehouse transfer
   if (transferFromWarehouse && qty > 0) {
     try {
       await performWarehouseTransfer(item.id, location, qty);
       showToast(`✓ Transferred ${qty} units from warehouse to ${locations.find(l => l.id === location)?.name || location}`);
+
+      // After successful transfer, reload item from server to get updated inventory
+      try {
+        const response = await fetch(`${API}/inventory`);
+        const updatedInventory = await response.json();
+        const updatedItem = Array.isArray(updatedInventory) ? updatedInventory.find(i => i.id === item.id) : null;
+        if (updatedItem) {
+          // Update local item with server state
+          Object.assign(item, updatedItem);
+          // Update in inventory array
+          const idx = inventory.findIndex(i => i.id === item.id);
+          if (idx > -1) inventory[idx] = item;
+        }
+      } catch (refreshError) {
+        console.warn('Failed to refresh item after transfer:', refreshError);
+      }
+
+      // Don't call saveInventory() again after successful transfer
+      closeModal('modal-add'); renderList();
+      showToast(editId?'✓ Item updated with transfer':'✓ Item added with transfer');
+      return;
     } catch (error) {
       showToast('⚠ Transfer failed: ' + error.message);
+      // For new items that failed transfer, remove from local inventory since save already happened
+      if (!editId) {
+        inventory = inventory.filter(i => i.id !== item.id);
+      }
       return;
     }
   } else {
@@ -3274,23 +3304,21 @@ function updateMoveList() {
     return;
   }
 
-  // Get items that have stock at current filter location but NOT at destination
+  // Get items that have stock at current filter location
   let availableItems = [];
   if (inventoryLocationFilter === 'all') {
-    // Show all items with any stock, but exclude items already at destination
+    // Show all items with any stock
     availableItems = inventory.filter(item => {
       if (!item.inventory) return false;
       const hasStockSomewhere = item.totalQty > 0;
-      const hasStockAtDestination = Number(item.inventory[destination]?.qty || 0) > 0;
-      return hasStockSomewhere && !hasStockAtDestination;
+      return hasStockSomewhere;
     });
   } else {
-    // Show items with stock at the filtered location, but exclude items already at destination
+    // Show items with stock at the filtered location
     availableItems = inventory.filter(item => {
       if (!item.inventory) return false;
       const qtyAtFilter = Number(item.inventory[inventoryLocationFilter]?.qty || 0);
-      const hasStockAtDestination = Number(item.inventory[destination]?.qty || 0) > 0;
-      return qtyAtFilter > 0 && !hasStockAtDestination;
+      return qtyAtFilter > 0;
     });
   }
 
@@ -3407,10 +3435,11 @@ function updateItemSelection(itemId, qty) {
 
 function getItemAvailableQty(itemId) {
   const item = inventory.find(i => i.id === itemId);
-  if (!item) return 0;
+  if (!item || !item.inventory) return 0;
 
   if (inventoryLocationFilter === 'all') {
-    return item.totalQty || 0;
+    // Compute totalQty locally instead of trusting the cached field
+    return Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc?.qty || 0), 0);
   } else {
     return Number(item.inventory[inventoryLocationFilter]?.qty || 0);
   }
