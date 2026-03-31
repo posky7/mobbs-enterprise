@@ -1357,6 +1357,25 @@ function testLocationFiltering() {
   const filtered = filterItemsByLocation(testItems);
   console.log(`Filtered items (${pnlLocationFilter}): ${filtered.length}`);
 
+  // Test 4: Test sales filtering by location
+  const testSales = [
+    { item: { id: '1' }, date: '2024-01-01', qty: 1, revenue: 100, profit: 50 },
+    { item: { id: '2' }, date: '2024-01-02', qty: 2, revenue: 200, profit: 100 }
+  ];
+
+  const filterSalesByLocation = (sales) => {
+    if (pnlLocationFilter === 'all') return sales;
+    return sales.filter(sale => {
+      // Find the item and check if it has inventory at the selected location
+      const item = inventory.find(i => i.id === sale.item.id);
+      if (!item || !item.inventory) return false;
+      return item.inventory[pnlLocationFilter] && Number(item.inventory[pnlLocationFilter].qty) >= 0;
+    });
+  };
+
+  const filteredSales = filterSalesByLocation(testSales);
+  console.log(`Filtered sales (${pnlLocationFilter}): ${filteredSales.length}`);
+
   console.log('Location filtering test complete');
 }
 
@@ -1428,13 +1447,14 @@ function renderPnL() {
     });
   };
 
-  // Filter sales by location
+  // Filter sales by location - determine location based on item's current inventory location
   const filterSalesByLocation = (sales) => {
     if (pnlLocationFilter === 'all') return sales;
     return sales.filter(sale => {
-      // For now, sales don't have location data, so we'll show all sales when filtering by location
-      // In a future enhancement, sales could be associated with locations
-      return true;
+      // Find the item and check if it has inventory at the selected location
+      const item = inventory.find(i => i.id === sale.item.id);
+      if (!item || !item.inventory) return false;
+      return item.inventory[pnlLocationFilter] && Number(item.inventory[pnlLocationFilter].qty) >= 0;
     });
   };
 
@@ -1454,6 +1474,13 @@ function renderPnL() {
   // ── Expense calculations split by type ───────────────────
   const recurringActive = expenses.filter(e => {
     if (e.status !== 'Active' || e.frequency === 'One-Time') return false;
+    // Filter by location if not 'all'
+    if (pnlLocationFilter === 'all') return true;
+    return e.location === pnlLocationFilter;
+  });
+
+  const oneTimeActive = expenses.filter(e => {
+    if (e.frequency !== 'One-Time') return false;
     // Filter by location if not 'all'
     if (pnlLocationFilter === 'all') return true;
     return e.location === pnlLocationFilter;
@@ -1488,15 +1515,35 @@ function renderPnL() {
   const actualProfit  = periodSales.reduce((s,sl)=>s+Number(sl.profit), 0);
   const net           = actualProfit - expForPeriod - loanPayments;
 
-  // By-category — period sales only
+  // By-category — period sales only, filtered by location
   const byCategory = {};
   inventory.forEach(item => {
     if (!byCategory[item.category]) byCategory[item.category] = { cost:0, sugg:0, qty:0, soldRevenue:0, soldProfit:0, soldUnits:0 };
     const d = byCategory[item.category];
-    d.cost += (Number(item.cost)+Number(item.labor))*Number(item.qty);
-    d.sugg += sp(item)*Number(item.qty);
-    d.qty  += Number(item.qty);
-    const ps = salesInPeriod(item, bounds);
+
+    // Filter inventory quantities by location
+    let itemQty = Number(item.qty);
+    if (pnlLocationFilter !== 'all') {
+      if (!item.inventory || !item.inventory[pnlLocationFilter]) {
+        itemQty = 0;
+      } else {
+        itemQty = Number(item.inventory[pnlLocationFilter].qty);
+      }
+    }
+
+    d.cost += (Number(item.cost)+Number(item.labor))*itemQty;
+    d.sugg += sp(item)*itemQty;
+    d.qty  += itemQty;
+
+    // Filter sales by period and location
+    const ps = salesInPeriod(item, bounds).filter(sale => {
+      if (pnlLocationFilter === 'all') return true;
+      // Find the item and check if it has inventory at the selected location
+      const saleItem = inventory.find(i => i.id === item.id);
+      if (!saleItem || !saleItem.inventory) return false;
+      return saleItem.inventory[pnlLocationFilter] && Number(saleItem.inventory[pnlLocationFilter].qty) >= 0;
+    });
+
     d.soldRevenue += ps.reduce((s,sl)=>s+Number(sl.revenue), 0);
     d.soldProfit  += ps.reduce((s,sl)=>s+Number(sl.profit),  0);
     d.soldUnits   += ps.reduce((s,sl)=>s+Number(sl.qty),     0);
