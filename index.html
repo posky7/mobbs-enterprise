@@ -1530,48 +1530,81 @@ function renderSoldList(soldItems) {
   const badge = document.getElementById('sold-count-badge');
   const arrow = document.getElementById('sold-toggle-arrow');
 
-  // Filter items with sales by location
-  let allWithSales = inventory.filter(i=>(i.sales||[]).length>0);
-  if (inventoryLocationFilter !== 'all') {
-    allWithSales = allWithSales.filter(item => {
-      // Filter sales by location - check if item has sales from the selected location
-      return (item.sales||[]).some(sale => sale.location === inventoryLocationFilter);
-    });
-  }
-  allWithSales = allWithSales.sort((a,b)=>a.name.localeCompare(b.name));
+  // Create location-specific sale entries instead of aggregated items
+  let locationSpecificSales = [];
 
-  if (!allWithSales.length) { sec.style.display='none'; return; }
+  inventory.forEach(item => {
+    if (!item.sales || item.sales.length === 0) return;
+
+    // Group sales by location for this item
+    const salesByLocation = {};
+    item.sales.forEach(sale => {
+      const locationId = sale.location || 'unknown';
+      if (!salesByLocation[locationId]) {
+        salesByLocation[locationId] = [];
+      }
+      salesByLocation[locationId].push(sale);
+    });
+
+    // Create an entry for each location
+    Object.keys(salesByLocation).forEach(locationId => {
+      const locationSales = salesByLocation[locationId];
+      const totalSoldQty = locationSales.reduce((s, sl) => s + Number(sl.qty), 0);
+      const totalRevenue = locationSales.reduce((s, sl) => s + Number(sl.revenue), 0);
+      const totalCostBasis = locationSales.reduce((s, sl) => s + (Number(item.cost) + Number(item.labor)) * Number(sl.qty), 0);
+      const totalProfit = totalRevenue - totalCostBasis;
+
+      // Filter by location if needed
+      if (inventoryLocationFilter !== 'all' && locationId !== inventoryLocationFilter) {
+        return;
+      }
+
+      locationSpecificSales.push({
+        item: item,
+        locationId: locationId,
+        locationName: locations.find(l => l.id === locationId)?.name || 'Unknown Location',
+        sales: locationSales,
+        totalSoldQty: totalSoldQty,
+        totalRevenue: totalRevenue,
+        totalProfit: totalProfit,
+        lastSale: locationSales.sort((a, b) => new Date(b.date) - new Date(a.date))[0]
+      });
+    });
+  });
+
+  // Sort by item name, then location name
+  locationSpecificSales.sort((a, b) => {
+    const itemCompare = a.item.name.localeCompare(b.item.name);
+    if (itemCompare !== 0) return itemCompare;
+    return a.locationName.localeCompare(b.locationName);
+  });
+
+  if (!locationSpecificSales.length) { sec.style.display='none'; return; }
 
   sec.style.display = 'block';
-  badge.textContent = allWithSales.length;
+  badge.textContent = locationSpecificSales.length;
   arrow.style.transform = soldSectionOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
   list.style.display = soldSectionOpen ? 'flex' : 'none';
 
   if (!soldSectionOpen) return;
 
-  list.innerHTML = allWithSales.map(item => {
-    // Filter sales by location for this item
-    let itemSales = item.sales || [];
-    if (inventoryLocationFilter !== 'all') {
-      itemSales = itemSales.filter(sale => sale.location === inventoryLocationFilter);
-    }
+  list.innerHTML = locationSpecificSales.map(entry => {
+    const { item, locationName, totalSoldQty, totalRevenue, totalProfit, lastSale } = entry;
 
-    const totalSoldQty = itemSales.reduce((s,sl)=>s+Number(sl.qty),0);
-    const totalRevenue = itemSales.reduce((s,sl)=>s+Number(sl.revenue),0);
-    const totalCostBasis = itemSales.reduce((s,sl)=>s+(Number(item.cost)+Number(item.labor))*Number(sl.qty),0);
-    const totalProfit = totalRevenue - totalCostBasis;
-
-    // Calculate net difference (Suggested Price - Revenue)
+    // Calculate net difference (Suggested Price - Revenue per unit)
     const suggestedPrice = Number(item.suggestedPrice ?? item.salePrice ?? 0);
-    const netDifference = suggestedPrice - (totalRevenue / Math.max(totalSoldQty, 1)); // per unit average
+    const netDifference = suggestedPrice - (totalRevenue / Math.max(totalSoldQty, 1));
 
-    const lastSale = [...itemSales].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
-    const soldOutBadge = Number(item.totalQty)===0;
+    // Check if item is sold out at this location
+    const currentQtyAtLocation = Number((item.inventory?.[entry.locationId]?.qty) || 0);
+    const soldOutBadge = currentQtyAtLocation === 0;
+
     return `<div class="inv-card" onclick="openDetail('${item.id}')" style="opacity:${soldOutBadge?1:.85}">
       <div class="inv-card-header">
         <div style="flex:1;padding-right:10px;">
           <div class="inv-name">${esc(item.name)}</div>
           <span class="category-chip">${esc(item.category)}</span>
+          <div style="font-size:11px;color:var(--accent);font-weight:600;margin-top:4px;">📍 ${esc(locationName)}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:12px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;${netDifference>=0?'color:var(--accent2);':'color:var(--danger);'}">
@@ -1579,7 +1612,7 @@ function renderSoldList(soldItems) {
           </div>
           ${soldOutBadge
             ? `<div style="background:#f0faf6;border:1.5px solid var(--accent2);border-radius:9px;padding:4px 10px;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--accent2);white-space:nowrap;">${totalSoldQty} sold</div>`
-            : `<div class="inv-qty-badge ok">${item.totalQty} left</div>`
+            : `<div class="inv-qty-badge ok">${currentQtyAtLocation} left</div>`
           }
           <div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;">${lastSale?new Date(lastSale.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—'}</div>
         </div>
@@ -2173,6 +2206,39 @@ function renderPnL() {
 
   const periodLabel = bounds.label;
 
+  // Individual sales cards for the selected period and location
+  const individualSalesCards = periodSales
+    .filter(sale => {
+      if (pnlLocationFilter === 'all') return true;
+      return sale.location === pnlLocationFilter;
+    })
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 20) // Limit to 20 most recent sales
+    .map(sale => {
+      const locationName = locations.find(l => l.id === sale.location)?.name || 'Unknown Location';
+      return `<div class="inv-card" style="margin-bottom:8px;">
+        <div class="inv-card-header">
+          <div style="flex:1;padding-right:10px;">
+            <div class="inv-name">${esc(sale.item.name)}</div>
+            <span class="category-chip">${esc(sale.item.category)}</span>
+            <div style="font-size:11px;color:var(--accent);font-weight:600;margin-top:4px;">📍 ${esc(locationName)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:12px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;${sale.profit>=0?'color:var(--accent2);':'color:var(--danger);'}">
+              ${sale.profit>=0?'+':''}${fmt(sale.profit)}
+            </div>
+            <div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);">${new Date(sale.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+          </div>
+        </div>
+        <div class="inv-metrics">
+          <div class="inv-metric"><div class="inv-metric-label">Qty Sold</div><div class="inv-metric-value price">${sale.qty} ${esc(sale.item.unit||'units')}</div></div>
+          <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(sale.revenue)}</div></div>
+          <div class="inv-metric"><div class="inv-metric-label">Price/Unit</div><div class="inv-metric-value">${fmt(sale.priceEach)}</div></div>
+          <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value ${sale.profit>=0?'highlight':'cost'}">${sale.revenue>0?Math.round((sale.profit/sale.revenue)*100):0}%</div></div>
+        </div>
+      </div>`;
+    }).join('');
+
   section.innerHTML = `
     <!-- Projected hero -->
     <div style="background:linear-gradient(135deg,rgba(26,158,110,.08),rgba(91,79,207,.06));border:1px solid rgba(26,158,110,.25);border-radius:var(--radius);padding:22px;margin-bottom:14px;text-align:center;">
@@ -2205,6 +2271,15 @@ function renderPnL() {
       <div style="font-size:11px;color:var(--text3);text-align:center;">See Expenses breakdown below for deductions → Net Profit</div>`:`
       <div style="text-align:center;padding:16px 0;color:var(--text3);font-size:13px;">No sales recorded for this period</div>`}
     </div>
+
+    <!-- Individual Sales Cards -->
+    ${individualSalesCards ? `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;padding:0 2px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">Individual Sales</div>
+      <div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);">${esc(periodLabel)} · ${periodSales.filter(sale => pnlLocationFilter === 'all' || sale.location === pnlLocationFilter).length} sale${periodSales.filter(sale => pnlLocationFilter === 'all' || sale.location === pnlLocationFilter).length !== 1 ? 's' : ''}</div>
+    </div>
+    <div style="margin-bottom:14px;">${individualSalesCards}</div>
+    ` : ''}
 
     <!-- Expense breakdown for period -->
     <div class="pnl-card" style="margin-bottom:14px;">
