@@ -1805,30 +1805,41 @@ function recordSale() {
   const date=document.getElementById('sale-date').value;
 
   if(qty<=0){document.getElementById('sale-qty').focus();return;}
-  if(qty>Number(item.qty)){
-    showToast(`Only ${item.qty} in stock`); return;
+
+  // Initialize inventory object if it doesn't exist
+  if (!item.inventory) item.inventory = {};
+
+  // Determine the location where the sale occurred
+  // Use the first active location with available stock
+  let saleLocation = null;
+  let availableQty = 0;
+  const activeLocations = locations.filter(loc => loc.active);
+  for (const loc of activeLocations) {
+    const locQty = Number(item.inventory[loc.id]?.qty || 0);
+    if (locQty > 0) {
+      saleLocation = loc.id;
+      availableQty = locQty;
+      break;
+    }
+  }
+
+  // Check if there's enough stock at the selected location
+  if (!saleLocation || qty > availableQty) {
+    const totalQty = Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc.qty || 0), 0);
+    showToast(`Only ${availableQty || totalQty} in stock at selected location`);
+    return;
   }
 
   const costEach=Number(item.cost)+Number(item.labor);
   const revenue=qty*priceEach;
   const profit=revenue-(qty*costEach);
 
-  // Determine the location where the sale occurred
-  // For now, use the first active location with available stock
-  let saleLocation = null;
-  if (item.inventory) {
-    const activeLocations = locations.filter(loc => loc.active);
-    for (const loc of activeLocations) {
-      if (item.inventory[loc.id] && Number(item.inventory[loc.id].qty) > 0) {
-        saleLocation = loc.id;
-        break;
-      }
-    }
-  }
-
   if(!item.sales)item.sales=[];
   item.sales.push({sid:uid(),date,qty,priceEach,revenue,profit,location:saleLocation});
-  item.qty=Math.max(0,Number(item.qty)-qty);
+
+  // Decrement quantity at the specific location
+  item.inventory[saleLocation].qty = Math.max(0, Number(item.inventory[saleLocation].qty) - qty);
+  item.inventory[saleLocation].lastUpdated = new Date().toISOString();
 
   saveInventory(); renderDetail(); renderList();
   showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(revenue)}`);
