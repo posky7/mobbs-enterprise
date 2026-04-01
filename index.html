@@ -2153,20 +2153,19 @@ function renderPnL() {
     d.sugg += sp(item)*itemQty;
     d.qty  += itemQty;
 
-    // Filter sales by period and location
-    const ps = salesInPeriod(item, bounds).filter(sale => {
-      if (pnlLocationFilter === 'all') return true;
-      // Find the item and check if it has inventory at the selected location
-      const saleItem = inventory.find(i => i.id === item.id);
-      if (!saleItem || !saleItem.inventory) return false;
-      return saleItem.inventory[pnlLocationFilter] && Number(saleItem.inventory[pnlLocationFilter].qty) >= 0;
-    });
+  // Filter sales by period and location
+  const ps = salesInPeriod(item, bounds).filter(sale => {
+    if (pnlLocationFilter === 'all') return true;
+    // Check if sale occurred at the selected location
+    return sale.location === pnlLocationFilter;
+  });
 
     d.soldRevenue += ps.reduce((s,sl)=>s+Number(sl.revenue), 0);
     d.soldProfit  += ps.reduce((s,sl)=>s+Number(sl.profit),  0);
     d.soldUnits   += ps.reduce((s,sl)=>s+Number(sl.qty),     0);
   });
 
+  const locationName = pnlLocationFilter === 'all' ? 'All Locations' : (locations.find(l => l.id === pnlLocationFilter)?.name || 'Unknown Location');
   const catRows = Object.entries(byCategory)
     .filter(([, d]) => d.qty > 0 || d.soldUnits > 0)
     .sort((a,b) => a[0].localeCompare(b[0]))
@@ -2176,6 +2175,7 @@ function renderPnL() {
       return `<div class="pnl-row">
         <div>
           <div class="pnl-row-label">${esc(cat)}</div>
+          <div style="font-size:10px;color:var(--accent);font-weight:600;margin-top:1px;">📍 ${esc(locationName)}</div>
           <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:2px;">
             ${d.qty > 0 ? `${d.qty} in stock` : 'sold out'}
             ${hasSales ? ` · <span style="color:var(--accent2)">${d.soldUnits} sold</span>` : ''}
