@@ -495,6 +495,7 @@ select.form-input option { background:#fff; color:#1a1612; }
       <button class="btn-tool" onclick="openResetInventoryModal()" style="color:var(--danger);border-color:var(--danger);">🔄 Reset Inventory</button>
       <button class="btn-tool" onclick="openResetExpensesModal()" style="color:var(--danger);border-color:var(--danger);">💸 Reset Expenses</button>
       <button class="btn-tool" onclick="openResetLoansModal()" style="color:var(--danger);border-color:var(--danger);">🏦 Reset Loans</button>
+      <button class="btn-tool" onclick="openResetLocationsModal()" style="color:var(--danger);border-color:var(--danger);">📍 Reset Locations</button>
       <button class="btn-tool" onclick="openBackupModal()" style="color:var(--accent);border-color:var(--accent);">🔒 Backup</button>
       <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
@@ -4251,6 +4252,49 @@ async function confirmResetLoans() {
 
   } catch (error) {
     console.error('Reset loans error:', error);
+    showToast('⚠ Reset failed — check connection');
+  }
+}
+
+// ── Reset Locations ──────────────────────────────────────────
+function openResetLocationsModal() {
+  showConfirm(
+    'Reset All Locations?',
+    `This will permanently delete all ${locations.length} location record${locations.length !== 1 ? 's' : ''} from the server. This will orphan any inventory items that reference these locations. This cannot be undone.`,
+    'Reset Locations'
+  ).then(confirmed => {
+    if (confirmed) {
+      confirmResetLocations();
+    }
+  });
+}
+
+async function confirmResetLocations() {
+  try {
+    showToast('Resetting locations…');
+
+    // Clear locations in memory
+    locations = [];
+
+    // Save to server
+    await saveLocations();
+
+    // Refresh all displays that depend on locations
+    renderLocationSettings();
+    renderList();
+    populateInventoryLocationFilter();
+    populatePnLLocationFilter();
+    populateLocationSelect();
+    populateExpenseLocationSelect();
+
+    // Refresh other views that might be affected
+    renderPnL();
+    renderReports();
+
+    showToast('✓ All locations have been reset');
+
+  } catch (error) {
+    console.error('Reset locations error:', error);
     showToast('⚠ Reset failed — check connection');
   }
 }
