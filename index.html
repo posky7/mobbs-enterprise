@@ -351,6 +351,65 @@ select.form-input option { background:#fff; color:#1a1612; }
       <button class="btn-save" onclick="switchTab('settings')" style="margin-top:0;">Go to Settings</button>
     </div>
 
+    <!-- Income Statement -->
+    <div class="pnl-section" id="income-statement-section" style="padding-top:14px;">
+      <div class="pnl-card" style="margin-bottom:14px;">
+        <div style="padding:12px 16px 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);border-bottom:1px solid var(--border);margin-bottom:8px;">Income Statement — <span id="income-statement-period">Year to Date</span></div>
+
+        <!-- Revenue Section -->
+        <div class="pnl-row" style="background:var(--surface2);border-bottom:1px solid var(--border);">
+          <div class="pnl-row-label" style="font-weight:700;color:var(--text);font-size:15px;">Revenue</div>
+          <div class="pnl-row-val" style="font-weight:700;color:var(--text);font-size:15px;" id="is-revenue">$0.00</div>
+        </div>
+
+        <!-- Cost of Goods Sold -->
+        <div class="pnl-row">
+          <div class="pnl-row-label">Cost of Goods Sold</div>
+          <div class="pnl-row-val neg" id="is-cogs">−$0.00</div>
+        </div>
+
+        <!-- Gross Profit -->
+        <div class="pnl-row" style="background:var(--surface2);border-top:2px solid var(--border);border-bottom:2px solid var(--border);">
+          <div class="pnl-row-label" style="font-weight:700;color:var(--accent2);font-size:15px;">Gross Profit</div>
+          <div class="pnl-row-val" style="font-weight:700;font-size:15px;" id="is-gross-profit">$0.00</div>
+        </div>
+
+        <!-- Operating Expenses -->
+        <div class="pnl-row" style="background:var(--surface2);border-bottom:1px solid var(--border);margin-top:8px;">
+          <div class="pnl-row-label" style="font-weight:700;color:var(--text);font-size:14px;">Operating Expenses</div>
+          <div class="pnl-row-val" style="font-weight:700;color:var(--text);font-size:14px;" id="is-operating-expenses">−$0.00</div>
+        </div>
+
+        <!-- Expense Breakdown -->
+        <div id="is-expense-breakdown">
+          <!-- Expenses will be populated here -->
+        </div>
+
+        <!-- Operating Income -->
+        <div class="pnl-row" style="background:var(--surface2);border-top:2px solid var(--border);border-bottom:1px solid var(--border);">
+          <div class="pnl-row-label" style="font-weight:700;color:var(--accent2);font-size:14px;">Operating Income</div>
+          <div class="pnl-row-val" style="font-weight:700;font-size:14px;" id="is-operating-income">$0.00</div>
+        </div>
+
+        <!-- Other Income/Expenses -->
+        <div class="pnl-row" style="background:var(--surface2);border-bottom:1px solid var(--border);margin-top:8px;">
+          <div class="pnl-row-label" style="font-weight:700;color:var(--text);font-size:14px;">Other Income & Expenses</div>
+          <div class="pnl-row-val" style="font-weight:700;color:var(--text);font-size:14px;" id="is-other-income-expenses">−$0.00</div>
+        </div>
+
+        <!-- Other Breakdown -->
+        <div id="is-other-breakdown">
+          <!-- Loan payments and other items will be populated here -->
+        </div>
+
+        <!-- Net Income -->
+        <div class="pnl-row" style="background:linear-gradient(135deg,rgba(26,158,110,.12),rgba(26,158,110,.04));border:2px solid rgba(26,158,110,.25);margin-top:8px;">
+          <div class="pnl-row-label" style="font-weight:800;color:var(--text);font-size:16px;">Net Income</div>
+          <div class="pnl-row-val" style="font-weight:800;font-size:16px;" id="is-net-income">$0.00</div>
+        </div>
+      </div>
+    </div>
+
     <div class="pnl-section" id="pnl-section" style="padding-top:14px;"></div>
 
     <!-- Last Updated timestamp -->
@@ -1494,7 +1553,7 @@ function switchTab(n) {
   document.getElementById('tab-'+n).classList.add('active');
   document.getElementById('nav-'+n).classList.add('active');
   if(n==='inventory') populateInventoryLocationFilter();
-  if(n==='pnl')      renderPnL();
+  if(n==='pnl')      { renderPnL(); renderIncomeStatement(); }
   if(n==='loans')    renderLoans();
   if(n==='expenses') renderExpenses();
   if(n==='reports')  renderReports();
@@ -2117,6 +2176,103 @@ function getPeriodBounds() {
   const ly    = m === 0 ? y-1 : y;
   const label = new Date(ly, lm, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
   return { start: new Date(ly, lm, 1), end: new Date(ly, lm+1, 0, 23, 59, 59), label };
+}
+
+// ── Income Statement Calculations ───────────────────────────────────
+function calculateIncomeStatement(bounds) {
+  // Revenue: All sales in the period
+  const periodSales = inventory.flatMap(i => salesInPeriod(i, bounds).map(sl => ({ ...sl, item: i })));
+  const revenue = periodSales.reduce((s, sl) => s + Number(sl.revenue), 0);
+
+  // Cost of Goods Sold: Cost of items sold in the period
+  const cogs = periodSales.reduce((s, sl) => s + (Number(sl.item.cost) + Number(sl.item.labor)) * Number(sl.qty), 0);
+
+  // Gross Profit
+  const grossProfit = revenue - cogs;
+
+  // Operating Expenses: Recurring expenses + one-time expenses in period
+  const recurringExpenses = expenses.filter(e => {
+    if (e.status !== 'Active' || e.frequency === 'One-Time') return false;
+    if (pnlLocationFilter === 'all') return true;
+    return e.location === pnlLocationFilter;
+  }).reduce((s, e) => s + expCostInPeriod(e, bounds), 0);
+
+  const oneTimeExpenses = expenses.filter(e => {
+    if (e.frequency !== 'One-Time') return false;
+    if (!e.due) return false;
+    const d = new Date(e.due);
+    const inPeriod = d >= bounds.start && d <= bounds.end;
+    if (!inPeriod) return false;
+    if (pnlLocationFilter === 'all') return true;
+    return e.location === pnlLocationFilter;
+  }).reduce((s, e) => s + Number(e.amount), 0);
+
+  const operatingExpenses = recurringExpenses + oneTimeExpenses;
+
+  // Operating Income
+  const operatingIncome = grossProfit - operatingExpenses;
+
+  // Other Income/Expenses: Loan payments (negative)
+  const loanPayments = loans.reduce((s, l) => s + loanPaid(l), 0);
+
+  // Net Income
+  const netIncome = operatingIncome - loanPayments;
+
+  return {
+    revenue,
+    cogs,
+    grossProfit,
+    operatingExpenses,
+    operatingIncome,
+    otherIncomeExpenses: -loanPayments, // Negative for display
+    netIncome,
+    periodSales,
+    recurringExpenses,
+    oneTimeExpenses,
+    loanPayments
+  };
+}
+
+function renderIncomeStatement() {
+  const bounds = getPeriodBounds();
+  const is = calculateIncomeStatement(bounds);
+
+  // Update period label
+  document.getElementById('income-statement-period').textContent = bounds.label;
+
+  // Update main values
+  document.getElementById('is-revenue').textContent = fmt(is.revenue);
+  document.getElementById('is-cogs').textContent = '−' + fmt(is.cogs);
+  document.getElementById('is-gross-profit').textContent = fmt(is.grossProfit);
+  document.getElementById('is-gross-profit').className = 'pnl-row-val ' + (is.grossProfit >= 0 ? 'pos' : 'neg');
+
+  document.getElementById('is-operating-expenses').textContent = '−' + fmt(is.operatingExpenses);
+  document.getElementById('is-operating-income').textContent = fmt(is.operatingIncome);
+  document.getElementById('is-operating-income').className = 'pnl-row-val ' + (is.operatingIncome >= 0 ? 'pos' : 'neg');
+
+  // Expense breakdown
+  const expenseBreakdown = [];
+  if (is.recurringExpenses > 0) {
+    expenseBreakdown.push(`<div class="pnl-row"><div class="pnl-row-label">Recurring Expenses</div><div class="pnl-row-val neg">−${fmt(is.recurringExpenses)}</div></div>`);
+  }
+  if (is.oneTimeExpenses > 0) {
+    expenseBreakdown.push(`<div class="pnl-row"><div class="pnl-row-label">One-Time Expenses</div><div class="pnl-row-val neg">−${fmt(is.oneTimeExpenses)}</div></div>`);
+  }
+  document.getElementById('is-expense-breakdown').innerHTML = expenseBreakdown.join('');
+
+  // Other income/expenses breakdown
+  const otherBreakdown = [];
+  if (is.loanPayments > 0) {
+    otherBreakdown.push(`<div class="pnl-row"><div class="pnl-row-label">Loan Payments</div><div class="pnl-row-val neg">−${fmt(is.loanPayments)}</div></div>`);
+  }
+  document.getElementById('is-other-breakdown').innerHTML = otherBreakdown.length ? otherBreakdown.join('') : '<div class="pnl-row"><div class="pnl-row-label" style="color:var(--text3)">No other income or expenses</div></div>';
+
+  document.getElementById('is-other-income-expenses').textContent = fmt(is.otherIncomeExpenses);
+  document.getElementById('is-other-income-expenses').className = 'pnl-row-val ' + (is.otherIncomeExpenses >= 0 ? 'pos' : 'neg');
+
+  // Net Income
+  document.getElementById('is-net-income').textContent = fmt(is.netIncome);
+  document.getElementById('is-net-income').className = 'pnl-row-val ' + (is.netIncome >= 0 ? 'pos' : 'neg');
 }
 
 function salesInPeriod(item, bounds) {
