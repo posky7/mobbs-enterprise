@@ -3420,8 +3420,9 @@ function toggleAllLocations() {
 function updateResetPreview() {
   const selectedLocations = Array.from(document.querySelectorAll('.location-checkbox:checked')).map(cb => cb.value);
   const onlyZeroStock = document.getElementById('reset-only-zero-stock').checked;
+  const resetItemsSold = document.getElementById('reset-items-sold').checked;
 
-  if (selectedLocations.length === 0) {
+  if (selectedLocations.length === 0 && !resetItemsSold) {
     document.getElementById('reset-preview').style.display = 'none';
     document.getElementById('reset-confirm-btn').disabled = true;
     return;
@@ -3430,6 +3431,8 @@ function updateResetPreview() {
   // Calculate what will be reset
   let itemsToReset = [];
   let totalUnitsToReset = 0;
+  let totalSalesRecords = 0;
+  let totalRevenueLost = 0;
 
   inventory.forEach(item => {
     if (!item.inventory) return;
@@ -3449,36 +3452,82 @@ function updateResetPreview() {
     });
   });
 
+  // Calculate sales impact if reset items sold is checked
+  if (resetItemsSold) {
+    inventory.forEach(item => {
+      if (item.sales && item.sales.length > 0) {
+        // If locations are selected, only count sales from those locations
+        let salesToCount = item.sales;
+        if (selectedLocations.length > 0) {
+          salesToCount = item.sales.filter(sale => selectedLocations.includes(sale.location));
+        }
+
+        totalSalesRecords += salesToCount.length;
+        totalRevenueLost += salesToCount.reduce((sum, sale) => sum + Number(sale.revenue || 0), 0);
+      }
+    });
+  }
+
   // Show preview
   const previewContentEl = document.getElementById('reset-preview-content');
-  if (itemsToReset.length === 0) {
+  const hasInventoryChanges = itemsToReset.length > 0;
+  const hasSalesChanges = resetItemsSold && totalSalesRecords > 0;
+
+  if (!hasInventoryChanges && !hasSalesChanges) {
     previewContentEl.innerHTML = '<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">No items match the selected criteria</div>';
   } else {
-    previewContentEl.innerHTML = `
-      <div class="pnl-row"><div class="pnl-row-label">Items affected</div><div class="pnl-row-val">${itemsToReset.length}</div></div>
-      <div class="pnl-row"><div class="pnl-row-label">Total units to reset</div><div class="pnl-row-val">${totalUnitsToReset}</div></div>
+    let previewHTML = '';
+
+    if (hasInventoryChanges) {
+      previewHTML += `
+        <div class="pnl-row"><div class="pnl-row-label">Items affected</div><div class="pnl-row-val">${itemsToReset.length}</div></div>
+        <div class="pnl-row"><div class="pnl-row-label">Total units to reset</div><div class="pnl-row-val">${totalUnitsToReset}</div></div>
+      `;
+    }
+
+    if (hasSalesChanges) {
+      previewHTML += `
+        <div class="pnl-row"><div class="pnl-row-label">Sales records to remove</div><div class="pnl-row-val">${totalSalesRecords}</div></div>
+        <div class="pnl-row"><div class="pnl-row-label">Revenue history lost</div><div class="pnl-row-val">$${totalRevenueLost.toFixed(2)}</div></div>
+      `;
+    }
+
+    const actionDescription = [];
+    if (hasInventoryChanges) {
+      actionDescription.push('set inventory quantities to zero');
+    }
+    if (hasSalesChanges) {
+      actionDescription.push('clear all sales history');
+    }
+
+    previewHTML += `
       <div style="margin-top:12px;font-size:11px;color:var(--text3);line-height:1.5;">
-        This will set inventory quantities to zero for the selected items at the chosen locations. Sales history will be preserved.
+        This will ${actionDescription.join(' and ')} for the selected items${selectedLocations.length > 0 ? ' at the chosen locations' : ''}. This cannot be undone.
       </div>
     `;
+
+    previewContentEl.innerHTML = previewHTML;
   }
 
   document.getElementById('reset-preview').style.display = 'block';
-  document.getElementById('reset-confirm-btn').disabled = itemsToReset.length === 0;
+  document.getElementById('reset-confirm-btn').disabled = !hasInventoryChanges && !hasSalesChanges;
 }
 
 async function confirmResetInventory() {
   const selectedLocations = Array.from(document.querySelectorAll('.location-checkbox:checked')).map(cb => cb.value);
   const onlyZeroStock = document.getElementById('reset-only-zero-stock').checked;
+  const resetItemsSold = document.getElementById('reset-items-sold').checked;
 
-  if (selectedLocations.length === 0) {
-    showToast('Select at least one location');
+  if (selectedLocations.length === 0 && !resetItemsSold) {
+    showToast('Select at least one location or check "Reset items sold"');
     return;
   }
 
-  // Count affected items
+  // Count affected items and sales
   let affectedItems = 0;
   let affectedUnits = 0;
+  let affectedSalesRecords = 0;
+  let affectedRevenue = 0;
 
   inventory.forEach(item => {
     if (!item.inventory) return;
@@ -3491,13 +3540,39 @@ async function confirmResetInventory() {
     });
   });
 
-  if (affectedItems === 0) {
+  // Count sales impact
+  if (resetItemsSold) {
+    inventory.forEach(item => {
+      if (item.sales && item.sales.length > 0) {
+        let salesToCount = item.sales;
+        if (selectedLocations.length > 0) {
+          salesToCount = item.sales.filter(sale => selectedLocations.includes(sale.location));
+        }
+        affectedSalesRecords += salesToCount.length;
+        affectedRevenue += salesToCount.reduce((sum, sale) => sum + Number(sale.revenue || 0), 0);
+      }
+    });
+  }
+
+  if (affectedItems === 0 && affectedSalesRecords === 0) {
     showToast('No items match the selected criteria');
     return;
   }
 
-  const locationNames = selectedLocations.map(id => locations.find(l => l.id === id)?.name || id).join(', ');
-  const confirmMsg = `Reset ${affectedUnits} units across ${affectedItems} item${affectedItems !== 1 ? 's' : ''} at: ${locationNames}? This cannot be undone.`;
+  // Build confirmation message
+  let confirmMsg = '';
+  const actions = [];
+
+  if (affectedItems > 0) {
+    const locationNames = selectedLocations.map(id => locations.find(l => l.id === id)?.name || id).join(', ');
+    actions.push(`reset ${affectedUnits} units across ${affectedItems} item${affectedItems !== 1 ? 's' : ''} at: ${locationNames}`);
+  }
+
+  if (affectedSalesRecords > 0) {
+    actions.push(`clear ${affectedSalesRecords} sales record${affectedSalesRecords !== 1 ? 's' : ''} ($${affectedRevenue.toFixed(2)} revenue)`);
+  }
+
+  confirmMsg = `${actions.join(' and ')}? This cannot be undone.`;
 
   const ok = await showConfirm('Reset Inventory?', confirmMsg, 'Reset');
   if (!ok) return;
@@ -3507,18 +3582,35 @@ async function confirmResetInventory() {
     showToast('Resetting inventory…');
 
     // Update inventory in memory
-    inventory.forEach(item => {
-      if (!item.inventory) return;
-      selectedLocations.forEach(locationId => {
-        const currentQty = Number(item.inventory[locationId]?.qty || 0);
-        if (!onlyZeroStock || currentQty === 0) {
-          item.inventory[locationId] = {
-            qty: 0,
-            lastUpdated: new Date().toISOString()
-          };
+    if (affectedItems > 0) {
+      inventory.forEach(item => {
+        if (!item.inventory) return;
+        selectedLocations.forEach(locationId => {
+          const currentQty = Number(item.inventory[locationId]?.qty || 0);
+          if (!onlyZeroStock || currentQty === 0) {
+            item.inventory[locationId] = {
+              qty: 0,
+              lastUpdated: new Date().toISOString()
+            };
+          }
+        });
+      });
+    }
+
+    // Clear sales history if requested
+    if (resetItemsSold) {
+      inventory.forEach(item => {
+        if (item.sales && item.sales.length > 0) {
+          if (selectedLocations.length === 0) {
+            // Clear all sales if no locations selected
+            item.sales = [];
+          } else {
+            // Clear only sales from selected locations
+            item.sales = item.sales.filter(sale => !selectedLocations.includes(sale.location));
+          }
         }
       });
-    });
+    }
 
     // Save to server
     await saveInventory();
@@ -3527,7 +3619,16 @@ async function confirmResetInventory() {
     closeModal('modal-reset-inventory');
     renderList();
 
-    showToast(`✓ Reset ${affectedUnits} units across ${affectedItems} item${affectedItems !== 1 ? 's' : ''}`);
+    // Build success message
+    const successActions = [];
+    if (affectedItems > 0) {
+      successActions.push(`reset ${affectedUnits} units across ${affectedItems} item${affectedItems !== 1 ? 's' : ''}`);
+    }
+    if (affectedSalesRecords > 0) {
+      successActions.push(`cleared ${affectedSalesRecords} sales record${affectedSalesRecords !== 1 ? 's' : ''}`);
+    }
+
+    showToast(`✓ ${successActions.join(' and ')}`);
 
   } catch (error) {
     console.error('Reset inventory error:', error);
@@ -3904,9 +4005,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             <input type="checkbox" id="reset-all-locations" onchange="toggleAllLocations()" style="width:16px;height:16px;">
             <label for="reset-all-locations" style="font-size:13px;color:var(--text2);margin:0;">Reset all locations</label>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
             <input type="checkbox" id="reset-only-zero-stock" style="width:16px;height:16px;">
             <label for="reset-only-zero-stock" style="font-size:13px;color:var(--text2);margin:0;">Reset sold-out items only</label>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="reset-items-sold" onchange="updateResetPreview()" style="width:16px;height:16px;">
+            <label for="reset-items-sold" style="font-size:13px;color:var(--text2);margin:0;">Reset items sold (clear all sales history)</label>
           </div>
         </div>
       </div>
