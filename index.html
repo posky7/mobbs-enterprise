@@ -281,23 +281,7 @@ select.form-input option { background:#fff; color:#1a1612; }
       </div>
     </div>
 
-    <div class="summary-strip">
-      <div class="stat-card purple"><div class="stat-label">In Stock</div><div class="stat-value" id="sum-items">0</div><div class="stat-sub">SKUs tracked</div></div>
-      <div class="stat-card green"><div class="stat-label">Total Units</div><div class="stat-value" id="sum-units">0</div><div class="stat-sub">in stock</div></div>
-      <div class="stat-card orange"><div class="stat-label">Cost Value</div><div class="stat-value" id="sum-cost">$0</div><div class="stat-sub">inventory cost</div></div>
-      <div class="stat-card red"><div class="stat-label">Suggested Value</div><div class="stat-value" id="sum-retail">$0</div><div class="stat-sub">at suggested price</div></div>
-    </div>
 
-    <!-- Last Updated timestamp -->
-    <div style="padding:16px;text-align:center;color:var(--text3);font-size:12px;font-family:var(--font-mono);">
-      Last updated: <span id="inventory-last-updated">—</span>
-    </div>
-
-    <!-- Sold summary strip -->
-    <div class="summary-strip" id="sold-summary-strip" style="padding-top:0;display:none;">
-      <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Units Sold</div><div class="stat-value" id="sum-sold-units">0</div><div class="stat-sub">total sold</div></div>
-      <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Revenue Earned</div><div class="stat-value" id="sum-sold-revenue">$0</div><div class="stat-sub">from sales</div></div>
-    </div>
     <div class="section-header"><div class="section-title">Items</div><div style="display:flex;gap:8px;"><button class="btn-add" onclick="openMoveInventoryModal()">📦 Move Inventory</button><button class="btn-add" onclick="openAddModal()">＋ Add Item</button></div></div>
     <div class="search-wrap"><input class="search-input" type="search" placeholder="Search inventory…" id="search-box" oninput="renderList()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
 
