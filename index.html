@@ -335,6 +335,7 @@ select.form-input option { background:#fff; color:#1a1612; }
         <select class="form-input" id="finance-view-selector" onchange="setFinanceView()" style="max-width:300px;">
           <option value="income-statement">Income Statement</option>
           <option value="pnl">P&L</option>
+          <option value="inventory-summary">Inventory Summary</option>
           <option value="individual-sales">Individual Sales</option>
         </select>
       </div>
@@ -425,6 +426,40 @@ select.form-input option { background:#fff; color:#1a1612; }
     </div>
 
     <div class="pnl-section" id="pnl-section" style="padding-top:14px;"></div>
+
+    <!-- Inventory Summary -->
+    <div class="pnl-section" id="inventory-summary-section" style="padding-top:14px;display:none;">
+      <!-- Location and period controls for Inventory Summary -->
+      <div id="inventory-summary-controls" style="padding:12px 16px 0; display: none;">
+        <div style="margin-bottom:12px;">
+          <label class="form-label" style="margin-bottom:8px;display:block;">Location</label>
+          <select class="form-input" id="inventory-summary-location-filter" onchange="setInventorySummaryLocationFilter()" style="max-width:300px;">
+            <option value="all">All Locations</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface2);border-radius:var(--radius-sm);padding:3px;gap:3px;">
+          <button id="inventory-summary-period-ytd"   class="pnl-period-btn active" onclick="setInventorySummaryPeriod('ytd')">Year to Date</button>
+          <button id="inventory-summary-period-month" class="pnl-period-btn"        onclick="setInventorySummaryPeriod('month')">This Month</button>
+          <button id="inventory-summary-period-last"  class="pnl-period-btn"        onclick="setInventorySummaryPeriod('last')">Last Month</button>
+        </div>
+      </div>
+
+      <!-- Inventory Summary Cards -->
+      <div id="inventory-summary-cards" style="padding:0 16px;">
+        <div class="summary-strip">
+          <div class="stat-card purple"><div class="stat-label">In Stock</div><div class="stat-value" id="inventory-summary-items">0</div><div class="stat-sub">SKUs tracked</div></div>
+          <div class="stat-card green"><div class="stat-label">Total Units</div><div class="stat-value" id="inventory-summary-units">0</div><div class="stat-sub">in stock</div></div>
+          <div class="stat-card orange"><div class="stat-label">Cost Value</div><div class="stat-value" id="inventory-summary-cost">$0</div><div class="stat-sub">inventory cost</div></div>
+          <div class="stat-card red"><div class="stat-label">Suggested Value</div><div class="stat-value" id="inventory-summary-retail">$0</div><div class="stat-sub">at suggested price</div></div>
+        </div>
+
+        <!-- Sold summary strip -->
+        <div class="summary-strip" id="inventory-summary-sold-strip" style="padding-top:0;display:none;">
+          <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Units Sold</div><div class="stat-value" id="inventory-summary-sold-units">0</div><div class="stat-sub">total sold</div></div>
+          <div class="stat-card green" style="grid-column:span 2"><div class="stat-label">Revenue Earned</div><div class="stat-value" id="inventory-summary-sold-revenue">$0</div><div class="stat-sub">from sales</div></div>
+        </div>
+      </div>
+    </div>
 
     <!-- Individual Sales -->
     <div class="pnl-section" id="individual-sales-section" style="padding-top:14px;display:none;">
@@ -2365,6 +2400,8 @@ function setFinanceView() {
   const incomeStatementSection = document.getElementById('income-statement-section');
   const pnlSection = document.getElementById('pnl-section');
   const pnlControlsContainer = document.getElementById('pnl-controls-container');
+  const inventorySummarySection = document.getElementById('inventory-summary-section');
+  const inventorySummaryControls = document.getElementById('inventory-summary-controls');
   const individualSalesSection = document.getElementById('individual-sales-section');
   const individualSalesControls = document.getElementById('individual-sales-controls');
 
@@ -2372,20 +2409,37 @@ function setFinanceView() {
     incomeStatementSection.style.display = 'block';
     pnlSection.style.display = 'none';
     pnlControlsContainer.style.display = 'none';
+    inventorySummarySection.style.display = 'none';
+    inventorySummaryControls.style.display = 'none';
     individualSalesSection.style.display = 'none';
     individualSalesControls.style.display = 'none';
+    renderIncomeStatement();
   } else if (view === 'pnl') {
     incomeStatementSection.style.display = 'none';
     pnlSection.style.display = 'block';
     pnlControlsContainer.style.display = 'block';
+    inventorySummarySection.style.display = 'none';
+    inventorySummaryControls.style.display = 'none';
     individualSalesSection.style.display = 'none';
     individualSalesControls.style.display = 'none';
     populatePnLLocationFilter();
     renderPnL();
+  } else if (view === 'inventory-summary') {
+    incomeStatementSection.style.display = 'none';
+    pnlSection.style.display = 'none';
+    pnlControlsContainer.style.display = 'none';
+    inventorySummarySection.style.display = 'block';
+    inventorySummaryControls.style.display = 'block';
+    individualSalesSection.style.display = 'none';
+    individualSalesControls.style.display = 'none';
+    populateInventorySummaryLocationFilter();
+    renderInventorySummary();
   } else if (view === 'individual-sales') {
     incomeStatementSection.style.display = 'none';
     pnlSection.style.display = 'none';
     pnlControlsContainer.style.display = 'none';
+    inventorySummarySection.style.display = 'none';
+    inventorySummaryControls.style.display = 'none';
     individualSalesSection.style.display = 'block';
     individualSalesControls.style.display = 'block';
     populateIndividualSalesLocationFilter();
@@ -2482,6 +2536,136 @@ function setIndividualSalesPeriod(period) {
   document.getElementById(`individual-sales-period-${period}`).classList.add('active');
 
   renderIndividualSales();
+}
+
+// ── Inventory Summary ────────────────────────────────────────
+let inventorySummaryPeriod = 'ytd'; // Default to "Year to Date"
+let inventorySummaryLocationFilter = 'all'; // Default to "All Locations"
+
+function populateInventorySummaryLocationFilter() {
+  const select = document.getElementById('inventory-summary-location-filter');
+  if (!select) return;
+
+  // Clear existing options except "All Locations"
+  select.innerHTML = '<option value="all">All Locations</option>';
+
+  // Add active (non-archived) locations
+  const activeLocations = locations.filter(loc => loc.active && !loc.archived);
+  activeLocations.forEach(loc => {
+    const option = document.createElement('option');
+    option.value = loc.id;
+    option.textContent = loc.name;
+    select.appendChild(option);
+  });
+
+  // Set current selection
+  select.value = inventorySummaryLocationFilter;
+}
+
+function setInventorySummaryLocationFilter() {
+  const select = document.getElementById('inventory-summary-location-filter');
+  inventorySummaryLocationFilter = select.value;
+  renderInventorySummary();
+}
+
+function setInventorySummaryPeriod(period) {
+  inventorySummaryPeriod = period;
+
+  // Update button states
+  document.querySelectorAll('[id^="inventory-summary-period-"]').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.getElementById(`inventory-summary-period-${period}`).classList.add('active');
+
+  renderInventorySummary();
+}
+
+function renderInventorySummary() {
+  const bounds = getInventorySummaryBounds();
+
+  // Calculate inventory metrics based on location and period filters
+  let totalItems = 0;
+  let totalUnits = 0;
+  let totalCost = 0;
+  let totalRetail = 0;
+  let totalSoldUnits = 0;
+  let totalSoldRevenue = 0;
+
+  inventory.forEach(item => {
+    // Filter by location if not 'all'
+    let itemQty = 0;
+    let itemCost = Number(item.cost) + Number(item.labor);
+    let itemRetail = Number(item.suggestedPrice ?? item.salePrice ?? 0);
+
+    if (inventorySummaryLocationFilter === 'all') {
+      // Sum across all locations
+      itemQty = item.totalQty || 0;
+    } else {
+      // Use only the selected location's quantity
+      itemQty = Number(item.inventory?.[inventorySummaryLocationFilter]?.qty || 0);
+    }
+
+    // Count items with stock
+    if (itemQty > 0) {
+      totalItems++;
+      totalUnits += itemQty;
+      totalCost += itemCost * itemQty;
+      totalRetail += itemRetail * itemQty;
+    }
+
+    // Calculate sales within the period
+    const periodSales = (item.sales || []).filter(sale => {
+      if (!sale.date) return false;
+      const saleDate = new Date(sale.date);
+      return saleDate >= bounds.start && saleDate <= bounds.end;
+    }).filter(sale => {
+      // Filter by location if not 'all'
+      return inventorySummaryLocationFilter === 'all' || sale.location === inventorySummaryLocationFilter;
+    });
+
+    totalSoldUnits += periodSales.reduce((sum, sale) => sum + Number(sale.qty), 0);
+    totalSoldRevenue += periodSales.reduce((sum, sale) => sum + Number(sale.revenue), 0);
+  });
+
+  // Update the display elements
+  document.getElementById('inventory-summary-items').textContent = totalItems;
+  document.getElementById('inventory-summary-units').textContent = totalUnits;
+  document.getElementById('inventory-summary-cost').textContent = fmtK(totalCost);
+  document.getElementById('inventory-summary-retail').textContent = fmtK(totalRetail);
+
+  // Show/hide sold summary strip
+  const soldStrip = document.getElementById('inventory-summary-sold-strip');
+  if (totalSoldUnits > 0) {
+    soldStrip.style.display = 'grid';
+    document.getElementById('inventory-summary-sold-units').textContent = totalSoldUnits;
+    document.getElementById('inventory-summary-sold-revenue').textContent = fmtK(totalSoldRevenue);
+  } else {
+    soldStrip.style.display = 'none';
+  }
+
+  // Update last updated timestamp
+  const lastUpdatedEl = document.getElementById('pnl-last-updated');
+  if (lastUpdatedEl) {
+    lastUpdatedEl.textContent = new Date().toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    });
+  }
+}
+
+function getInventorySummaryBounds() {
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  if (inventorySummaryPeriod === 'ytd') {
+    return { start: new Date(y, 0, 1), end: now, label: `Jan 1 – Today ${y}` };
+  }
+  if (inventorySummaryPeriod === 'month') {
+    const label = now.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+    return { start: new Date(y, m, 1), end: new Date(y, m+1, 0, 23, 59, 59), label };
+  }
+  // last month
+  const lm = m === 0 ? 11 : m-1, ly = m === 0 ? y-1 : y;
+  const label = new Date(ly, lm, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  return { start: new Date(ly, lm, 1), end: new Date(ly, lm+1, 0, 23, 59, 59), label };
 }
 
 function renderIndividualSales() {
