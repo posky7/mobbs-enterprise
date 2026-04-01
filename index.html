@@ -572,6 +572,46 @@ select.form-input option { background:#fff; color:#1a1612; }
   </nav>
 </div>
 
+<!-- Location Add Modal -->
+<div class="modal-overlay" id="modal-location-add">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title">Add Location</div><button class="modal-close" onclick="closeModal('modal-location-add')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="location-add-id">
+      <div class="form-section">
+        <div class="form-section-title">Location Details</div>
+        <div class="form-group"><label class="form-label">Location Name</label><input class="form-input" type="text" id="location-add-name" placeholder="e.g. Downtown Booth" autocomplete="off"></div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-input" id="location-add-type">
+            <option value="retail">Retail Booth</option>
+            <option value="storage">Storage</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Monthly Rent ($)</label><input class="form-input" type="number" id="location-add-rent" placeholder="0.00" step="0.01" min="0" inputmode="decimal"></div>
+          <div class="form-group"><label class="form-label">Transaction Fee (%)</label><input class="form-input" type="number" id="location-add-fee" placeholder="0.00" step="0.01" min="0" max="100" inputmode="decimal"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="location-add-active" style="width:16px;height:16px;" checked>
+            Active (can track inventory)
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="location-add-warehouse" style="width:16px;height:16px;">
+            Set as warehouse (can transfer inventory from here)
+          </label>
+        </div>
+      </div>
+      <button class="btn-save" onclick="saveLocationAdd()">Add Location</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Location Edit Modal -->
 <div class="modal-overlay" id="modal-location-edit">
   <div class="modal-sheet">
@@ -588,6 +628,10 @@ select.form-input option { background:#fff; color:#1a1612; }
             <option value="retail">Retail Booth</option>
             <option value="storage">Storage</option>
           </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Monthly Rent ($)</label><input class="form-input" type="number" id="location-rent" placeholder="0.00" step="0.01" min="0" inputmode="decimal"></div>
+          <div class="form-group"><label class="form-label">Transaction Fee (%)</label><input class="form-input" type="number" id="location-fee" placeholder="0.00" step="0.01" min="0" max="100" inputmode="decimal"></div>
         </div>
         <div class="form-group">
           <label class="form-label" style="display:flex;align-items:center;gap:8px;">
@@ -1374,23 +1418,53 @@ function populateInventoryLocationFilter() {
 
 // ── Location Management ────────────────────────────────────
 function addLocation() {
-  const name = prompt('Enter location name (e.g., "Downtown Booth"):');
-  if (!name || !name.trim()) return;
+  // Reset form fields
+  document.getElementById('location-add-id').value = '';
+  document.getElementById('location-add-name').value = '';
+  document.getElementById('location-add-type').value = 'retail';
+  document.getElementById('location-add-rent').value = '';
+  document.getElementById('location-add-fee').value = '';
+  document.getElementById('location-add-active').checked = true;
+  document.getElementById('location-add-warehouse').checked = false;
+
+  // Show modal
+  document.getElementById('modal-location-add').classList.add('open');
+}
+
+function saveLocationAdd() {
+  const name = document.getElementById('location-add-name').value.trim();
+  if (!name) {
+    document.getElementById('location-add-name').focus();
+    return;
+  }
+
+  const monthlyRent = parseFloat(document.getElementById('location-add-rent').value) || 0;
+  const transactionFeePercent = parseFloat(document.getElementById('location-add-fee').value) || 0;
+
+  // Validate transaction fee percentage
+  if (transactionFeePercent < 0 || transactionFeePercent > 100) {
+    showToast('Transaction fee must be between 0% and 100%');
+    document.getElementById('location-add-fee').focus();
+    return;
+  }
 
   const location = {
     id: 'location-' + Date.now(),
-    name: name.trim(),
-    type: 'retail',
-    active: true,
+    name: name,
+    type: document.getElementById('location-add-type').value,
+    active: document.getElementById('location-add-active').checked,
     order: locations.length,
-    isWarehouse: false
+    isWarehouse: document.getElementById('location-add-warehouse').checked,
+    monthlyRent: monthlyRent,
+    transactionFeePercent: transactionFeePercent
   };
 
   locations.push(location);
   saveLocations();
+  closeModal('modal-location-add');
   renderLocationSettings();
-  populateInventoryLocationFilter(); // Update inventory filter
-  populatePnLLocationFilter(); // Update P&L filter
+  populateInventoryLocationFilter();
+  populatePnLLocationFilter();
   showToast('✓ Location added');
 }
 
@@ -1460,6 +1534,8 @@ function openEditLocationModal(id) {
   document.getElementById('location-edit-id').value = id;
   document.getElementById('location-name').value = loc.name;
   document.getElementById('location-type').value = loc.type;
+  document.getElementById('location-rent').value = loc.monthlyRent || '';
+  document.getElementById('location-fee').value = loc.transactionFeePercent || '';
   document.getElementById('location-active').checked = loc.active;
   document.getElementById('location-warehouse').checked = loc.isWarehouse;
 
@@ -1488,6 +1564,15 @@ function saveLocationEdit() {
   const newType = document.getElementById('location-type').value;
   const newActive = document.getElementById('location-active').checked;
   const newWarehouse = document.getElementById('location-warehouse').checked;
+  const newMonthlyRent = parseFloat(document.getElementById('location-rent').value) || 0;
+  const newTransactionFeePercent = parseFloat(document.getElementById('location-fee').value) || 0;
+
+  // Validate transaction fee percentage
+  if (newTransactionFeePercent < 0 || newTransactionFeePercent > 100) {
+    showToast('Transaction fee must be between 0% and 100%');
+    document.getElementById('location-fee').focus();
+    return;
+  }
 
   // If setting as warehouse, unset any existing warehouse
   if (newWarehouse && !loc.isWarehouse) {
@@ -1499,6 +1584,8 @@ function saveLocationEdit() {
   loc.type = newType;
   loc.active = newActive;
   loc.isWarehouse = newWarehouse;
+  loc.monthlyRent = newMonthlyRent;
+  loc.transactionFeePercent = newTransactionFeePercent;
 
   saveLocations();
   closeModal('modal-location-edit');
@@ -2029,15 +2116,30 @@ function recordSale() {
   const revenue=qty*priceEach;
   const profit=revenue-(qty*costEach);
 
+  // Calculate transaction fee for this sale
+  const location = locations.find(l => l.id === saleLocation);
+  const transactionFeePercent = location?.transactionFeePercent || 0;
+  const transactionFee = revenue * (transactionFeePercent / 100);
+
   if(!item.sales)item.sales=[];
-  item.sales.push({sid:uid(),date,qty,priceEach,revenue,profit,location:saleLocation});
+  item.sales.push({
+    sid:uid(),
+    date,
+    qty,
+    priceEach,
+    revenue,
+    profit,
+    location:saleLocation,
+    transactionFee,
+    transactionFeePercent
+  });
 
   // Decrement quantity at the specific location
   item.inventory[saleLocation].qty = Math.max(0, Number(item.inventory[saleLocation].qty) - qty);
   item.inventory[saleLocation].lastUpdated = new Date().toISOString();
 
   saveInventory(); renderDetail(); renderList();
-  showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(revenue)}`);
+  showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(revenue)}${transactionFee > 0 ? ` (${fmt(transactionFee)} fee)` : ''}`);
 }
 
 function removeSale(sid) {
@@ -2187,10 +2289,21 @@ function calculateIncomeStatement(bounds) {
   // Cost of Goods Sold: Cost of items sold in the period
   const cogs = periodSales.reduce((s, sl) => s + (Number(sl.item.cost) + Number(sl.item.labor)) * Number(sl.qty), 0);
 
+  // Transaction Fees: Calculate based on sales at each location
+  const transactionFees = periodSales.reduce((s, sl) => {
+    // Filter by location if needed
+    if (pnlLocationFilter === 'all') {
+      return s + Number(sl.transactionFee || 0);
+    } else {
+      // Only include fees for sales at the selected location
+      return sl.location === pnlLocationFilter ? s + Number(sl.transactionFee || 0) : s;
+    }
+  }, 0);
+
   // Gross Profit
   const grossProfit = revenue - cogs;
 
-  // Operating Expenses: Recurring expenses + one-time expenses in period
+  // Operating Expenses: Recurring expenses + one-time expenses in period + transaction fees
   const recurringExpenses = expenses.filter(e => {
     if (e.status !== 'Active' || e.frequency === 'One-Time') return false;
     if (pnlLocationFilter === 'all') return true;
@@ -2207,7 +2320,7 @@ function calculateIncomeStatement(bounds) {
     return e.location === pnlLocationFilter;
   }).reduce((s, e) => s + Number(e.amount), 0);
 
-  const operatingExpenses = recurringExpenses + oneTimeExpenses;
+  const operatingExpenses = recurringExpenses + oneTimeExpenses + transactionFees;
 
   // Operating Income
   const operatingIncome = grossProfit - operatingExpenses;
@@ -2229,6 +2342,7 @@ function calculateIncomeStatement(bounds) {
     periodSales,
     recurringExpenses,
     oneTimeExpenses,
+    transactionFees,
     loanPayments
   };
 }
