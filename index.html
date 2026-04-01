@@ -409,22 +409,22 @@ select.form-input option { background:#fff; color:#1a1612; }
       </div>
     </div>
 
-    <div class="pnl-section" id="pnl-section" style="padding-top:14px;">
-      <!-- Location and period controls for P&L -->
-      <div id="pnl-controls" style="padding:12px 16px 0; display: none;">
-        <div style="margin-bottom:12px;text-align:center;">
-          <label class="form-label" style="margin-bottom:8px;display:block;">Location</label>
-          <select class="form-input" id="pnl-location-filter" onchange="setPnLLocationFilter()" style="max-width:300px;">
-            <option value="all">All Locations</option>
-          </select>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface2);border-radius:var(--radius-sm);padding:3px;gap:3px;max-width:400px;margin:0 auto;">
-          <button id="pnl-period-ytd"   class="pnl-period-btn active" onclick="setPnLPeriod('ytd')">Year to Date</button>
-          <button id="pnl-period-month" class="pnl-period-btn"        onclick="setPnLPeriod('month')">This Month</button>
-          <button id="pnl-period-last"  class="pnl-period-btn"        onclick="setPnLPeriod('last')">Last Month</button>
-        </div>
+    <!-- Location and period controls for P&L (matching Individual Sales layout) -->
+    <div id="pnl-controls-container" style="padding:12px 16px 0; display: none;">
+      <div style="margin-bottom:12px;text-align:center;">
+        <label class="form-label" style="margin-bottom:8px;display:block;">Location</label>
+        <select class="form-input" id="pnl-location-filter" onchange="setPnLLocationFilter()" style="max-width:300px;">
+          <option value="all">All Locations</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface2);border-radius:var(--radius-sm);padding:3px;gap:3px;max-width:400px;margin:0 auto;">
+        <button id="pnl-period-ytd"   class="pnl-period-btn active" onclick="setPnLPeriod('ytd')">Year to Date</button>
+        <button id="pnl-period-month" class="pnl-period-btn"        onclick="setPnLPeriod('month')">This Month</button>
+        <button id="pnl-period-last"  class="pnl-period-btn"        onclick="setPnLPeriod('last')">Last Month</button>
       </div>
     </div>
+
+    <div class="pnl-section" id="pnl-section" style="padding-top:14px;"></div>
 
     <!-- Individual Sales -->
     <div class="pnl-section" id="individual-sales-section" style="padding-top:14px;display:none;">
@@ -2380,6 +2380,8 @@ function setFinanceView() {
     pnlControlsContainer.style.display = 'block';
     individualSalesSection.style.display = 'none';
     individualSalesControls.style.display = 'none';
+    populatePnLLocationFilter();
+    renderPnL();
   } else if (view === 'individual-sales') {
     incomeStatementSection.style.display = 'none';
     pnlSection.style.display = 'none';
