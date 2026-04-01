@@ -1723,7 +1723,7 @@ function renderSoldList(soldItems) {
         <div class="inv-metric"><div class="inv-metric-label">Sold</div><div class="inv-metric-value price">${totalSoldQty} ${esc(item.unit||'units')}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(totalRevenue)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Profit</div><div class="inv-metric-value ${totalProfit>=0?'highlight':'cost'}">${fmt(totalProfit)}</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Suggested $</div><div class="inv-metric-value">${fmt(suggestedPrice)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Suggested $</div><div class="inv-metric-value">${fmt(item.suggestedPrice ?? item.salePrice ?? 0)}</div></div>
       </div></div>`;
   }).join('');
 }
