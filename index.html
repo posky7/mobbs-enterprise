@@ -421,8 +421,10 @@ select.form-input option { background:#fff; color:#1a1612; }
     <div class="section-header"><div class="section-title">Data Management</div></div>
     <div class="data-tools">
       <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
-      <button class="btn-tool" onclick="document.getElementById('import-file').click()">⬆ Import CSV</button>
+      <button class="btn-tool" onclick="importCSV(event)">⬆ Import CSV</button>
       <button class="btn-tool" onclick="openResetInventoryModal()" style="color:var(--danger);border-color:var(--danger);">🔄 Reset Inventory</button>
+      <button class="btn-tool" onclick="openResetExpensesModal()" style="color:var(--danger);border-color:var(--danger);">💸 Reset Expenses</button>
+      <button class="btn-tool" onclick="openResetLoansModal()" style="color:var(--danger);border-color:var(--danger);">🏦 Reset Loans</button>
       <button class="btn-tool" onclick="openBackupModal()" style="color:var(--accent);border-color:var(--accent);">🔒 Backup</button>
       <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
@@ -3736,6 +3738,78 @@ async function confirmResetInventory() {
 
   } catch (error) {
     console.error('Reset inventory error:', error);
+    showToast('⚠ Reset failed — check connection');
+  }
+}
+
+// ── Reset Expenses ──────────────────────────────────────────
+function openResetExpensesModal() {
+  showConfirm(
+    'Reset All Expenses?',
+    `This will permanently delete all ${expenses.length} expense record${expenses.length !== 1 ? 's' : ''} from the server. This cannot be undone.`,
+    'Reset Expenses'
+  ).then(confirmed => {
+    if (confirmed) {
+      confirmResetExpenses();
+    }
+  });
+}
+
+async function confirmResetExpenses() {
+  try {
+    showToast('Resetting expenses…');
+
+    // Clear expenses in memory
+    expenses = [];
+
+    // Save to server
+    await saveExpenses();
+
+    // Refresh displays that show expense data
+    renderExpenses();
+    renderPnL();
+    renderReports();
+
+    showToast('✓ All expenses have been reset');
+
+  } catch (error) {
+    console.error('Reset expenses error:', error);
+    showToast('⚠ Reset failed — check connection');
+  }
+}
+
+// ── Reset Loans ─────────────────────────────────────────────
+function openResetLoansModal() {
+  showConfirm(
+    'Reset All Loans?',
+    `This will permanently delete all ${loans.length} loan record${loans.length !== 1 ? 's' : ''} and payment history from the server. This cannot be undone.`,
+    'Reset Loans'
+  ).then(confirmed => {
+    if (confirmed) {
+      confirmResetLoans();
+    }
+  });
+}
+
+async function confirmResetLoans() {
+  try {
+    showToast('Resetting loans…');
+
+    // Clear loans in memory
+    loans = [];
+
+    // Save to server
+    await saveLoans();
+
+    // Refresh displays that show loan data
+    renderLoans();
+    renderPnL();
+    renderReports();
+
+    showToast('✓ All loans have been reset');
+
+  } catch (error) {
+    console.error('Reset loans error:', error);
     showToast('⚠ Reset failed — check connection');
   }
 }
