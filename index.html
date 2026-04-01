@@ -1697,9 +1697,8 @@ function renderSoldList(soldItems) {
   list.innerHTML = locationSpecificSales.map(entry => {
     const { item, locationName, totalSoldQty, totalRevenue, totalProfit, lastSale } = entry;
 
-    // Calculate net difference (Suggested Price - Revenue per unit)
-    const suggestedPrice = Number(item.suggestedPrice ?? item.salePrice ?? 0);
-    const netDifference = suggestedPrice - (totalRevenue / Math.max(totalSoldQty, 1));
+      // Calculate total profit from all sales (Revenue - Cost - Labor)
+      const totalProfit = locationSales.reduce((sum, sale) => sum + Number(sale.profit), 0);
 
     // Check if item is sold out at this location
     const currentQtyAtLocation = Number((item.inventory?.[entry.locationId]?.qty) || 0);
@@ -1713,8 +1712,8 @@ function renderSoldList(soldItems) {
           <div style="font-size:11px;color:var(--accent);font-weight:600;margin-top:4px;">📍 ${esc(locationName)}</div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:12px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;${netDifference>=0?'color:var(--accent2);':'color:var(--danger);'}">
-            ${netDifference>=0?'+':''}${fmt(netDifference)}
+          <div style="font-size:12px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;${totalProfit>=0?'color:var(--accent2);':'color:var(--danger);'}">
+            ${totalProfit>=0?'+':''}${fmt(totalProfit)}
           </div>
           ${soldOutBadge
             ? `<div style="background:#f0faf6;border:1.5px solid var(--accent2);border-radius:9px;padding:4px 10px;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--accent2);white-space:nowrap;">${totalSoldQty} sold</div>`
