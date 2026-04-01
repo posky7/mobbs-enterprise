@@ -1697,9 +1697,6 @@ function renderSoldList(soldItems) {
   list.innerHTML = locationSpecificSales.map(entry => {
     const { item, locationName, totalSoldQty, totalRevenue, totalProfit, lastSale } = entry;
 
-      // Calculate total profit from all sales (Revenue - Cost - Labor)
-      const totalProfit = locationSales.reduce((sum, sale) => sum + Number(sale.profit), 0);
-
     // Check if item is sold out at this location
     const currentQtyAtLocation = Number((item.inventory?.[entry.locationId]?.qty) || 0);
     const soldOutBadge = currentQtyAtLocation === 0;
