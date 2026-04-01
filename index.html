@@ -300,17 +300,7 @@ select.form-input option { background:#fff; color:#1a1612; }
     </div>
     <div class="section-header"><div class="section-title">Items</div><div style="display:flex;gap:8px;"><button class="btn-add" onclick="openMoveInventoryModal()">📦 Move Inventory</button><button class="btn-add" onclick="openAddModal()">＋ Add Item</button></div></div>
     <div class="search-wrap"><input class="search-input" type="search" placeholder="Search inventory…" id="search-box" oninput="renderList()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
-    <div class="data-tools">
-      <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
-      <button class="btn-tool" onclick="document.getElementById('import-file').click()">⬆ Import CSV</button>
-      <button class="btn-tool" onclick="openResetInventoryModal()" style="color:var(--danger);border-color:var(--danger);">🔄 Reset Inventory</button>
-      <button class="btn-tool" onclick="openBackupModal()" style="color:var(--accent);border-color:var(--accent);">🔒 Backup</button>
-      <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
-      <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
-    </div>
-    <div id="backup-status" style="padding:0 16px 10px;font-size:11px;color:var(--text3);font-family:var(--font-mono);display:none;text-align:center;">
-      Last backup: <span id="backup-date">never</span>
-    </div>
+
     <div class="inv-list" id="inv-list"></div>
 
     <!-- Sold section -->
@@ -425,6 +415,24 @@ select.form-input option { background:#fff; color:#1a1612; }
 
     <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px;">
       Manage your retail booth locations and storage facility. Each location can track inventory separately.
+    </div>
+
+    <!-- Data Management -->
+    <div class="section-header"><div class="section-title">Data Management</div></div>
+    <div class="data-tools">
+      <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn-tool" onclick="document.getElementById('import-file').click()">⬆ Import CSV</button>
+      <button class="btn-tool" onclick="openResetInventoryModal()" style="color:var(--danger);border-color:var(--danger);">🔄 Reset Inventory</button>
+      <button class="btn-tool" onclick="openBackupModal()" style="color:var(--accent);border-color:var(--accent);">🔒 Backup</button>
+      <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
+      <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
+    </div>
+    <div id="backup-status" style="padding:0 16px 10px;font-size:11px;color:var(--text3);font-family:var(--font-mono);display:none;text-align:center;">
+      Last backup: <span id="backup-date">never</span>
+    </div>
+
+    <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px;">
+      Export and import inventory data, reset inventory levels, and manage backups of your data.
     </div>
   </div>
 
