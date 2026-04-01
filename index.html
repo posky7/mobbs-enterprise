@@ -2180,14 +2180,21 @@ function renderPnL() {
 
   // Projected (in-stock items only, period-independent, filtered by location)
   const inStock = inventory.filter(i => {
-    if (pnlLocationFilter === 'all') return Number(i.qty) > 0;
+    if (pnlLocationFilter === 'all') return Number(i.totalQty || 0) > 0;
     // For specific location, check if item has inventory at that location with qty > 0
     return i.inventory && i.inventory[pnlLocationFilter] && Number(i.inventory[pnlLocationFilter].qty) > 0;
   });
-  const totCost = inStock.reduce((a,i)=>a+(Number(i.cost)+Number(i.labor))*Number(i.qty), 0);
-  const totSugg = inStock.reduce((a,i)=>a+sp(i)*Number(i.qty), 0);
-  const labor   = inStock.reduce((a,i)=>a+Number(i.labor)*Number(i.qty), 0);
-  const raw     = inStock.reduce((a,i)=>a+Number(i.cost)*Number(i.qty), 0);
+
+  // Calculate quantities correctly based on location filter
+  const getItemQty = (item) => {
+    if (pnlLocationFilter === 'all') return Number(item.totalQty || 0);
+    return item.inventory && item.inventory[pnlLocationFilter] ? Number(item.inventory[pnlLocationFilter].qty) : 0;
+  };
+
+  const totCost = inStock.reduce((a,i)=>a+(Number(i.cost)+Number(i.labor))*getItemQty(i), 0);
+  const totSugg = inStock.reduce((a,i)=>a+sp(i)*getItemQty(i), 0);
+  const labor   = inStock.reduce((a,i)=>a+Number(i.labor)*getItemQty(i), 0);
+  const raw     = inStock.reduce((a,i)=>a+Number(i.cost)*getItemQty(i), 0);
   const gross   = totSugg - totCost;
   const margin  = totSugg > 0 ? (gross/totSugg*100).toFixed(1) : 0;
 
