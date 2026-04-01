@@ -510,6 +510,42 @@ select.form-input option { background:#fff; color:#1a1612; }
   </nav>
 </div>
 
+<!-- Location Edit Modal -->
+<div class="modal-overlay" id="modal-location-edit">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title">Edit Location</div><button class="modal-close" onclick="closeModal('modal-location-edit')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="location-edit-id">
+      <div class="form-section">
+        <div class="form-section-title">Location Details</div>
+        <div class="form-group"><label class="form-label">Location Name</label><input class="form-input" type="text" id="location-name" placeholder="e.g. Downtown Booth" autocomplete="off"></div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-input" id="location-type">
+            <option value="retail">Retail Booth</option>
+            <option value="storage">Storage</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="location-active" style="width:16px;height:16px;">
+            Active (can track inventory)
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="location-warehouse" style="width:16px;height:16px;">
+            Set as warehouse (can transfer inventory from here)
+          </label>
+        </div>
+      </div>
+      <button class="btn-save" onclick="saveLocationEdit()">Save Changes</button>
+      <div style="height:12px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Add/Edit Item Modal -->
 <div class="modal-overlay" id="modal-add">
   <div class="modal-sheet">
@@ -1355,6 +1391,62 @@ function deleteLocation(id) {
   showToast('✓ Location deleted');
 }
 
+function openEditLocationModal(id) {
+  const loc = locations.find(l => l.id === id);
+  if (!loc) return;
+
+  document.getElementById('location-edit-id').value = id;
+  document.getElementById('location-name').value = loc.name;
+  document.getElementById('location-type').value = loc.type;
+  document.getElementById('location-active').checked = loc.active;
+  document.getElementById('location-warehouse').checked = loc.isWarehouse;
+
+  document.getElementById('modal-location-edit').classList.add('open');
+}
+
+function saveLocationEdit() {
+  const id = document.getElementById('location-edit-id').value;
+  const loc = locations.find(l => l.id === id);
+  if (!loc) return;
+
+  const newName = document.getElementById('location-name').value.trim();
+  if (!newName) {
+    document.getElementById('location-name').focus();
+    return;
+  }
+
+  // Check if name is already taken by another location
+  const existingLoc = locations.find(l => l.id !== id && l.name.toLowerCase() === newName.toLowerCase());
+  if (existingLoc) {
+    showToast('Location name already exists');
+    document.getElementById('location-name').focus();
+    return;
+  }
+
+  const newType = document.getElementById('location-type').value;
+  const newActive = document.getElementById('location-active').checked;
+  const newWarehouse = document.getElementById('location-warehouse').checked;
+
+  // If setting as warehouse, unset any existing warehouse
+  if (newWarehouse && !loc.isWarehouse) {
+    locations.forEach(l => l.isWarehouse = false);
+  }
+
+  // Update location properties
+  loc.name = newName;
+  loc.type = newType;
+  loc.active = newActive;
+  loc.isWarehouse = newWarehouse;
+
+  saveLocations();
+  closeModal('modal-location-edit');
+  renderLocationSettings();
+  renderList();
+  populateInventoryLocationFilter();
+  populatePnLLocationFilter();
+  showToast('✓ Location updated');
+}
+
 function renderLocationSettings() {
   const container = document.getElementById('location-settings-list');
   if (!container) return;
@@ -1370,6 +1462,10 @@ function renderLocationSettings() {
           <span class="category-chip">${loc.type === 'storage' ? 'Storage' : 'Retail Booth'}${loc.isWarehouse ? ' · 🏭 Warehouse' : ''}</span>
         </div>
         <div style="display:flex;gap:8px;">
+          <button onclick="openEditLocationModal('${loc.id}')"
+                  style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+            Edit
+          </button>
           ${loc.active ? `<button onclick="setWarehouse('${loc.id}')"
                   style="background:${loc.isWarehouse ? 'var(--accent3)' : 'var(--text3)'};color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
             ${loc.isWarehouse ? 'Warehouse' : 'Set as Warehouse'}
@@ -3855,7 +3951,7 @@ async function executeMove() {
 
 // ── Init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup','modal-move-inventory'].forEach(initSwipeDismiss);
+  ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup','modal-move-inventory','modal-location-edit'].forEach(initSwipeDismiss);
   populateUnitSelect('print');
   await loadAllData();
   populateInventoryLocationFilter();
