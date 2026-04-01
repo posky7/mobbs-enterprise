@@ -1403,8 +1403,8 @@ function populateInventoryLocationFilter() {
   // Clear existing options except "All Locations"
   select.innerHTML = '<option value="all">All Locations</option>';
 
-  // Add active locations
-  const activeLocations = locations.filter(loc => loc.active);
+  // Add active (non-archived) locations
+  const activeLocations = locations.filter(loc => loc.active && !loc.archived);
   activeLocations.forEach(loc => {
     const option = document.createElement('option');
     option.value = loc.id;
@@ -1412,7 +1412,11 @@ function populateInventoryLocationFilter() {
     select.appendChild(option);
   });
 
-  // Set current selection
+  // Set current selection - if current filter is archived, reset to "all"
+  const currentLoc = locations.find(loc => loc.id === inventoryLocationFilter);
+  if (currentLoc && currentLoc.archived) {
+    inventoryLocationFilter = 'all';
+  }
   select.value = inventoryLocationFilter;
 }
 
@@ -1479,6 +1483,62 @@ function toggleLocationActive(id) {
   populatePnLLocationFilter(); // Update P&L filter
 }
 
+function archiveLocation(id) {
+  const loc = locations.find(l => l.id === id);
+  if (!loc) return;
+
+  // Check if location has inventory
+  const hasInventory = inventory.some(item =>
+    item.inventory && item.inventory[id] && item.inventory[id].qty > 0
+  );
+
+  if (hasInventory) {
+    showConfirm(
+      'Archive Location with Inventory?',
+      'This location has current inventory. Archiving will preserve all transaction history, but the inventory will no longer be tracked at this location.',
+      'Archive Anyway'
+    ).then(confirmed => {
+      if (confirmed) {
+        performArchive(id);
+      }
+    });
+  } else {
+    performArchive(id);
+  }
+}
+
+function performArchive(id) {
+  const loc = locations.find(l => l.id === id);
+  if (!loc) return;
+
+  loc.archived = true;
+  loc.archivedDate = new Date().toISOString();
+  loc.archivedReason = 'Location archived to preserve transaction history';
+
+  saveLocations();
+  renderLocationSettings();
+  renderList();
+  populateInventoryLocationFilter();
+  populatePnLLocationFilter();
+  showToast('✓ Location archived - transaction history preserved');
+}
+
+function unarchiveLocation(id) {
+  const loc = locations.find(l => l.id === id);
+  if (!loc) return;
+
+  loc.archived = false;
+  delete loc.archivedDate;
+  delete loc.archivedReason;
+
+  saveLocations();
+  renderLocationSettings();
+  renderList();
+  populateInventoryLocationFilter();
+  populatePnLLocationFilter();
+  showToast('✓ Location restored');
+}
+
 function setWarehouse(id) {
   const loc = locations.find(l => l.id === id);
   if (!loc) return;
@@ -1499,7 +1559,7 @@ function setWarehouse(id) {
   renderLocationSettings();
 }
 
-function deleteLocation(id) {
+async function deleteLocation(id) {
   if (locations.length <= 1) {
     showToast('Cannot delete the last location');
     return;
@@ -1513,10 +1573,43 @@ function deleteLocation(id) {
     item.inventory && item.inventory[id] && item.inventory[id].qty > 0
   );
 
+  // Count sales records for this location
+  const salesCount = inventory.reduce((total, item) => {
+    return total + (item.sales || []).filter(sale => sale.location === id).length;
+  }, 0);
+
+  // Count expense records for this location
+  const expenseCount = expenses.filter(exp => exp.location === id).length;
+
+  // Build warning message
+  let warningMsg = 'This will permanently delete the location and all associated data. ';
+  const issues = [];
+
   if (hasInventory) {
-    showToast('Cannot delete location with existing inventory');
-    return;
+    issues.push('This location has current inventory that will be orphaned');
   }
+
+  if (salesCount > 0) {
+    issues.push(`${salesCount} sales record${salesCount !== 1 ? 's' : ''} will be orphaned`);
+  }
+
+  if (expenseCount > 0) {
+    issues.push(`${expenseCount} expense record${expenseCount !== 1 ? 's' : ''} will be orphaned`);
+  }
+
+  if (issues.length > 0) {
+    warningMsg += 'WARNING: ' + issues.join(', ') + '. This will cause accounting reconciliation issues and break transaction history. ';
+  }
+
+  warningMsg += 'This action is primarily intended for testing cleanup and cannot be undone.';
+
+  const ok = await showConfirm(
+    'Delete Location?',
+    warningMsg,
+    'Delete Anyway'
+  );
+
+  if (!ok) return;
 
   locations = locations.filter(l => l.id !== id);
   saveLocations();
@@ -1524,7 +1617,7 @@ function deleteLocation(id) {
   renderList();
   populateInventoryLocationFilter(); // Update inventory filter
   populatePnLLocationFilter(); // Update P&L filter
-  showToast('✓ Location deleted');
+  showToast('✓ Location deleted - data may be orphaned');
 }
 
 function openEditLocationModal(id) {
@@ -1600,37 +1693,77 @@ function renderLocationSettings() {
   const container = document.getElementById('location-settings-list');
   if (!container) return;
 
-  // Find current warehouse
-  const currentWarehouse = locations.find(loc => loc.isWarehouse);
+  // Separate active and archived locations
+  const activeLocations = locations.filter(loc => !loc.archived);
+  const archivedLocations = locations.filter(loc => loc.archived);
 
-  container.innerHTML = locations.map(loc => `
-    <div class="inv-card" style="cursor:default;">
-      <div class="inv-card-header">
-        <div>
-          <div class="inv-name">${esc(loc.name)}</div>
-          <span class="category-chip">${loc.type === 'storage' ? 'Storage' : 'Retail Booth'}${loc.isWarehouse ? ' · 🏭 Warehouse' : ''}</span>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button onclick="openEditLocationModal('${loc.id}')"
-                  style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
-            Edit
-          </button>
-          ${loc.active ? `<button onclick="setWarehouse('${loc.id}')"
-                  style="background:${loc.isWarehouse ? 'var(--accent3)' : 'var(--text3)'};color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
-            ${loc.isWarehouse ? 'Warehouse' : 'Set as Warehouse'}
-          </button>` : ''}
-          <button onclick="toggleLocationActive('${loc.id}')"
-                  style="background:${loc.active ? 'var(--accent2)' : 'var(--text3)'};color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
-            ${loc.active ? 'Active' : 'Inactive'}
-          </button>
-          ${loc.type !== 'storage' ? `<button onclick="deleteLocation('${loc.id}')"
-                  style="background:var(--danger);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
-            Delete
-          </button>` : ''}
+  let html = '';
+
+  // Active locations section
+  if (activeLocations.length > 0) {
+    html += activeLocations.map(loc => `
+      <div class="inv-card" style="cursor:default;">
+        <div class="inv-card-header">
+          <div>
+            <div class="inv-name">${esc(loc.name)}</div>
+            <span class="category-chip">${loc.type === 'storage' ? 'Storage' : 'Retail Booth'}${loc.isWarehouse ? ' · 🏭 Warehouse' : ''}</span>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="openEditLocationModal('${loc.id}')"
+                    style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+              Edit
+            </button>
+            ${loc.active ? `<button onclick="setWarehouse('${loc.id}')"
+                    style="background:${loc.isWarehouse ? 'var(--accent3)' : 'var(--text3)'};color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+              ${loc.isWarehouse ? 'Warehouse' : 'Set as Warehouse'}
+            </button>` : ''}
+            <button onclick="toggleLocationActive('${loc.id}')"
+                    style="background:${loc.active ? 'var(--accent2)' : 'var(--text3)'};color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+              ${loc.active ? 'Active' : 'Inactive'}
+            </button>
+            <button onclick="archiveLocation('${loc.id}')"
+                    style="background:var(--accent3);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+              Archive
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  }
+
+  // Archived locations section
+  if (archivedLocations.length > 0) {
+    html += `
+      <div style="margin:20px 0 12px 0;padding:12px 16px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:4px;">Archived Locations</div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.4;">These locations are no longer active but their transaction history is preserved.</div>
+      </div>
+    `;
+
+    html += archivedLocations.map(loc => `
+      <div class="inv-card" style="cursor:default;opacity:.75;border-color:var(--text3);">
+        <div class="inv-card-header">
+          <div>
+            <div class="inv-name">${esc(loc.name)} <span style="font-size:11px;color:var(--text3);font-weight:400;">(Archived)</span></div>
+            <span class="category-chip">${loc.type === 'storage' ? 'Storage' : 'Retail Booth'}</span>
+            ${loc.archivedDate ? `<div style="font-size:10px;color:var(--text3);margin-top:2px;">Archived: ${new Date(loc.archivedDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="unarchiveLocation('${loc.id}')"
+                    style="background:var(--accent2);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+              Unarchive
+            </button>
+            <button onclick="deleteLocation('${loc.id}')"
+                    style="background:var(--danger);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  container.innerHTML = html;
 }
 
 // ── Tabs ───────────────────────────────────────────────────
@@ -2196,8 +2329,8 @@ function populatePnLLocationFilter() {
   // Clear existing options except "All Locations"
   select.innerHTML = '<option value="all">All Locations</option>';
 
-  // Add active locations
-  const activeLocations = locations.filter(loc => loc.active);
+  // Add active (non-archived) locations
+  const activeLocations = locations.filter(loc => loc.active && !loc.archived);
   activeLocations.forEach(loc => {
     const option = document.createElement('option');
     option.value = loc.id;
@@ -2205,7 +2338,11 @@ function populatePnLLocationFilter() {
     select.appendChild(option);
   });
 
-  // Set current selection
+  // Set current selection - if current filter is archived, reset to "all"
+  const currentLoc = locations.find(loc => loc.id === pnlLocationFilter);
+  if (currentLoc && currentLoc.archived) {
+    pnlLocationFilter = 'all';
+  }
   select.value = pnlLocationFilter;
 }
 
