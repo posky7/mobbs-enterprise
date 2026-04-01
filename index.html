@@ -1861,57 +1861,7 @@ function renderList() {
   const inStock = filteredItems.filter(i => Number(i.totalQty) > 0).sort((a,b)=>a.name.localeCompare(b.name));
   const soldOut = filteredItems.filter(i => Number(i.totalQty) === 0 && (i.sales||[]).length > 0).sort((a,b)=>a.name.localeCompare(b.name));
 
-  // Summary stats — in-stock only, filtered by location
-  const tot = (arr, fn) => arr.reduce(fn, 0);
-  let totalUnits = 0;
-  let totalCost = 0;
-  let totalRetail = 0;
 
-  inStock.forEach(item => {
-    let itemQty = Number(item.totalQty);
-    let itemCost = Number(item.cost) + Number(item.labor);
-    let itemRetail = Number(item.suggestedPrice ?? item.salePrice ?? 0);
-
-    if (inventoryLocationFilter !== 'all') {
-      // For specific location, use only that location's quantity
-      itemQty = Number(item.inventory[inventoryLocationFilter]?.qty || 0);
-    }
-
-    totalUnits += itemQty;
-    totalCost += itemCost * itemQty;
-    totalRetail += itemRetail * itemQty;
-  });
-
-  document.getElementById('sum-items').textContent  = inStock.length;
-  document.getElementById('sum-units').textContent  = totalUnits;
-  document.getElementById('sum-cost').textContent   = fmtK(totalCost);
-  document.getElementById('sum-retail').textContent = fmtK(totalRetail);
-
-  // Update last updated timestamp
-  document.getElementById('inventory-last-updated').textContent = new Date().toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true
-  });
-
-  // Sold summary — filtered by location
-  let soldItems = inventory.filter(i=>(i.sales||[]).length>0);
-  if (inventoryLocationFilter !== 'all') {
-    soldItems = soldItems.filter(item => {
-      // Filter sales by location - check if item has sales from the selected location
-      return (item.sales||[]).some(sale => sale.location === inventoryLocationFilter);
-    });
-  }
-
-  const totalSoldUnits   = soldItems.reduce((s,i)=>(i.sales||[]).reduce((ss,sl)=>ss+Number(sl.qty),0)+s, 0);
-  const totalSoldRevenue = soldItems.reduce((s,i)=>(i.sales||[]).reduce((ss,sl)=>ss+Number(sl.revenue),0)+s, 0);
-  const soldStrip = document.getElementById('sold-summary-strip');
-  if (totalSoldUnits > 0) {
-    soldStrip.style.display = 'grid';
-    document.getElementById('sum-sold-units').textContent   = totalSoldUnits;
-    document.getElementById('sum-sold-revenue').textContent = fmtK(totalSoldRevenue);
-  } else {
-    soldStrip.style.display = 'none';
-  }
 
   // In-stock list
   const el = document.getElementById('inv-list');
