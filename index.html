@@ -323,7 +323,7 @@ select.form-input option { background:#fff; color:#1a1612; }
         <div class="app-logo">Lenore's Closet</div>
         <div class="header-clock"><div class="header-clock-time" id="pnl-clock">—</div><div class="header-clock-date" id="pnl-date">—</div></div>
       </div>
-      <div class="header-title">Profit & Loss</div>
+      <div class="header-title">Finance</div>
     </div>
 
     <!-- Location filter -->
@@ -338,6 +338,13 @@ select.form-input option { background:#fff; color:#1a1612; }
         <button id="pnl-period-ytd"   class="pnl-period-btn active" onclick="setPnLPeriod('ytd')">Year to Date</button>
         <button id="pnl-period-month" class="pnl-period-btn"        onclick="setPnLPeriod('month')">This Month</button>
         <button id="pnl-period-last"  class="pnl-period-btn"        onclick="setPnLPeriod('last')">Last Month</button>
+      </div>
+      <div style="margin-top:12px;">
+        <label class="form-label" style="margin-bottom:8px;display:block;">View</label>
+        <select class="form-input" id="finance-view-selector" onchange="setFinanceView()" style="max-width:300px;">
+          <option value="income-statement">Income Statement</option>
+          <option value="pnl">P&L</option>
+        </select>
       </div>
     </div>
 
@@ -562,10 +569,10 @@ select.form-input option { background:#fff; color:#1a1612; }
 
   </div>
 
-  <nav class="bottom-nav">
+    <nav class="bottom-nav">
     <button class="nav-btn active" id="nav-inventory" onclick="switchTab('inventory')"><span class="nav-icon">📦</span><span class="nav-label">Inventory</span></button>
     <button class="nav-btn" id="nav-expenses" onclick="switchTab('expenses')"><span class="nav-icon">💸</span><span class="nav-label">Expenses</span></button>
-    <button class="nav-btn" id="nav-pnl" onclick="switchTab('pnl')"><span class="nav-icon">📊</span><span class="nav-label">P&L</span></button>
+    <button class="nav-btn" id="nav-pnl" onclick="switchTab('pnl')"><span class="nav-icon">📊</span><span class="nav-label">Finance</span></button>
     <button class="nav-btn" id="nav-reports" onclick="switchTab('reports')"><span class="nav-icon">📈</span><span class="nav-label">Reports</span></button>
     <button class="nav-btn" id="nav-loans" onclick="switchTab('loans')"><span class="nav-icon">🏦</span><span class="nav-label">Loans</span></button>
     <button class="nav-btn" id="nav-settings" onclick="switchTab('settings')"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></button>
@@ -2320,6 +2327,22 @@ function setPnLLocationFilter() {
   const select = document.getElementById('pnl-location-filter');
   pnlLocationFilter = select.value;
   renderPnL();
+}
+
+function setFinanceView() {
+  const select = document.getElementById('finance-view-selector');
+  const view = select.value;
+
+  const incomeStatementSection = document.getElementById('income-statement-section');
+  const pnlSection = document.getElementById('pnl-section');
+
+  if (view === 'income-statement') {
+    incomeStatementSection.style.display = 'block';
+    pnlSection.style.display = 'none';
+  } else if (view === 'pnl') {
+    incomeStatementSection.style.display = 'none';
+    pnlSection.style.display = 'block';
+  }
 }
 
 function populatePnLLocationFilter() {
@@ -4442,6 +4465,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   populateInventoryLocationFilter();
   renderList();
   updateBackupStatus();
+  // Initialize Finance view to show Income Statement by default
+  setFinanceView();
 });
 </script>
 
