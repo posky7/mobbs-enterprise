@@ -11,51 +11,52 @@ function loanBalance(loan) {
   return Math.max(0, Number(loan.amount) - loanPaid(loan));
 }
 
-export default async function handler(event) {
-  const httpMethod = event.httpMethod;
-  const body = event.body;
-  const query = event.queryStringParameters || {};
+export default async function handler(req) {
+  const httpMethod = req.method;
+  const url = new URL(req.url);
+  const action = url.searchParams.get('action');
+  const loanId = url.searchParams.get('loanId');
+  const paymentId = url.searchParams.get('paymentId');
 
   try {
     if (httpMethod === 'GET') {
       const loans = await readBlobData('loans');
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loans)
-      };
+      return new Response(JSON.stringify(loans), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (httpMethod === 'PUT') {
+      const body = await req.text();
       const loansData = JSON.parse(body || '[]');
       await writeBlobData('loans', loansData);
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true })
-      };
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    if (httpMethod === 'POST' && query.action === 'add-payment') {
-      const { loanId, date, amount, note } = JSON.parse(body || '{}');
+    if (httpMethod === 'POST' && action === 'add-payment') {
+      const body = await req.text();
+      const { loanId: bodyLoanId, date, amount, note } = JSON.parse(body || '{}');
+      const resolvedLoanId = bodyLoanId || loanId;
 
-      if (!loanId || !amount || amount <= 0) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Missing required parameters' })
-        };
+      if (!resolvedLoanId || !amount || amount <= 0) {
+        return new Response(JSON.stringify({ error: 'Missing required parameters' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const loans = await readBlobData('loans');
-      const loan = loans.find(l => l.id === loanId);
+      const loan = loans.find(l => l.id === resolvedLoanId);
 
       if (!loan) {
-        return {
-          statusCode: 404,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Loan not found' })
-        };
+        return new Response(JSON.stringify({ error: 'Loan not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const remaining = loanBalance(loan);
@@ -74,38 +75,32 @@ export default async function handler(event) {
       }
 
       await writeBlobData('loans', loans);
-
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          success: true,
-          message: `Payment of $${actualAmount.toFixed(2)} recorded`,
-          capped: actualAmount < Number(amount)
-        })
-      };
+      return new Response(JSON.stringify({
+        success: true,
+        message: `Payment of $${actualAmount.toFixed(2)} recorded`,
+        capped: actualAmount < Number(amount)
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    if (httpMethod === 'DELETE' && query.action === 'remove-payment') {
-      const { loanId, paymentId } = query;
-
+    if (httpMethod === 'DELETE' && action === 'remove-payment') {
       if (!loanId || !paymentId) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Missing required parameters' })
-        };
+        return new Response(JSON.stringify({ error: 'Missing required parameters' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const loans = await readBlobData('loans');
       const loan = loans.find(l => l.id === loanId);
 
       if (!loan) {
-        return {
-          statusCode: 404,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Loan not found' })
-        };
+        return new Response(JSON.stringify({ error: 'Loan not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       loan.payments = (loan.payments || []).filter(p => p.pid !== paymentId);
@@ -115,29 +110,25 @@ export default async function handler(event) {
       }
 
       await writeBlobData('loans', loans);
-
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true, message: 'Payment removed' })
-      };
+      return new Response(JSON.stringify({ success: true, message: 'Payment removed' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    return {
-      statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('Loans API error:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'Internal server error',
-        details: error.message 
-      })
-    };
+    return new Response(JSON.stringify({
+      error: 'Internal server error',
+      details: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }

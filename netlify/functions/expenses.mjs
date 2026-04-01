@@ -86,45 +86,41 @@ function expYTD(e) {
   return expCostInPeriod(e, ytdBounds);
 }
 
-export default async function handler(event) {
-  const httpMethod = event.httpMethod;
-  const body = event.body;
+export default async function handler(req) {
+  const httpMethod = req.method;
 
   try {
     if (httpMethod === 'GET') {
       const expenses = await readBlobData('expenses');
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(expenses)
-      };
+      return new Response(JSON.stringify(expenses), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (httpMethod === 'PUT') {
+      const body = await req.text();
       const expensesData = JSON.parse(body || '[]');
       await writeBlobData('expenses', expensesData);
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true })
-      };
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    return {
-      statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('Expenses API error:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'Internal server error',
-        details: error.message 
-      })
-    };
+    return new Response(JSON.stringify({
+      error: 'Internal server error',
+      details: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }

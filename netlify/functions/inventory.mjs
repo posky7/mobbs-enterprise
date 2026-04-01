@@ -13,73 +13,69 @@ function migrateItem(item) {
   return item;
 }
 
-export default async function handler(event) {
-  const httpMethod = event.httpMethod || 'GET';
+export default async function handler(req) {
+  const httpMethod = req.method || 'GET';
+  const url = new URL(req.url);
+  const action = url.searchParams.get('action');
 
   try {
     if (httpMethod === 'GET') {
       let inventory = await readBlobData('inventory');
       inventory = inventory.map(migrateItem);
       await writeBlobData('inventory', inventory);
-
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inventory)
-      };
+      return new Response(JSON.stringify(inventory), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    if (httpMethod === 'PUT' || httpMethod === 'POST') {
-      const data = JSON.parse(event.body || '[]');
+    if (httpMethod === 'PUT') {
+      const body = await req.text();
+      const data = JSON.parse(body || '[]');
       const migrated = Array.isArray(data) ? data.map(migrateItem) : data;
       await writeBlobData('inventory', migrated);
-
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true })
-      };
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (httpMethod === 'DELETE') {
       await writeBlobData('inventory', []);
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true })
-      };
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Transfer action (used by Move Inventory)
-    if (httpMethod === 'POST' && event.queryStringParameters?.action === 'transfer') {
-      const { itemId, fromLocation, toLocation, quantity } = JSON.parse(event.body || '{}');
+    if (httpMethod === 'POST' && action === 'transfer') {
+      const body = await req.text();
+      const { itemId, fromLocation, toLocation, quantity } = JSON.parse(body || '{}');
 
       if (!itemId || !fromLocation || !toLocation || !quantity) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Missing parameters' })
-        };
+        return new Response(JSON.stringify({ error: 'Missing parameters' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       let inventory = await readBlobData('inventory');
       const item = inventory.find(i => i.id === itemId);
       if (!item) {
-        return {
-          statusCode: 404,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Item not found' })
-        };
+        return new Response(JSON.stringify({ error: 'Item not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       if (!item.inventory) item.inventory = {};
       const fromQty = Number(item.inventory[fromLocation]?.qty || 0);
       if (fromQty < quantity) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Insufficient quantity' })
-        };
+        return new Response(JSON.stringify({ error: 'Insufficient quantity' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       item.inventory[fromLocation] = { qty: fromQty - quantity, lastUpdated: new Date().toISOString() };
@@ -88,29 +84,36 @@ export default async function handler(event) {
       item.inventory[toLocation].lastUpdated = new Date().toISOString();
 
       await writeBlobData('inventory', inventory);
-
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true })
-      };
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    return {
-      statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
+    if (httpMethod === 'POST') {
+      const body = await req.text();
+      const data = JSON.parse(body || '[]');
+      const migrated = Array.isArray(data) ? data.map(migrateItem) : data;
+      await writeBlobData('inventory', migrated);
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('Inventory handler error:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'Internal server error', 
-        details: error.message 
-      })
-    };
+    return new Response(JSON.stringify({
+      error: 'Internal server error',
+      details: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }

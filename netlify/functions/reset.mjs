@@ -1,14 +1,13 @@
 import { clearBlobStore, setBackupTimestamp } from './_blob-storage.mjs';
 
-export default async function handler(event) {
-  const httpMethod = event.httpMethod;
+export default async function handler(req) {
+  const httpMethod = req.method;
 
   if (httpMethod !== 'POST' && httpMethod !== 'DELETE') {
-    return {
-      statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   try {
@@ -21,24 +20,22 @@ export default async function handler(event) {
 
     await setBackupTimestamp(null);
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        success: true, 
-        message: 'All data has been reset successfully' 
-      })
-    };
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'All data has been reset successfully'
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('Reset function error:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'Failed to reset data', 
-        details: error.message 
-      })
-    };
+    return new Response(JSON.stringify({
+      error: 'Failed to reset data',
+      details: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
