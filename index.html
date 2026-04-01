@@ -3324,7 +3324,7 @@ function openResetInventoryModal() {
 
   // Reset checkboxes and options
   document.getElementById('reset-all-locations').checked = false;
-  document.getElementById('reset-only-zero-stock').checked = true;
+  document.getElementById('reset-only-zero-stock').checked = false;
   document.getElementById('reset-preview').style.display = 'none';
   document.getElementById('reset-confirm-btn').disabled = true;
 
@@ -3361,18 +3361,15 @@ function updateResetPreview() {
 
     selectedLocations.forEach(locationId => {
       const locationQty = Number(item.inventory[locationId]?.qty || 0);
-      if (locationQty > 0) {
-        // Check if we should only reset zero stock items
-        if (!onlyZeroStock || locationQty === 0) {
-          itemsToReset.push({
-            itemId: item.id,
-            itemName: item.name,
-            locationId: locationId,
-            locationName: locations.find(l => l.id === locationId)?.name || locationId,
-            currentQty: locationQty
-          });
-          totalUnitsToReset += locationQty;
-        }
+      if (!onlyZeroStock || locationQty === 0) {
+        itemsToReset.push({
+          itemId: item.id,
+          itemName: item.name,
+          locationId: locationId,
+          locationName: locations.find(l => l.id === locationId)?.name || locationId,
+          currentQty: locationQty
+        });
+        totalUnitsToReset += locationQty;
       }
     });
   });
@@ -3412,7 +3409,7 @@ async function confirmResetInventory() {
     if (!item.inventory) return;
     selectedLocations.forEach(locationId => {
       const qty = Number(item.inventory[locationId]?.qty || 0);
-      if (qty > 0 && (!onlyZeroStock || qty === 0)) {
+      if (!onlyZeroStock || qty === 0) {
         affectedItems++;
         affectedUnits += qty;
       }
@@ -3439,7 +3436,7 @@ async function confirmResetInventory() {
       if (!item.inventory) return;
       selectedLocations.forEach(locationId => {
         const currentQty = Number(item.inventory[locationId]?.qty || 0);
-        if (currentQty > 0 && (!onlyZeroStock || currentQty === 0)) {
+        if (!onlyZeroStock || currentQty === 0) {
           item.inventory[locationId] = {
             qty: 0,
             lastUpdated: new Date().toISOString()
@@ -3833,8 +3830,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             <label for="reset-all-locations" style="font-size:13px;color:var(--text2);margin:0;">Reset all locations</label>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="reset-only-zero-stock" checked style="width:16px;height:16px;">
-            <label for="reset-only-zero-stock" style="font-size:13px;color:var(--text2);margin:0;">Only reset items with zero stock (sold out items)</label>
+            <input type="checkbox" id="reset-only-zero-stock" style="width:16px;height:16px;">
+            <label for="reset-only-zero-stock" style="font-size:13px;color:var(--text2);margin:0;">Reset sold-out items only</label>
           </div>
         </div>
       </div>
