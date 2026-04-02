@@ -3956,26 +3956,50 @@ function setRptPeriod(p) {
 }
 
 function getRptBounds() {
-  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
-  if (rptPeriod === 'all')   return { start: new Date(2000,0,1), end: now, label: 'All Time' };
-  if (rptPeriod === 'ytd')   return { start: new Date(y,0,1),    end: now, label: `${y} Year to Date` };
+  const now   = new Date();
+  const y     = now.getFullYear();
+  const m     = now.getMonth();        // 0-based
+  if (rptPeriod === 'all') {
+    return { start: new Date(2000,0,1), end: now, label: 'All Time' };
+  }
+  if (rptPeriod === 'ytd') {
+    // end = today, not Dec 31 — so we only count sales that have actually occurred
+    return { start: new Date(y, 0, 1), end: now, label: `Jan 1 – Today ${y}` };
+  }
   if (rptPeriod === 'month') {
-    const lb = now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-    return { start: new Date(y,m,1), end: new Date(y,m+1,0,23,59,59), label: lb };
+    const label = now.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+    return { start: new Date(y, m, 1), end: now, label };
   }
   // last month
-  const lm = m===0?11:m-1, ly = m===0?y-1:y;
-  const lb  = new Date(ly,lm,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  return { start: new Date(ly,lm,1), end: new Date(ly,lm+1,0,23,59,59), label: lb };
+  const lm    = m === 0 ? 11 : m-1;
+  const ly    = m === 0 ? y-1 : y;
+  const label = new Date(ly, lm, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  return { start: new Date(ly, lm, 1), end: new Date(ly, lm+1, 0, 23, 59, 59), label };
 }
 
 // Get all sale events in bounds, each with item reference
 function getRptSales(bounds) {
-  return inventory.flatMap(item =>
+  console.log('Reports: Filtering sales for period:', bounds.label, 'from', bounds.start.toISOString(), 'to', bounds.end.toISOString());
+
+  const allSales = inventory.flatMap(item =>
     (item.sales||[])
-      .filter(sl => { if(!sl.date) return false; const d=new Date(sl.date); return d>=bounds.start && d<=bounds.end; })
+      .filter(sl => {
+        if(!sl.date) {
+          console.log('Reports: Skipping sale with no date:', sl);
+          return false;
+        }
+        const d = new Date(sl.date);
+        const inBounds = d >= bounds.start && d <= bounds.end;
+        if (!inBounds) {
+          console.log('Reports: Sale out of bounds:', sl.date, '->', d.toISOString());
+        }
+        return inBounds;
+      })
       .map(sl => ({ ...sl, item }))
   );
+
+  console.log('Reports: Found', allSales.length, 'sales in period');
+  return allSales;
 }
 
 // Group sales by week or day label for the line chart
@@ -4108,9 +4132,22 @@ function renderReports() {
     ['chart-revenue','chart-category','chart-items'].forEach(id=>{
       if(rptCharts[id]){rptCharts[id].destroy();delete rptCharts[id];}
     });
+
+    // Show helpful empty state messages
+    const emptyMsg = rptPeriod === 'all'
+      ? 'No sales recorded yet — add inventory and mark items as sold to see reports'
+      : `No sales in ${bounds.label.toLowerCase()} — try a different time period or add sales data`;
+
     // Show "no data" overlay on first chart area
     const ctx = document.getElementById('chart-revenue');
-    if(ctx) { const p=ctx.parentElement; p.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;font-family:var(--font-main);">No sales in this period</div>'; }
+    if(ctx) { const p=ctx.parentElement; p.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;font-family:var(--font-main);text-align:center;padding:20px;">${emptyMsg}</div>`; }
+
+    // Clear KPI values
+    document.getElementById('rpt-revenue').textContent = '$0';
+    document.getElementById('rpt-profit').textContent = '$0';
+    document.getElementById('rpt-units').textContent = '0';
+    document.getElementById('rpt-margin').textContent = '0%';
+
     return;
   }
 
