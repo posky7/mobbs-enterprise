@@ -110,11 +110,10 @@ html,body { height:100%; width:100%; overflow:hidden; background:var(--bg); font
 .inv-qty-badge.low { border-color:var(--danger); color:var(--danger); background:#fff0f0; }
 .inv-qty-badge.ok  { border-color:var(--accent2); color:var(--accent2); background:#f0faf6; }
 .category-chip { display:inline-block; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); margin-top:3px; }
-.inv-metrics { display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--border); }
-.inv-metric  { padding:10px 8px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:3px; }
-.inv-metric:last-child { border-right:none; }
-.inv-metric-label { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); }
-.inv-metric-value { font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--text); }
+.inv-metrics { display:flex; border-top:1px solid var(--border); padding:8px 12px; gap:12px; justify-content:space-between; align-items:center; }
+.inv-metric  { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+.inv-metric-label { font-size:8px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); }
+.inv-metric-value { font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--text); text-align:right; }
 .inv-metric-value.highlight { color:var(--accent2); }
 .inv-metric-value.cost      { color:var(--accent3); }
 .inv-metric-value.price     { color:var(--accent); }
@@ -1986,8 +1985,14 @@ function renderSoldList(soldItems) {
       const locationSales = salesByLocation[locationId];
       const totalSoldQty = locationSales.reduce((s, sl) => s + Number(sl.qty), 0);
       const totalRevenue = locationSales.reduce((s, sl) => s + Number(sl.revenue), 0);
+      const totalTransactionFee = locationSales.reduce((s, sl) => s + Number(sl.transactionFee || 0), 0);
+
+      // Calculate net revenue after transaction fee
+      const netRevenue = totalRevenue - totalTransactionFee;
+
+      // Calculate net profit: net revenue - cost - labor
       const totalCostBasis = locationSales.reduce((s, sl) => s + (Number(item.cost) + Number(item.labor)) * Number(sl.qty), 0);
-      const totalProfit = totalRevenue - totalCostBasis;
+      const netProfit = netRevenue - totalCostBasis;
 
       // Filter by location if needed
       if (inventoryLocationFilter !== 'all' && locationId !== inventoryLocationFilter) {
@@ -2001,7 +2006,9 @@ function renderSoldList(soldItems) {
         sales: locationSales,
         totalSoldQty: totalSoldQty,
         totalRevenue: totalRevenue,
-        totalProfit: totalProfit,
+        totalTransactionFee: totalTransactionFee,
+        netRevenue: netRevenue,
+        netProfit: netProfit,
         lastSale: locationSales.sort((a, b) => new Date(b.date) - new Date(a.date))[0]
       });
     });
@@ -2024,11 +2031,7 @@ function renderSoldList(soldItems) {
   if (!soldSectionOpen) return;
 
   list.innerHTML = locationSpecificSales.map(entry => {
-    const { item, locationName, totalSoldQty, totalRevenue, totalProfit, lastSale, sales } = entry;
-
-    // Calculate total transaction fee and margin
-    const totalTransactionFee = sales.reduce((sum, sale) => sum + Number(sale.transactionFee || 0), 0);
-    const margin = totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 100) : 0;
+    const { item, locationName, totalSoldQty, totalRevenue, totalTransactionFee, netRevenue, netProfit, lastSale } = entry;
 
     // Check if item is sold out at this location
     const currentQtyAtLocation = Number((item.inventory?.[entry.locationId]?.qty) || 0);
@@ -2042,8 +2045,8 @@ function renderSoldList(soldItems) {
           <div style="font-size:11px;color:var(--accent);font-weight:600;margin-top:4px;">📍 ${esc(locationName)}</div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:12px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;${totalProfit>=0?'color:var(--accent2);':'color:var(--danger);'}">
-            ${totalProfit>=0?'+':''}${fmt(totalProfit)}
+          <div style="font-size:12px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;${netProfit>=0?'color:var(--accent2);':'color:var(--danger);'}">
+            ${netProfit>=0?'+':''}${fmt(netProfit)}
           </div>
           ${soldOutBadge
             ? `<div style="background:#f0faf6;border:1.5px solid var(--accent2);border-radius:9px;padding:4px 10px;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--accent2);white-space:nowrap;">${totalSoldQty} sold</div>`
@@ -2053,10 +2056,12 @@ function renderSoldList(soldItems) {
         </div>
       </div>
       <div class="inv-metrics">
-        <div class="inv-metric"><div class="inv-metric-label">Sold</div><div class="inv-metric-value price">${totalSoldQty} ${esc(item.unit||'units')}</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(totalRevenue)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(item.cost)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Labor</div><div class="inv-metric-value cost">${fmt(item.labor)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${fmt(totalTransactionFee)}</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value ${margin>=0?'highlight':'cost'}">${margin}%</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Sug.</div><div class="inv-metric-value highlight">${fmt(item.suggestedPrice ?? item.salePrice ?? 0)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(totalRevenue)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Net Profit</div><div class="inv-metric-value ${netProfit>=0?'highlight':'cost'}">${fmt(netProfit)}</div></div>
       </div></div>`;
   }).join('');
 }
