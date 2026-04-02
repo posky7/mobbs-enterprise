@@ -848,7 +848,13 @@ select.form-input option { background:#fff; color:#1a1612; }
         <label class="form-label">Sale Date</label>
         <input class="form-input" type="date" id="sale-date">
       </div>
-      <button class="btn-save" onclick="recordSale()" style="background:linear-gradient(135deg,var(--accent2),#138a5c);">✓ Record Sale</button>
+      <div class="form-group" id="sale-location-group" style="display:none;">
+        <label class="form-label">Location *</label>
+        <select class="form-input" id="sale-location">
+          <option value="">Select location...</option>
+        </select>
+      </div>
+      <button class="btn-save" onclick="recordSale()" id="record-sale-btn" style="background:linear-gradient(135deg,var(--accent2),#138a5c);">✓ Record Sale</button>
 
       <!-- Sale history for this item -->
       <div id="detail-sale-history-wrap" style="margin-top:16px;display:none;">
@@ -2265,6 +2271,48 @@ function renderDetail() {
   document.getElementById('sale-price-override').value=suggested > 0 ? suggested.toFixed(2) : '';
   document.getElementById('sale-date').value=new Date().toISOString().split('T')[0];
 
+  // Populate location selector for multi-location items
+  const locationGroup = document.getElementById('sale-location-group');
+  const locationSelect = document.getElementById('sale-location');
+  const recordSaleBtn = document.getElementById('record-sale-btn');
+
+  // Check if item exists in multiple locations with stock
+  const locationsWithStock = locations.filter(loc =>
+    loc.active && item.inventory && item.inventory[loc.id] && Number(item.inventory[loc.id].qty) > 0
+  );
+
+  if (locationsWithStock.length > 1) {
+    // Show location selector
+    locationGroup.style.display = 'block';
+    locationSelect.innerHTML = '<option value="">Select location...</option>';
+
+    locationsWithStock.forEach(loc => {
+      const qty = Number(item.inventory[loc.id].qty);
+      const option = document.createElement('option');
+      option.value = loc.id;
+      option.textContent = `${loc.name} (${qty} ${item.unit || 'units'})`;
+      locationSelect.appendChild(option);
+    });
+
+    // Clear any previous selection and disable button
+    locationSelect.value = '';
+    recordSaleBtn.disabled = true;
+    recordSaleBtn.style.opacity = '0.5';
+  } else {
+    // Hide location selector for single location items
+    locationGroup.style.display = 'none';
+    locationSelect.value = '';
+    recordSaleBtn.disabled = false;
+    recordSaleBtn.style.opacity = '1';
+  }
+
+  // Add event listener to enable/disable button based on location selection
+  locationSelect.onchange = function() {
+    const isSelected = this.value !== '';
+    recordSaleBtn.disabled = !isSelected;
+    recordSaleBtn.style.opacity = isSelected ? '1' : '0.5';
+  };
+
   // Sale history
   const sales=[...(item.sales||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
   const hw=document.getElementById('detail-sale-history-wrap');
@@ -2302,16 +2350,30 @@ function recordSale() {
   if (!item.inventory) item.inventory = {};
 
   // Determine the location where the sale occurred
-  // Use the first active location with available stock
   let saleLocation = null;
   let availableQty = 0;
-  const activeLocations = locations.filter(loc => loc.active);
-  for (const loc of activeLocations) {
-    const locQty = Number(item.inventory[loc.id]?.qty || 0);
-    if (locQty > 0) {
-      saleLocation = loc.id;
-      availableQty = locQty;
-      break;
+
+  // Check if location selector is visible (multi-location item)
+  const locationGroup = document.getElementById('sale-location-group');
+  if (locationGroup.style.display !== 'none') {
+    // Multi-location item - use selected location
+    saleLocation = document.getElementById('sale-location').value;
+    if (!saleLocation) {
+      showToast('Please select a location for this sale');
+      document.getElementById('sale-location').focus();
+      return;
+    }
+    availableQty = Number(item.inventory[saleLocation]?.qty || 0);
+  } else {
+    // Single location item - use the first active location with available stock
+    const activeLocations = locations.filter(loc => loc.active);
+    for (const loc of activeLocations) {
+      const locQty = Number(item.inventory[loc.id]?.qty || 0);
+      if (locQty > 0) {
+        saleLocation = loc.id;
+        availableQty = locQty;
+        break;
+      }
     }
   }
 
