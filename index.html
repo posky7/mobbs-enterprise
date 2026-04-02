@@ -311,11 +311,11 @@ select.form-input option { background:#fff; color:#1a1612; }
 
 
 
-    <!-- View selector (always visible) -->
-    <div style="padding:12px 16px 0;">
+    <!-- View selector (hidden by default, shown only when not in income statement view) -->
+    <div id="finance-view-controls" style="padding:12px 16px 0; display: none;">
       <div style="margin-top:12px;">
         <label class="form-label" style="margin-bottom:8px;display:block;">View</label>
-        <select class="form-input" id="finance-view-selector" onchange="setFinanceView()" style="max-width:300px;">
+        <select class="form-input" id="finance-view-selector" onchange="setFinanceView()" style="max-width:300px;"></select>
           <option value="income-statement">Income Statement</option>
           <option value="pnl">P&L</option>
           <option value="inventory-summary">Inventory Summary</option>
@@ -2467,6 +2467,7 @@ function setFinanceView() {
   const select = document.getElementById('finance-view-selector');
   const view = select.value;
 
+  const financeViewControls = document.getElementById('finance-view-controls');
   const incomeStatementSection = document.getElementById('income-statement-section');
   const pnlSection = document.getElementById('pnl-section');
   const pnlControlsContainer = document.getElementById('pnl-controls-container');
@@ -2476,6 +2477,8 @@ function setFinanceView() {
   const individualSalesControls = document.getElementById('individual-sales-controls');
 
   if (view === 'income-statement') {
+    // Hide view selector for default income statement view
+    financeViewControls.style.display = 'none';
     incomeStatementSection.style.display = 'block';
     pnlSection.style.display = 'none';
     pnlControlsContainer.style.display = 'none';
@@ -2484,36 +2487,40 @@ function setFinanceView() {
     individualSalesSection.style.display = 'none';
     individualSalesControls.style.display = 'none';
     renderIncomeStatement();
-  } else if (view === 'pnl') {
-    incomeStatementSection.style.display = 'none';
-    pnlSection.style.display = 'block';
-    pnlControlsContainer.style.display = 'block';
-    inventorySummarySection.style.display = 'none';
-    inventorySummaryControls.style.display = 'none';
-    individualSalesSection.style.display = 'none';
-    individualSalesControls.style.display = 'none';
-    populatePnLLocationFilter();
-    renderPnL();
-  } else if (view === 'inventory-summary') {
-    incomeStatementSection.style.display = 'none';
-    pnlSection.style.display = 'none';
-    pnlControlsContainer.style.display = 'none';
-    inventorySummarySection.style.display = 'block';
-    inventorySummaryControls.style.display = 'block';
-    individualSalesSection.style.display = 'none';
-    individualSalesControls.style.display = 'none';
-    populateInventorySummaryLocationFilter();
-    renderInventorySummary();
-  } else if (view === 'individual-sales') {
-    incomeStatementSection.style.display = 'none';
-    pnlSection.style.display = 'none';
-    pnlControlsContainer.style.display = 'none';
-    inventorySummarySection.style.display = 'none';
-    inventorySummaryControls.style.display = 'none';
-    individualSalesSection.style.display = 'block';
-    individualSalesControls.style.display = 'block';
-    populateIndividualSalesLocationFilter();
-    renderIndividualSales();
+  } else {
+    // Show view selector for other views
+    financeViewControls.style.display = 'block';
+    if (view === 'pnl') {
+      incomeStatementSection.style.display = 'none';
+      pnlSection.style.display = 'block';
+      pnlControlsContainer.style.display = 'block';
+      inventorySummarySection.style.display = 'none';
+      inventorySummaryControls.style.display = 'none';
+      individualSalesSection.style.display = 'none';
+      individualSalesControls.style.display = 'none';
+      populatePnLLocationFilter();
+      renderPnL();
+    } else if (view === 'inventory-summary') {
+      incomeStatementSection.style.display = 'none';
+      pnlSection.style.display = 'none';
+      pnlControlsContainer.style.display = 'none';
+      inventorySummarySection.style.display = 'block';
+      inventorySummaryControls.style.display = 'block';
+      individualSalesSection.style.display = 'none';
+      individualSalesControls.style.display = 'none';
+      populateInventorySummaryLocationFilter();
+      renderInventorySummary();
+    } else if (view === 'individual-sales') {
+      incomeStatementSection.style.display = 'none';
+      pnlSection.style.display = 'none';
+      pnlControlsContainer.style.display = 'none';
+      inventorySummarySection.style.display = 'none';
+      inventorySummaryControls.style.display = 'none';
+      individualSalesSection.style.display = 'block';
+      individualSalesControls.style.display = 'block';
+      populateIndividualSalesLocationFilter();
+      renderIndividualSales();
+    }
   }
 }
 
