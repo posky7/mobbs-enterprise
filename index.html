@@ -3996,9 +3996,10 @@ function groupSalesByTime(sales, bounds) {
       const mon = new Date(d); mon.setDate(diff);
       key = 'Wk '+mon.toLocaleDateString('en-US',{month:'short',day:'numeric'});
     }
-    if (!buckets[key]) buckets[key] = { revenue:0, profit:0 };
+    if (!buckets[key]) buckets[key] = { revenue:0, profit:0, fees:0 };
     buckets[key].revenue += Number(sl.revenue);
     buckets[key].profit  += Number(sl.profit);
+    buckets[key].fees    += Number(sl.transactionFee || 0);
   });
 
   // Sort chronologically by first date seen in each bucket
@@ -4017,7 +4018,12 @@ function groupSalesByTime(sales, bounds) {
     if (!orderedKeys.includes(key)) orderedKeys.push(key);
   });
 
-  return { labels: orderedKeys, revenue: orderedKeys.map(k=>buckets[k].revenue), profit: orderedKeys.map(k=>buckets[k].profit) };
+  return {
+    labels: orderedKeys,
+    revenue: orderedKeys.map(k=>buckets[k].revenue),
+    profit: orderedKeys.map(k=>buckets[k].profit),
+    fees: orderedKeys.map(k=>buckets[k].fees)
+  };
 }
 
 // Chart.js defaults — warm light palette
@@ -4054,9 +4060,11 @@ function renderReports() {
 
   // KPIs
   const revenue = sales.reduce((s,sl)=>s+Number(sl.revenue), 0);
+  const fees    = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
+  const netRevenue = revenue - fees;
   const profit  = sales.reduce((s,sl)=>s+Number(sl.profit),  0);
   const units   = sales.reduce((s,sl)=>s+Number(sl.qty),     0);
-  const margin  = revenue>0 ? Math.round((profit/revenue)*100) : 0;
+  const margin  = netRevenue>0 ? Math.round((profit/netRevenue)*100) : 0;
 
   document.getElementById('rpt-revenue').textContent = fmtK(revenue);
   document.getElementById('rpt-profit').textContent  = fmtK(profit);
@@ -4146,14 +4154,24 @@ function renderReports() {
   const expProjected = expOccurrences ? expPaid : monthlyExpActive; // fallback
   const loanPaidAmt  = loans.reduce((s,l)=>s+loanPaid(l),0);
 
+  // Calculate fees paid and projected
+  const feesPaid = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
+  const feesProjected = inStock.reduce((s,i)=>{
+    const primaryLocationId = getItemPrimaryLocation(i);
+    const location = locations.find(l => l.id === primaryLocationId);
+    const transactionFeePercent = location?.transactionFeePercent || 0;
+    const projectedFee = sp(i) * getItemQty(i) * (transactionFeePercent / 100);
+    return s + projectedFee;
+  }, 0);
+
   makeChart('chart-exp',{
     type:'bar',
     data:{
-      labels:['Revenue','Profit','Exp Paid','Exp Projected','Loan Payments'],
+      labels:['Revenue','Profit','Exp Paid','Exp Projected','Fees Paid','Fees Projected','Loan Payments'],
       datasets:[{
-        data:[revenue, profit, expPaid, expProjected, loanPaidAmt],
-        backgroundColor:[CHART_COLORS.greenFill, CHART_COLORS.purpleFill, CHART_COLORS.orangeFill, CHART_COLORS.orangeFill, CHART_COLORS.redFill],
-        borderColor:   [CHART_COLORS.green,      CHART_COLORS.purple,     CHART_COLORS.orange,     CHART_COLORS.orange,     CHART_COLORS.red],
+        data:[revenue, profit, expPaid, expProjected, feesPaid, feesProjected, loanPaidAmt],
+        backgroundColor:[CHART_COLORS.greenFill, CHART_COLORS.purpleFill, CHART_COLORS.orangeFill, CHART_COLORS.orangeFill, CHART_COLORS.redFill, CHART_COLORS.redFill, CHART_COLORS.redFill],
+        borderColor:   [CHART_COLORS.green,      CHART_COLORS.purple,     CHART_COLORS.orange,     CHART_COLORS.orange,     CHART_COLORS.red,      CHART_COLORS.red,      CHART_COLORS.red],
         borderWidth:1.5, borderRadius:4,
       }],
     },
