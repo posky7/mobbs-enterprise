@@ -272,7 +272,7 @@ select.form-input option { background:#fff; color:#1a1612; }
     </div>
     <!-- Location filter -->
     <div style="padding:12px 16px 0;">
-      <div style="margin-bottom:12px;">
+      <div style="margin-bottom:12px;text-align:center;">
         <label class="form-label" style="margin-bottom:8px;display:block;">Location</label>
         <select class="form-input" id="inventory-location-filter" onchange="setInventoryLocationFilter()" style="max-width:300px;">
           <option value="all">All Locations</option>
@@ -281,7 +281,7 @@ select.form-input option { background:#fff; color:#1a1612; }
     </div>
 
 
-    <div class="section-header"><div class="section-title">Items</div><div style="display:flex;gap:8px;"><button class="btn-add" onclick="openMoveInventoryModal()">📦 Move Inventory</button><button class="btn-add" onclick="openAddModal()">＋ Add Item</button></div></div>
+    <div class="section-header"><div style="display:flex;gap:8px;"><button class="btn-add" onclick="openMoveInventoryModal()">📦 Move Inventory</button><button class="btn-add" onclick="openAddModal()">＋ Add Item</button></div></div>
     <div class="search-wrap"><input class="search-input" type="search" placeholder="Search inventory…" id="search-box" oninput="renderList()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
 
     <div class="inv-list" id="inv-list"></div>
