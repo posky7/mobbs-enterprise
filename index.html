@@ -1000,6 +1000,62 @@ let loans = [];
 let currentLoanId = null, currentDetailId = null, currentLocationId = 'storage';
 let inventoryLocationFilter = 'all';
 
+// ── Global Utility Functions ──────────────────────────────────
+// Shared calculation utilities for P&L and Reports
+function getSuggestedPrice(item) {
+  return Number(item.suggestedPrice ?? item.salePrice ?? 0);
+}
+
+// Parse YYYY-MM-DD date string as local midnight (not UTC midnight)
+function parseLocalDate(dateString) {
+  if (!dateString) return null;
+  // Split YYYY-MM-DD and create date at local midnight
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day); // month is 0-based in Date constructor
+}
+
+function getItemQuantity(item, locationFilter) {
+  if (locationFilter === 'all') return Number(item.totalQty || 0);
+  return item.inventory && item.inventory[locationFilter] ? Number(item.inventory[locationFilter].qty) : 0;
+}
+
+function getInStockItems(locationFilter) {
+  return inventory.filter(i => {
+    if (locationFilter === 'all') return Number(i.totalQty || 0) > 0;
+    // For specific location, check if item has inventory at that location with qty > 0
+    return i.inventory && i.inventory[locationFilter] && Number(i.inventory[locationFilter].qty) > 0;
+  });
+}
+
+function filterItemsByLocation(items, locationFilter) {
+  if (locationFilter === 'all') return items;
+  return items.filter(item => {
+    if (!item.inventory) return false;
+    return item.inventory[locationFilter] && Number(item.inventory[locationFilter].qty) > 0;
+  });
+}
+
+function filterSalesByLocation(sales, locationFilter) {
+  if (locationFilter === 'all') return sales;
+  return sales.filter(sale => {
+    // Find the item and check if it has inventory at the selected location
+    const item = inventory.find(i => i.id === sale.item.id);
+    if (!item || !item.inventory) return false;
+    return item.inventory[locationFilter] && Number(item.inventory[locationFilter].qty) >= 0;
+  });
+}
+
+function calculateProjectedFees(inventory, locationFilter) {
+  const inStock = getInStockItems(locationFilter);
+  return inStock.reduce((s, i) => {
+    const primaryLocationId = getItemPrimaryLocation(i);
+    const location = locations.find(l => l.id === primaryLocationId);
+    const transactionFeePercent = location?.transactionFeePercent || 0;
+    const projectedFee = getSuggestedPrice(i) * getItemQuantity(i, locationFilter) * (transactionFeePercent / 100);
+    return s + projectedFee;
+  }, 0);
+}
+
 // ── API helpers ──────────────────────────────────────────────
 const getApiBaseUrl = () => {
   const hostname = window.location.hostname;
@@ -3131,46 +3187,13 @@ function renderPnL() {
 
   const bounds = getPeriodBounds();
 
-  // suggestedPrice helper with backward compat
-  const sp = i => Number(i.suggestedPrice ?? i.salePrice ?? 0);
+  // Use global utility functions for calculations
 
-  // Filter items by location for calculations
-  const filterItemsByLocation = (items) => {
-    if (pnlLocationFilter === 'all') return items;
-    return items.filter(item => {
-      if (!item.inventory) return false;
-      return item.inventory[pnlLocationFilter] && Number(item.inventory[pnlLocationFilter].qty) > 0;
-    });
-  };
-
-  // Filter sales by location - determine location based on item's current inventory location
-  const filterSalesByLocation = (sales) => {
-    if (pnlLocationFilter === 'all') return sales;
-    return sales.filter(sale => {
-      // Find the item and check if it has inventory at the selected location
-      const item = inventory.find(i => i.id === sale.item.id);
-      if (!item || !item.inventory) return false;
-      return item.inventory[pnlLocationFilter] && Number(item.inventory[pnlLocationFilter].qty) >= 0;
-    });
-  };
-
-  // Projected (in-stock items only, period-independent, filtered by location)
-  const inStock = inventory.filter(i => {
-    if (pnlLocationFilter === 'all') return Number(i.totalQty || 0) > 0;
-    // For specific location, check if item has inventory at that location with qty > 0
-    return i.inventory && i.inventory[pnlLocationFilter] && Number(i.inventory[pnlLocationFilter].qty) > 0;
-  });
-
-  // Calculate quantities correctly based on location filter
-  const getItemQty = (item) => {
-    if (pnlLocationFilter === 'all') return Number(item.totalQty || 0);
-    return item.inventory && item.inventory[pnlLocationFilter] ? Number(item.inventory[pnlLocationFilter].qty) : 0;
-  };
-
-  const totCost = inStock.reduce((a,i)=>a+(Number(i.cost)+Number(i.labor))*getItemQty(i), 0);
-  const totSugg = inStock.reduce((a,i)=>a+sp(i)*getItemQty(i), 0);
-  const labor   = inStock.reduce((a,i)=>a+Number(i.labor)*getItemQty(i), 0);
-  const raw     = inStock.reduce((a,i)=>a+Number(i.cost)*getItemQty(i), 0);
+  const inStock = getInStockItems(pnlLocationFilter);
+  const totCost = inStock.reduce((a,i)=>a+(Number(i.cost)+Number(i.labor))*getItemQuantity(i, pnlLocationFilter), 0);
+  const totSugg = inStock.reduce((a,i)=>a+getSuggestedPrice(i)*getItemQuantity(i, pnlLocationFilter), 0);
+  const labor   = inStock.reduce((a,i)=>a+Number(i.labor)*getItemQuantity(i, pnlLocationFilter), 0);
+  const raw     = inStock.reduce((a,i)=>a+Number(i.cost)*getItemQuantity(i, pnlLocationFilter), 0);
   const gross   = totSugg - totCost;
   const margin  = totSugg > 0 ? (gross/totSugg*100).toFixed(1) : 0;
 
@@ -3988,7 +4011,7 @@ function getRptSales(bounds) {
           console.log('Reports: Skipping sale with no date:', sl);
           return false;
         }
-        const d = new Date(sl.date);
+        const d = parseLocalDate(sl.date);
         const inBounds = d >= bounds.start && d <= bounds.end;
         if (!inBounds) {
           console.log('Reports: Sale out of bounds:', sl.date, '->', d.toISOString());
@@ -4071,10 +4094,33 @@ function chartDefaults() {
 }
 
 function makeChart(id, config) {
-  if (rptCharts[id]) { rptCharts[id].destroy(); delete rptCharts[id]; }
-  const ctx = document.getElementById(id);
-  if (!ctx) return;
-  rptCharts[id] = new Chart(ctx, config);
+  try {
+    // Clean up existing chart
+    if (rptCharts[id]) {
+      rptCharts[id].destroy();
+      delete rptCharts[id];
+    }
+
+    const ctx = document.getElementById(id);
+    if (!ctx) {
+      console.warn(`Chart canvas ${id} not found`);
+      return;
+    }
+
+    // Create new chart with error handling
+    rptCharts[id] = new Chart(ctx, config);
+  } catch (error) {
+    console.error(`Failed to create chart ${id}:`, error);
+    // Clean up on failure
+    if (rptCharts[id]) {
+      try {
+        rptCharts[id].destroy();
+      } catch (destroyError) {
+        console.error(`Failed to destroy chart ${id}:`, destroyError);
+      }
+      delete rptCharts[id];
+    }
+  }
 }
 
 function renderReports() {
@@ -4093,7 +4139,7 @@ function renderReports() {
     return s + expCostInPeriod(e, bounds);
   }, 0);
   const monthlyExpActive = expenses.filter(e=>e.status==='Active'&&e.frequency!=='One-Time').reduce((s,e)=>s+expMonthly(e),0);
-  const expProjected = expOccurrences ? expPaid : monthlyExpActive; // fallback
+  const expProjected = expPaid > 0 ? expPaid : monthlyExpActive; // fallback
   const loanPaidAmt  = loans.reduce((s,l)=>s+loanPaid(l),0);
 
   // Calculate fees paid and projected (these depend on sales/inventory data)
@@ -4138,9 +4184,28 @@ function renderReports() {
       ? 'No sales recorded yet — add inventory and mark items as sold to see reports'
       : `No sales in ${bounds.label.toLowerCase()} — try a different time period or add sales data`;
 
-    // Show "no data" overlay on first chart area
-    const ctx = document.getElementById('chart-revenue');
-    if(ctx) { const p=ctx.parentElement; p.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;font-family:var(--font-main);text-align:center;padding:20px;">${emptyMsg}</div>`; }
+    // Hide charts and show empty state overlay instead of destroying canvas
+    const chartContainers = ['chart-revenue','chart-category','chart-items'];
+    chartContainers.forEach(id => {
+      const container = document.getElementById(id)?.parentElement;
+      if (container) {
+        // Hide the canvas
+        const canvas = document.getElementById(id);
+        if (canvas) canvas.style.display = 'none';
+
+        // Create or update empty state overlay
+        let overlay = container.querySelector('.chart-empty-state');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.className = 'chart-empty-state';
+          overlay.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;font-family:var(--font-main);text-align:center;padding:20px;position:absolute;top:0;left:0;right:0;bottom:0;background:var(--surface);border-radius:var(--radius);z-index:10;';
+          container.style.position = 'relative';
+          container.appendChild(overlay);
+        }
+        overlay.textContent = emptyMsg;
+        overlay.style.display = 'flex';
+      }
+    });
 
     // Clear KPI values
     document.getElementById('rpt-revenue').textContent = '$0';
@@ -4150,6 +4215,21 @@ function renderReports() {
 
     return;
   }
+
+  // If we have sales data, make sure charts are visible and empty states are hidden
+  const chartContainers = ['chart-revenue','chart-category','chart-items'];
+  chartContainers.forEach(id => {
+    const container = document.getElementById(id)?.parentElement;
+    if (container) {
+      // Show the canvas
+      const canvas = document.getElementById(id);
+      if (canvas) canvas.style.display = 'block';
+
+      // Hide empty state overlay
+      const overlay = container.querySelector('.chart-empty-state');
+      if (overlay) overlay.style.display = 'none';
+    }
+  });
 
   // KPIs (only calculated when there are sales)
   const fees    = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
