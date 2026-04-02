@@ -1994,9 +1994,11 @@ function renderSoldList(soldItems) {
       const totalCostBasis = locationSales.reduce((s, sl) => s + (Number(item.cost) + Number(item.labor)) * Number(sl.qty), 0);
       const netProfit = netRevenue - totalCostBasis;
 
-      // Calculate margin %: (Net Profit / Suggested Price) × 100
+      // Calculate margin %: (Net Profit / Effective Revenue) × 100
+      // Effective revenue = suggested price after transaction fee
       const suggestedPrice = Number(item.suggestedPrice ?? item.salePrice ?? 0);
-      const marginPercent = suggestedPrice > 0 ? Math.round((netProfit / suggestedPrice) * 100) : 0;
+      const effectiveRevenue = suggestedPrice * (1 - (transactionFeePercent / 100));
+      const marginPercent = effectiveRevenue > 0 ? Math.round((netProfit / effectiveRevenue) * 100) : 0;
 
       // Filter by location if needed
       if (inventoryLocationFilter !== 'all' && locationId !== inventoryLocationFilter) {
