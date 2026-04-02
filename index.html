@@ -3258,7 +3258,7 @@ function renderPnL() {
     }
 
     d.cost += (Number(item.cost)+Number(item.labor))*itemQty;
-    d.sugg += sp(item)*itemQty;
+    d.sugg += getSuggestedPrice(item)*itemQty;
     d.qty  += itemQty;
 
   // Filter sales by period and location
