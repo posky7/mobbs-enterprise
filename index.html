@@ -2479,41 +2479,30 @@ function setFinanceView() {
   // Always show view selector for navigation between finance views
   financeViewControls.style.display = 'block';
 
+  // First, hide all sections and controls
+  incomeStatementSection.style.display = 'none';
+  pnlSection.style.display = 'none';
+  pnlControlsContainer.style.display = 'none';
+  inventorySummarySection.style.display = 'none';
+  inventorySummaryControls.style.display = 'none';
+  individualSalesSection.style.display = 'none';
+  individualSalesControls.style.display = 'none';
+
+  // Then show only the selected view
   if (view === 'income-statement') {
     incomeStatementSection.style.display = 'block';
-    pnlSection.style.display = 'none';
-    pnlControlsContainer.style.display = 'none';
-    inventorySummarySection.style.display = 'none';
-    inventorySummaryControls.style.display = 'none';
-    individualSalesSection.style.display = 'none';
-    individualSalesControls.style.display = 'none';
     renderIncomeStatement();
   } else if (view === 'pnl') {
-    incomeStatementSection.style.display = 'none';
     pnlSection.style.display = 'block';
     pnlControlsContainer.style.display = 'block';
-    inventorySummarySection.style.display = 'none';
-    inventorySummaryControls.style.display = 'none';
-    individualSalesSection.style.display = 'none';
-    individualSalesControls.style.display = 'none';
     populatePnLLocationFilter();
     renderPnL();
   } else if (view === 'inventory-summary') {
-    incomeStatementSection.style.display = 'none';
-    pnlSection.style.display = 'none';
-    pnlControlsContainer.style.display = 'none';
     inventorySummarySection.style.display = 'block';
     inventorySummaryControls.style.display = 'block';
-    individualSalesSection.style.display = 'none';
-    individualSalesControls.style.display = 'none';
     populateInventorySummaryLocationFilter();
     renderInventorySummary();
   } else if (view === 'individual-sales') {
-    incomeStatementSection.style.display = 'none';
-    pnlSection.style.display = 'none';
-    pnlControlsContainer.style.display = 'none';
-    inventorySummarySection.style.display = 'none';
-    inventorySummaryControls.style.display = 'none';
     individualSalesSection.style.display = 'block';
     individualSalesControls.style.display = 'block';
     populateIndividualSalesLocationFilter();
