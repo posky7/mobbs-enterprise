@@ -1994,6 +1994,10 @@ function renderSoldList(soldItems) {
       const totalCostBasis = locationSales.reduce((s, sl) => s + (Number(item.cost) + Number(item.labor)) * Number(sl.qty), 0);
       const netProfit = netRevenue - totalCostBasis;
 
+      // Calculate margin %: (Net Profit / Suggested Price) × 100
+      const suggestedPrice = Number(item.suggestedPrice ?? item.salePrice ?? 0);
+      const marginPercent = suggestedPrice > 0 ? Math.round((netProfit / suggestedPrice) * 100) : 0;
+
       // Filter by location if needed
       if (inventoryLocationFilter !== 'all' && locationId !== inventoryLocationFilter) {
         return;
@@ -2009,6 +2013,7 @@ function renderSoldList(soldItems) {
         totalTransactionFee: totalTransactionFee,
         netRevenue: netRevenue,
         netProfit: netProfit,
+        marginPercent: marginPercent,
         lastSale: locationSales.sort((a, b) => new Date(b.date) - new Date(a.date))[0]
       });
     });
@@ -2062,6 +2067,7 @@ function renderSoldList(soldItems) {
         <div class="inv-metric"><div class="inv-metric-label">Sug.</div><div class="inv-metric-value highlight">${fmt(item.suggestedPrice ?? item.salePrice ?? 0)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(totalRevenue)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Net Profit</div><div class="inv-metric-value ${netProfit>=0?'highlight':'cost'}">${fmt(netProfit)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value price">${entry.marginPercent}%</div></div>
       </div></div>`;
   }).join('');
 }
