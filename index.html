@@ -4091,6 +4091,7 @@ function renderReports() {
       datasets: [
         { label:'Revenue', data: timeData.revenue, borderColor: CHART_COLORS.green,  backgroundColor: CHART_COLORS.greenFill,  fill:true, tension:.35, pointRadius:3, pointBackgroundColor: CHART_COLORS.green },
         { label:'Profit',  data: timeData.profit,  borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleFill, fill:true, tension:.35, pointRadius:3, pointBackgroundColor: CHART_COLORS.purple },
+        { label:'Fees',    data: timeData.fees,    borderColor: CHART_COLORS.red,    backgroundColor: CHART_COLORS.redFill,    fill:true, tension:.35, pointRadius:3, pointBackgroundColor: CHART_COLORS.red },
       ],
     },
     options: chartDefaults(),
