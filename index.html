@@ -2440,9 +2440,9 @@ function recordSale() {
     return;
   }
 
-  const costEach=Number(item.cost)+Number(item.labor);
-  const revenue=qty*priceEach;
-  const profit=revenue-(qty*costEach);
+   const costEach=Number(item.cost)+Number(item.labor);
+   const revenue=qty*priceEach;
+   const profit=(revenue-transactionFee)-(qty*costEach);
 
   // Calculate transaction fee for this sale
   const location = locations.find(l => l.id === saleLocation);
