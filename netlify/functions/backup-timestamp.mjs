@@ -1,43 +1,42 @@
 import { getBackupTimestamp, setBackupTimestamp } from './_blob-storage.mjs';
 
-export default async function handler(event) {
-  const httpMethod = event.httpMethod;
+export const config = { runtime: 'nodejs' };
+
+export default async function handler(req) {
+  const httpMethod = req.method;
 
   try {
     if (httpMethod === 'GET') {
       const ts = await getBackupTimestamp();
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timestamp: ts })
-      };
+      return new Response(JSON.stringify({ timestamp: ts }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (httpMethod === 'PUT' || httpMethod === 'POST') {
-      const { timestamp } = JSON.parse(event.body || '{}');
+      const body = await req.text();
+      const { timestamp } = JSON.parse(body || '{}');
       await setBackupTimestamp(timestamp || new Date().toLocaleString());
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true })
-      };
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    return {
-      statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('Backup timestamp error:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'Internal server error',
-        details: error.message 
-      })
-    };
+    return new Response(JSON.stringify({
+      error: 'Internal server error',
+      details: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
