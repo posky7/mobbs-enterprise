@@ -4058,19 +4058,6 @@ function renderReports() {
   const bounds = getRptBounds();
   const sales  = getRptSales(bounds);
 
-  // KPIs
-  const revenue = sales.reduce((s,sl)=>s+Number(sl.revenue), 0);
-  const fees    = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
-  const netRevenue = revenue - fees;
-  const profit  = sales.reduce((s,sl)=>s+Number(sl.profit),  0);
-  const units   = sales.reduce((s,sl)=>s+Number(sl.qty),     0);
-  const margin  = netRevenue>0 ? Math.round((profit/netRevenue)*100) : 0;
-
-  document.getElementById('rpt-revenue').textContent = fmtK(revenue);
-  document.getElementById('rpt-profit').textContent  = fmtK(profit);
-  document.getElementById('rpt-units').textContent   = units;
-  document.getElementById('rpt-margin').textContent  = margin+'%';
-
   // ── Chart 4: Revenue vs Expenses (grouped bar) ────────────
   // This chart should always show, even with no sales data
   const expPaid = expenses.reduce((s,e)=>{
@@ -4085,7 +4072,7 @@ function renderReports() {
   const expProjected = expOccurrences ? expPaid : monthlyExpActive; // fallback
   const loanPaidAmt  = loans.reduce((s,l)=>s+loanPaid(l),0);
 
-  // Calculate fees paid and projected
+  // Calculate fees paid and projected (these depend on sales/inventory data)
   const feesPaid = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
   const feesProjected = inStock.reduce((s,i)=>{
     const primaryLocationId = getItemPrimaryLocation(i);
@@ -4094,6 +4081,10 @@ function renderReports() {
     const projectedFee = sp(i) * getItemQty(i) * (transactionFeePercent / 100);
     return s + projectedFee;
   }, 0);
+
+  // Revenue and profit calculations (0 when no sales)
+  const revenue = sales.reduce((s,sl)=>s+Number(sl.revenue), 0);
+  const profit  = sales.reduce((s,sl)=>s+Number(sl.profit),  0);
 
   makeChart('chart-exp',{
     type:'bar',
@@ -4122,6 +4113,17 @@ function renderReports() {
     if(ctx) { const p=ctx.parentElement; p.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;font-family:var(--font-main);">No sales in this period</div>'; }
     return;
   }
+
+  // KPIs (only calculated when there are sales)
+  const fees    = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
+  const netRevenue = revenue - fees;
+  const units   = sales.reduce((s,sl)=>s+Number(sl.qty),     0);
+  const margin  = netRevenue>0 ? Math.round((profit/netRevenue)*100) : 0;
+
+  document.getElementById('rpt-revenue').textContent = fmtK(revenue);
+  document.getElementById('rpt-profit').textContent  = fmtK(profit);
+  document.getElementById('rpt-units').textContent   = units;
+  document.getElementById('rpt-margin').textContent  = margin+'%';
 
   // ── Chart 1: Revenue & Profit over time ──────────────────
   const timeData = groupSalesByTime(sales, bounds);
