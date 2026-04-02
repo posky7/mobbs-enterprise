@@ -2063,10 +2063,9 @@ function renderSoldList(soldItems) {
       <div class="inv-metrics">
         <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(item.cost)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Labor</div><div class="inv-metric-value cost">${fmt(item.labor)}</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${fmt(totalTransactionFee)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${entry.transactionFeePercent || 0}%</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Sug.</div><div class="inv-metric-value highlight">${fmt(item.suggestedPrice ?? item.salePrice ?? 0)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(totalRevenue)}</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Net Profit</div><div class="inv-metric-value ${netProfit>=0?'highlight':'cost'}">${fmt(netProfit)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value price">${entry.marginPercent}%</div></div>
       </div></div>`;
   }).join('');
