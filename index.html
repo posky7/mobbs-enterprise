@@ -2488,6 +2488,9 @@ function setFinanceView() {
   individualSalesSection.style.display = 'none';
   individualSalesControls.style.display = 'none';
 
+  // Clear content from all sections to prevent content leakage
+  document.getElementById('individual-sales-list').innerHTML = '';
+
   // Then show only the selected view
   if (view === 'income-statement') {
     incomeStatementSection.style.display = 'block';
