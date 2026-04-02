@@ -110,11 +110,9 @@ html,body { height:100%; width:100%; overflow:hidden; background:var(--bg); font
 .inv-qty-badge.low { border-color:var(--danger); color:var(--danger); background:#fff0f0; }
 .inv-qty-badge.ok  { border-color:var(--accent2); color:var(--accent2); background:#f0faf6; }
 .category-chip { display:inline-block; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); margin-top:3px; }
-.inv-metrics { display:grid; grid-template-columns:1fr 1fr; border-top:1px solid var(--border); gap:12px; }
-.inv-metric  { padding:8px 0; display:flex; flex-direction:column; gap:2px; }
-.inv-metric-group { display:flex; flex-direction:column; gap:6px; }
-.inv-metric-group:first-child { border-right:1px solid var(--border); padding-right:12px; }
-.inv-metric-group:last-child { padding-left:12px; }
+.inv-metrics { display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--border); }
+.inv-metric  { padding:10px 8px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:3px; }
+.inv-metric:last-child { border-right:none; }
 .inv-metric-label { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); }
 .inv-metric-value { font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--text); }
 .inv-metric-value.highlight { color:var(--accent2); }
@@ -1953,15 +1951,11 @@ function buildItemCard(item) {
     ${locationBreakdown ? `<div style="font-size:11px;color:var(--text3);padding:0 14px 8px;margin-top:-4px;">${esc(locationBreakdown)}</div>` : ''}
     <div class="margin-bar"><div class="margin-fill" style="width:${Math.min(100,Math.max(0,adjustedMargin))}%"></div></div>
     <div class="inv-metrics">
-      <div class="inv-metric-group">
-        <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(item.cost)}</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Labor</div><div class="inv-metric-value cost">${fmt(item.labor)}</div></div>
-      </div>
-      <div class="inv-metric-group">
-        <div class="inv-metric"><div class="inv-metric-label">Sug.</div><div class="inv-metric-value highlight">${fmt(suggested)}</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${transactionFeePercent}%</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value price">${adjustedMargin}%</div></div>
-      </div>
+      <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(item.cost)}</div></div>
+      <div class="inv-metric"><div class="inv-metric-label">Labor</div><div class="inv-metric-value cost">${fmt(item.labor)}</div></div>
+      <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${transactionFeePercent}%</div></div>
+      <div class="inv-metric"><div class="inv-metric-label">Sug.</div><div class="inv-metric-value highlight">${fmt(suggested)}</div></div>
+      <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value price">${adjustedMargin}%</div></div>
     </div></div>`;
 }
 
@@ -2710,14 +2704,10 @@ function renderIndividualSales() {
           </div>
         </div>
       <div class="inv-metrics">
-        <div class="inv-metric-group">
-          <div class="inv-metric"><div class="inv-metric-label">Sold</div><div class="inv-metric-value price">${sale.qty} ${esc(sale.item.unit||'units')}</div></div>
-          <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(sale.revenue)}</div></div>
-        </div>
-        <div class="inv-metric-group">
-          <div class="inv-metric"><div class="inv-metric-label">Sug.</div><div class="inv-metric-value highlight">${fmt(sale.item.suggestedPrice ?? sale.item.salePrice ?? 0)}</div></div>
-          <div class="inv-metric"><div class="inv-metric-label">Profit</div><div class="inv-metric-value ${sale.profit>=0?'highlight':'cost'}">${fmt(sale.profit)}</div></div>
-        </div>
+        <div class="inv-metric"><div class="inv-metric-label">Sold</div><div class="inv-metric-value price">${sale.qty} ${esc(sale.item.unit||'units')}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(sale.revenue)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${transactionFeePercent}%</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Profit</div><div class="inv-metric-value ${sale.profit>=0?'highlight':'cost'}">${fmt(sale.profit)}</div></div>
       </div>
       </div>
     `;
