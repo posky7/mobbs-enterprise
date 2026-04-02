@@ -4142,15 +4142,16 @@ function renderReports() {
   const expProjected = expPaid > 0 ? expPaid : monthlyExpActive; // fallback
   const loanPaidAmt  = loans.reduce((s,l)=>s+loanPaid(l),0);
 
-  // Calculate fees paid and projected (these depend on sales/inventory data)
-  const feesPaid = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
-  const feesProjected = inStock.reduce((s,i)=>{
-    const primaryLocationId = getItemPrimaryLocation(i);
-    const location = locations.find(l => l.id === primaryLocationId);
-    const transactionFeePercent = location?.transactionFeePercent || 0;
-    const projectedFee = sp(i) * getItemQty(i) * (transactionFeePercent / 100);
-    return s + projectedFee;
-  }, 0);
+   // Calculate fees paid and projected (these depend on sales/inventory data)
+   const feesPaid = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
+   const inStock = getInStockItems('all');
+   const feesProjected = inStock.reduce((s,i)=>{
+     const primaryLocationId = getItemPrimaryLocation(i);
+     const location = locations.find(l => l.id === primaryLocationId);
+     const transactionFeePercent = location?.transactionFeePercent || 0;
+     const projectedFee = getSuggestedPrice(i) * getItemQuantity(i, 'all') * (transactionFeePercent / 100);
+     return s + projectedFee;
+   }, 0);
 
   // Revenue and profit calculations (0 when no sales)
   const revenue = sales.reduce((s,sl)=>s+Number(sl.revenue), 0);
