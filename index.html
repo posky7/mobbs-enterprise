@@ -2444,9 +2444,11 @@ function adjustQty(d) {
 }
 function editCurrentItem() { closeModal('modal-detail'); setTimeout(()=>openEditModal(currentDetailId),180); }
 
-// ── P&L Period & Location ───────────────────────────────────
+// ── Finance Period & Location State ───────────────────────────────────
 let pnlPeriod = 'ytd';
 let pnlLocationFilter = 'all';
+let incomeStatementPeriod = 'ytd'; // Separate period for Income Statement
+let incomeStatementLocationFilter = 'all'; // Separate location filter for Income Statement
 
 function setPnLPeriod(p) {
   pnlPeriod = p;
@@ -2765,6 +2767,16 @@ function renderIndividualSales() {
     const profitColor = sale.profit >= 0 ? 'var(--accent2)' : 'var(--danger)';
     const profitSign = sale.profit >= 0 ? '+' : '';
 
+    // Calculate metrics for this sale
+    const item = sale.item;
+    const suggested = Number(item.suggestedPrice ?? item.salePrice ?? 0);
+    const location = locations.find(l => l.id === sale.location);
+    const transactionFeePercent = location?.transactionFeePercent || 0;
+    const effectiveRevenue = suggested * (1 - transactionFeePercent / 100);
+    const cost = Number(item.cost) + Number(item.labor);
+    const adjustedProfit = effectiveRevenue - cost;
+    const adjustedMargin = suggested > 0 ? Math.round((adjustedProfit / suggested) * 100) : 0;
+
     return `
       <div class="inv-card" style="margin-bottom:12px;">
         <div class="inv-card-header">
@@ -2786,7 +2798,7 @@ function renderIndividualSales() {
         <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(item.cost)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Labor</div><div class="inv-metric-value cost">${fmt(item.labor)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${transactionFeePercent}%</div></div>
-        <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(suggested)}</div></div>
+        <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(sale.revenue)}</div></div>
         <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value price">${adjustedMargin}%</div></div>
       </div>
     `;
@@ -2950,6 +2962,25 @@ function getPeriodBounds() {
   return { start: new Date(ly, lm, 1), end: new Date(ly, lm+1, 0, 23, 59, 59), label };
 }
 
+function getIncomeStatementBounds() {
+  const now   = new Date();
+  const y     = now.getFullYear();
+  const m     = now.getMonth();        // 0-based
+  if (incomeStatementPeriod === 'ytd') {
+    // end = today, not Dec 31 — so we only count expenses that have actually occurred
+    return { start: new Date(y, 0, 1), end: now, label: `Jan 1 – Today ${y}` };
+  }
+  if (incomeStatementPeriod === 'month') {
+    const label = now.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+    return { start: new Date(y, m, 1), end: new Date(y, m+1, 0, 23, 59, 59), label };
+  }
+  // last month
+  const lm    = m === 0 ? 11 : m-1;
+  const ly    = m === 0 ? y-1 : y;
+  const label = new Date(ly, lm, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  return { start: new Date(ly, lm, 1), end: new Date(ly, lm+1, 0, 23, 59, 59), label };
+}
+
 // ── Income Statement Calculations ───────────────────────────────────
 function calculateIncomeStatement(bounds) {
   // Revenue: All sales in the period (gross revenue before transaction fees)
@@ -3022,7 +3053,7 @@ function calculateIncomeStatement(bounds) {
 }
 
 function renderIncomeStatement() {
-  const bounds = getPeriodBounds();
+  const bounds = getIncomeStatementBounds();
   const is = calculateIncomeStatement(bounds);
 
   // Update period label
