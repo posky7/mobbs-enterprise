@@ -4071,9 +4071,50 @@ function renderReports() {
   document.getElementById('rpt-units').textContent   = units;
   document.getElementById('rpt-margin').textContent  = margin+'%';
 
+  // ── Chart 4: Revenue vs Expenses (grouped bar) ────────────
+  // This chart should always show, even with no sales data
+  const expPaid = expenses.reduce((s,e)=>{
+    if (e.frequency==='One-Time') {
+      if(!e.due) return s;
+      const d=new Date(e.due);
+      return d>=bounds.start&&d<=bounds.end ? s+Number(e.amount||0) : s;
+    }
+    return s + expCostInPeriod(e, bounds);
+  }, 0);
+  const monthlyExpActive = expenses.filter(e=>e.status==='Active'&&e.frequency!=='One-Time').reduce((s,e)=>s+expMonthly(e),0);
+  const expProjected = expOccurrences ? expPaid : monthlyExpActive; // fallback
+  const loanPaidAmt  = loans.reduce((s,l)=>s+loanPaid(l),0);
+
+  // Calculate fees paid and projected
+  const feesPaid = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
+  const feesProjected = inStock.reduce((s,i)=>{
+    const primaryLocationId = getItemPrimaryLocation(i);
+    const location = locations.find(l => l.id === primaryLocationId);
+    const transactionFeePercent = location?.transactionFeePercent || 0;
+    const projectedFee = sp(i) * getItemQty(i) * (transactionFeePercent / 100);
+    return s + projectedFee;
+  }, 0);
+
+  makeChart('chart-exp',{
+    type:'bar',
+    data:{
+      labels:['Revenue','Profit','Exp Paid','Exp Projected','Fees Paid','Fees Projected','Loan Payments'],
+      datasets:[{
+        data:[revenue, profit, expPaid, expProjected, feesPaid, feesProjected, loanPaidAmt],
+        backgroundColor:[CHART_COLORS.greenFill, CHART_COLORS.purpleFill, CHART_COLORS.orangeFill, CHART_COLORS.orangeFill, CHART_COLORS.redFill, CHART_COLORS.redFill, CHART_COLORS.redFill],
+        borderColor:   [CHART_COLORS.green,      CHART_COLORS.purple,     CHART_COLORS.orange,     CHART_COLORS.orange,     CHART_COLORS.red,      CHART_COLORS.red,      CHART_COLORS.red],
+        borderWidth:1.5, borderRadius:4,
+      }],
+    },
+    options:{
+      ...chartDefaults(),
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>' $'+ctx.parsed.y.toFixed(2) }, backgroundColor:'#fff',titleColor:'#1a1612',bodyColor:'#5a5248',borderColor:CHART_COLORS.border,borderWidth:1 } },
+    },
+  });
+
   if (!sales.length) {
-    // Clear all charts and show empty state
-    ['chart-revenue','chart-category','chart-items','chart-exp'].forEach(id=>{
+    // Clear sales-dependent charts and show empty state
+    ['chart-revenue','chart-category','chart-items'].forEach(id=>{
       if(rptCharts[id]){rptCharts[id].destroy();delete rptCharts[id];}
     });
     // Show "no data" overlay on first chart area
@@ -4142,44 +4183,6 @@ function renderReports() {
       ],
     },
     options: barOpts,
-  });  // ── Chart 4: Revenue vs Expenses (grouped bar) ────────────
-  const expPaid = expenses.reduce((s,e)=>{
-    if (e.frequency==='One-Time') {
-      if(!e.due) return s;
-      const d=new Date(e.due);
-      return d>=bounds.start&&d<=bounds.end ? s+Number(e.amount||0) : s;
-    }
-    return s + expCostInPeriod(e, bounds);
-  }, 0);
-  const monthlyExpActive = expenses.filter(e=>e.status==='Active'&&e.frequency!=='One-Time').reduce((s,e)=>s+expMonthly(e),0);
-  const expProjected = expOccurrences ? expPaid : monthlyExpActive; // fallback
-  const loanPaidAmt  = loans.reduce((s,l)=>s+loanPaid(l),0);
-
-  // Calculate fees paid and projected
-  const feesPaid = sales.reduce((s,sl)=>s+Number(sl.transactionFee || 0), 0);
-  const feesProjected = inStock.reduce((s,i)=>{
-    const primaryLocationId = getItemPrimaryLocation(i);
-    const location = locations.find(l => l.id === primaryLocationId);
-    const transactionFeePercent = location?.transactionFeePercent || 0;
-    const projectedFee = sp(i) * getItemQty(i) * (transactionFeePercent / 100);
-    return s + projectedFee;
-  }, 0);
-
-  makeChart('chart-exp',{
-    type:'bar',
-    data:{
-      labels:['Revenue','Profit','Exp Paid','Exp Projected','Fees Paid','Fees Projected','Loan Payments'],
-      datasets:[{
-        data:[revenue, profit, expPaid, expProjected, feesPaid, feesProjected, loanPaidAmt],
-        backgroundColor:[CHART_COLORS.greenFill, CHART_COLORS.purpleFill, CHART_COLORS.orangeFill, CHART_COLORS.orangeFill, CHART_COLORS.redFill, CHART_COLORS.redFill, CHART_COLORS.redFill],
-        borderColor:   [CHART_COLORS.green,      CHART_COLORS.purple,     CHART_COLORS.orange,     CHART_COLORS.orange,     CHART_COLORS.red,      CHART_COLORS.red,      CHART_COLORS.red],
-        borderWidth:1.5, borderRadius:4,
-      }],
-    },
-    options:{
-      ...chartDefaults(),
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>' $'+ctx.parsed.y.toFixed(2) }, backgroundColor:'#fff',titleColor:'#1a1612',bodyColor:'#5a5248',borderColor:CHART_COLORS.border,borderWidth:1 } },
-    },
   });
 }
 
