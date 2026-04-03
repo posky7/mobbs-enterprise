@@ -5,17 +5,25 @@ export const config = { runtime: 'nodejs' };
 const MIGRATION_VERSION = 1;
 
 function migrateItem(item) {
+  // Ensure item is a valid object
+  if (!item || typeof item !== 'object') {
+    throw new Error('Item is not a valid object');
+  }
+
   if (!item.version) {
     item.version = MIGRATION_VERSION;
-    // Initialize inventory object if it doesn't exist
-    if (!item.inventory) {
+
+    // Initialize inventory object if it doesn't exist or is invalid
+    if (!item.inventory || typeof item.inventory !== 'object') {
       item.inventory = {};
+
       // Migrate legacy qty field to inventory structure
       if (typeof item.qty !== 'undefined' && item.qty !== null) {
         // Use default location if no specific location data exists
         const defaultLocation = 'storage'; // fallback location
+        const qty = Number(item.qty);
         item.inventory[defaultLocation] = {
-          qty: Number(item.qty) || 0,
+          qty: isNaN(qty) ? 0 : qty,
           lastUpdated: new Date().toISOString()
         };
       }
@@ -26,17 +34,33 @@ function migrateItem(item) {
     if (typeof item.quantity !== 'undefined') delete item.quantity;
     if (typeof item.price !== 'undefined') delete item.price;
 
+    // Add imageUrl field if it doesn't exist
+    if (typeof item.imageUrl === 'undefined') {
+      item.imageUrl = null;
+    }
+
     // Ensure all inventory entries have valid quantities
-    if (item.inventory) {
-      Object.keys(item.inventory).forEach(locId => {
-        if (item.inventory[locId] && (item.inventory[locId].qty === null || typeof item.inventory[locId].qty === 'undefined')) {
-          item.inventory[locId].qty = 0;
-        }
-        // Ensure qty is a number
-        if (item.inventory[locId]) {
-          item.inventory[locId].qty = Number(item.inventory[locId].qty) || 0;
-        }
-      });
+    if (item.inventory && typeof item.inventory === 'object') {
+      try {
+        Object.keys(item.inventory).forEach(locId => {
+          const locationData = item.inventory[locId];
+          if (locationData && typeof locationData === 'object') {
+            if (locationData.qty === null || typeof locationData.qty === 'undefined') {
+              locationData.qty = 0;
+            }
+            // Ensure qty is a number
+            const qty = Number(locationData.qty);
+            locationData.qty = isNaN(qty) ? 0 : qty;
+          } else if (locationData !== null && typeof locationData !== 'object') {
+            // If location data is not an object, reset it
+            item.inventory[locId] = { qty: 0, lastUpdated: new Date().toISOString() };
+          }
+        });
+      } catch (inventoryError) {
+        console.warn('Error processing inventory data during migration:', inventoryError);
+        // Reset inventory to empty object if processing fails
+        item.inventory = {};
+      }
     }
   }
   return item;
@@ -50,9 +74,53 @@ export default async function handler(req) {
   try {
     if (httpMethod === 'GET') {
       let inventory = await readBlobData('inventory');
-      inventory = inventory.map(migrateItem);
-      await writeBlobData('inventory', inventory);
-      return new Response(JSON.stringify(inventory), {
+
+      // Safely migrate inventory items with error handling
+      const migratedInventory = [];
+      const migrationErrors = [];
+
+      for (let i = 0; i < inventory.length; i++) {
+        try {
+          // Basic validation before migration
+          if (!inventory[i] || typeof inventory[i] !== 'object') {
+            console.warn(`Skipping invalid inventory item at index ${i}: not an object`);
+            migrationErrors.push({ index: i, error: 'Invalid item format' });
+            continue;
+          }
+
+          const migratedItem = migrateItem(inventory[i]);
+          migratedInventory.push(migratedItem);
+        } catch (error) {
+          console.error(`Migration failed for inventory item at index ${i}:`, error);
+          migrationErrors.push({ index: i, error: error.message });
+
+          // Try to preserve the original item if migration fails
+          try {
+            if (inventory[i] && typeof inventory[i] === 'object') {
+              migratedInventory.push(inventory[i]);
+            }
+          } catch (preserveError) {
+            console.error(`Could not preserve original item at index ${i}:`, preserveError);
+          }
+        }
+      }
+
+      // Log migration summary
+      if (migrationErrors.length > 0) {
+        console.warn(`Inventory migration completed with ${migrationErrors.length} errors out of ${inventory.length} items`);
+      }
+
+      // Only write back if we have valid migrated data
+      if (migratedInventory.length > 0) {
+        try {
+          await writeBlobData('inventory', migratedInventory);
+        } catch (writeError) {
+          console.error('Failed to write migrated inventory data:', writeError);
+          // Continue with response even if write fails
+        }
+      }
+
+      return new Response(JSON.stringify(migratedInventory), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -60,8 +128,46 @@ export default async function handler(req) {
 
     if (httpMethod === 'PUT') {
       const body = await req.text();
-      const data = JSON.parse(body || '[]');
-      const migrated = Array.isArray(data) ? data.map(migrateItem) : data;
+      let data;
+      try {
+        data = JSON.parse(body || '[]');
+      } catch (parseError) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Safely migrate inventory items with error handling
+      const migrated = [];
+      if (Array.isArray(data)) {
+        for (let i = 0; i < data.length; i++) {
+          try {
+            if (!data[i] || typeof data[i] !== 'object') {
+              console.warn(`Skipping invalid inventory item at index ${i} in PUT request`);
+              continue;
+            }
+            migrated.push(migrateItem(data[i]));
+          } catch (error) {
+            console.error(`Migration failed for item at index ${i} in PUT request:`, error);
+            // Skip corrupted items
+          }
+        }
+      } else {
+        // Single item
+        try {
+          if (data && typeof data === 'object') {
+            migrated.push(migrateItem(data));
+          }
+        } catch (error) {
+          console.error('Migration failed for single item in PUT request:', error);
+          return new Response(JSON.stringify({ error: 'Failed to migrate item data' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
       await writeBlobData('inventory', migrated);
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
@@ -158,8 +264,46 @@ export default async function handler(req) {
 
     if (httpMethod === 'POST') {
       const body = await req.text();
-      const data = JSON.parse(body || '[]');
-      const migrated = Array.isArray(data) ? data.map(migrateItem) : data;
+      let data;
+      try {
+        data = JSON.parse(body || '[]');
+      } catch (parseError) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Safely migrate inventory items with error handling
+      const migrated = [];
+      if (Array.isArray(data)) {
+        for (let i = 0; i < data.length; i++) {
+          try {
+            if (!data[i] || typeof data[i] !== 'object') {
+              console.warn(`Skipping invalid inventory item at index ${i} in POST request`);
+              continue;
+            }
+            migrated.push(migrateItem(data[i]));
+          } catch (error) {
+            console.error(`Migration failed for item at index ${i} in POST request:`, error);
+            // Skip corrupted items
+          }
+        }
+      } else {
+        // Single item
+        try {
+          if (data && typeof data === 'object') {
+            migrated.push(migrateItem(data));
+          }
+        } catch (error) {
+          console.error('Migration failed for single item in POST request:', error);
+          return new Response(JSON.stringify({ error: 'Failed to migrate item data' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
       await writeBlobData('inventory', migrated);
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
