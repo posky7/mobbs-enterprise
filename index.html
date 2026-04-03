@@ -1296,7 +1296,7 @@ async function loadAllData() {
 
 function saveLocations() { fetch(`${API}/locations`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(locations) }).catch(e=>console.error('Save locations error',e)); }
 
-function saveInventory() { fetch(`${API}/inventory`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(inventory) }).catch(e=>console.error('Save inventory error',e)); }
+function saveInventory() { return fetch(`${API}/inventory`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(inventory) }).then(r=>{ if(!r.ok) throw new Error('Save failed: '+r.status); }).catch(e=>{ console.error('Save inventory error',e); throw e; }); }
 function saveLoans()     { fetch(`${API}/loans`,     { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(loans)     }).catch(e=>console.error('Save loans error',e)); }
 function saveExpenses()  { fetch(`${API}/expenses`,  { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(expenses)  }).catch(e=>console.error('Save expenses error',e)); }
 function loanPaid(l)    { return (l.payments||[]).reduce((s,p)=>s+Number(p.amount),0); }
@@ -2349,8 +2349,10 @@ function openAddModal() {
   toggleWarehouseTransfer();
 
   // Reset image upload
-  document.getElementById('f-image').value = '';
-  delete document.getElementById('f-image').dataset.imageUrl;
+  const _imgReset = document.getElementById('f-image');
+  _imgReset.value = '';
+  delete _imgReset.dataset.imageUrl;
+  delete _imgReset.dataset.imageId;
   document.getElementById('image-preview').innerHTML = '📦';
   document.getElementById('image-status').style.display = 'none';
 
@@ -2370,7 +2372,21 @@ function openEditModal(id) {
   document.getElementById('edit-id').value=id;
   document.getElementById('f-name').value=item.name;
   document.getElementById('f-category').value=item.category;
-  document.getElementById('f-qty').value=item.qty;
+
+  // Populate location select first so we can pre-select the item's primary location
+  populateLocationSelect();
+  const primaryLocId = getItemPrimaryLocation(item);
+  if (primaryLocId) {
+    document.getElementById('f-location').value = primaryLocId;
+  }
+
+  // Qty: migrated items store quantities in item.inventory per-location, not item.qty
+  const editLocId = document.getElementById('f-location').value;
+  const editLocQty = (item.inventory && editLocId && item.inventory[editLocId])
+    ? (item.inventory[editLocId].qty ?? 0)
+    : (typeof item.qty !== 'undefined' ? item.qty : 0);
+  document.getElementById('f-qty').value = editLocQty;
+
   document.getElementById('f-reorder').value=item.reorderPt??5;
   document.getElementById('f-cost').value=item.cost;
   document.getElementById('f-labor').value=item.labor;
@@ -2505,11 +2521,20 @@ async function saveItem() {
         return;
       }
     } else {
-      // Set quantity for the selected location (regular add)
-      item.inventory[location] = {
-        qty: qty,
-        lastUpdated: new Date().toISOString()
-      };
+      if (editId) {
+        // Editing: only update the currently-selected location's qty.
+        // Preserve all other locations so we don't wipe inventory elsewhere.
+        item.inventory = { ...(existing ? existing.inventory || {} : {}), [location]: {
+          qty: qty,
+          lastUpdated: new Date().toISOString()
+        }};
+      } else {
+        // New item: set quantity for the selected location
+        item.inventory[location] = {
+          qty: qty,
+          lastUpdated: new Date().toISOString()
+        };
+      }
     }
 
     // Update inventory array
