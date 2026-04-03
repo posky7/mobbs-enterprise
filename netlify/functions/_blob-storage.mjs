@@ -89,13 +89,20 @@ export async function getImage(imageId) {
   try {
     console.log(`Blob storage: Retrieving image ${imageId}`);
     const store = await getBlobStore('images');
-    const blob = await store.get(imageId);
-    if (blob) {
-      console.log(`Blob storage: Found image ${imageId}, size: ${blob.size}`);
-    } else {
+
+    // Get the blob as ArrayBuffer directly
+    const arrayBuffer = await store.get(imageId, { type: 'arrayBuffer' });
+    if (!arrayBuffer) {
       console.log(`Blob storage: Image ${imageId} not found`);
+      return null;
     }
-    return blob;
+
+    console.log(`Blob storage: Retrieved ArrayBuffer, size: ${arrayBuffer.byteLength}`);
+
+    return {
+      data: arrayBuffer,
+      metadata: { contentType: 'image/jpeg' } // Default fallback since metadata not available with type option
+    };
   } catch (error) {
     console.error(`Blob storage: Error retrieving image ${imageId}:`, error);
     return null;

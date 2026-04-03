@@ -13,18 +13,18 @@ export default async function handler(req, context) {
   try {
     // GET - Retrieve an image
     if (httpMethod === 'GET' && imageId) {
-      const imageBlob = await getImage(imageId);
-      if (!imageBlob) {
+      const imageResult = await getImage(imageId);
+      if (!imageResult) {
         return new Response('Image not found', {
           status: 404,
           headers: { 'Content-Type': 'text/plain' }
         });
       }
 
-      return new Response(imageBlob, {
+      return new Response(imageResult.data, {
         status: 200,
         headers: {
-          'Content-Type': imageBlob.metadata?.contentType || 'image/jpeg',
+          'Content-Type': imageResult.metadata.contentType || 'image/jpeg',
           'Cache-Control': 'public, max-age=31536000' // Cache for 1 year
         }
       });
