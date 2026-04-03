@@ -1,8 +1,10 @@
 import { getBackupTimestamp, setBackupTimestamp } from './_blob-storage.mjs';
 
-export const config = { runtime: 'nodejs' };
-
-export default async function handler(req) {
+/**
+ * @param {Request} req
+ * @param {import("@netlify/functions").Context} [context]
+ */
+export default async function handler(req, context) {
   const httpMethod = req.method;
 
   try {
@@ -15,8 +17,8 @@ export default async function handler(req) {
     }
 
     if (httpMethod === 'PUT' || httpMethod === 'POST') {
-      const body = await req.text();
-      const { timestamp } = JSON.parse(body || '{}');
+      /** @type {{ timestamp?: string }} */
+      const { timestamp } = await req.json().catch(() => ({}));
       await setBackupTimestamp(timestamp || new Date().toLocaleString());
       return new Response(JSON.stringify({ success: true }), {
         status: 200,

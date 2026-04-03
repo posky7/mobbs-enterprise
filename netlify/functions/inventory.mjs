@@ -1,7 +1,5 @@
 import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
-export const config = { runtime: 'nodejs' };
-
 const MIGRATION_VERSION = 1;
 
 function migrateItem(item) {
@@ -66,7 +64,11 @@ function migrateItem(item) {
   return item;
 }
 
-export default async function handler(req) {
+/**
+ * @param {Request} req
+ * @param {import("@netlify/functions").Context} [context]
+ */
+export default async function handler(req, context) {
   const httpMethod = req.method || 'GET';
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
@@ -127,16 +129,8 @@ export default async function handler(req) {
     }
 
     if (httpMethod === 'PUT') {
-      const body = await req.text();
-      let data;
-      try {
-        data = JSON.parse(body || '[]');
-      } catch (parseError) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+      /** @type {any[] | object} */
+      const data = await req.json().catch(() => []);
 
       // Safely migrate inventory items with error handling
       const migrated = [];
@@ -185,8 +179,8 @@ export default async function handler(req) {
 
     // Transfer action (used by Move Inventory)
     if (httpMethod === 'POST' && action === 'transfer') {
-      const body = await req.text();
-      const { itemId, fromLocation, toLocation, quantity } = JSON.parse(body || '{}');
+      /** @type {{ itemId?: string, fromLocation?: string, toLocation?: string, quantity?: any }} */
+      const { itemId, fromLocation, toLocation, quantity } = await req.json().catch(() => ({}));
 
       if (!itemId || !fromLocation || !toLocation || !quantity) {
         return new Response(JSON.stringify({ error: 'Missing required parameters: itemId, fromLocation, toLocation, quantity' }), {
@@ -263,16 +257,8 @@ export default async function handler(req) {
     }
 
     if (httpMethod === 'POST') {
-      const body = await req.text();
-      let data;
-      try {
-        data = JSON.parse(body || '[]');
-      } catch (parseError) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+      /** @type {any[] | object} */
+      const data = await req.json().catch(() => []);
 
       // Safely migrate inventory items with error handling
       const migrated = [];

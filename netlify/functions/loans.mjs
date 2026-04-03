@@ -1,7 +1,5 @@
 import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
-export const config = { runtime: 'nodejs' };
-
 // Helper functions for loan calculations
 function loanPaid(loan) {
   return (loan.payments || []).reduce((s, p) => s + Number(p.amount), 0);
@@ -11,7 +9,11 @@ function loanBalance(loan) {
   return Math.max(0, Number(loan.amount) - loanPaid(loan));
 }
 
-export default async function handler(req) {
+/**
+ * @param {Request} req
+ * @param {import("@netlify/functions").Context} [context]
+ */
+export default async function handler(req, context) {
   const httpMethod = req.method;
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
@@ -28,8 +30,8 @@ export default async function handler(req) {
     }
 
     if (httpMethod === 'PUT') {
-      const body = await req.text();
-      const loansData = JSON.parse(body || '[]');
+      /** @type {any[]} */
+      const loansData = await req.json().catch(() => []);
       await writeBlobData('loans', loansData);
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
@@ -38,8 +40,8 @@ export default async function handler(req) {
     }
 
     if (httpMethod === 'POST' && action === 'add-payment') {
-      const body = await req.text();
-      const { loanId: bodyLoanId, date, amount, note } = JSON.parse(body || '{}');
+      /** @type {{ loanId?: string, date?: string, amount?: any, note?: string }} */
+      const { loanId: bodyLoanId, date, amount, note } = await req.json().catch(() => ({}));
       const resolvedLoanId = bodyLoanId || loanId;
 
       if (!resolvedLoanId || !amount || amount <= 0) {

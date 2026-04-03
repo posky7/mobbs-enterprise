@@ -772,6 +772,15 @@ select.form-input option { background:#fff; color:#1a1612; }
           <div class="calc-item"><div class="calc-item-label">Margin</div><div class="calc-item-val pos" id="calc-margin">0%</div></div>
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Photo (optional)</label>
+        <input type="file" id="f-image" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleImageUpload(this)">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button type="button" class="btn-tool" onclick="document.getElementById('f-image').click()" style="flex:1;padding:10px 12px;">📷 Choose Photo</button>
+          <div id="image-preview" style="width:60px;height:60px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text3);flex-shrink:0;">📦</div>
+        </div>
+        <div id="image-status" style="font-size:11px;color:var(--text3);margin-top:4px;display:none;"></div>
+      </div>
       <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="f-notes" placeholder="Any additional details…" autocomplete="off"></div>
       <button class="btn-save" onclick="saveItem()">Save Item</button>
       <button class="btn-delete" id="btn-delete-item" style="display:none" onclick="confirmDeleteItem()">Delete Item</button>
@@ -814,6 +823,7 @@ select.form-input option { background:#fff; color:#1a1612; }
     <div class="modal-handle"></div>
     <div class="modal-header"><div class="modal-title" id="detail-name">Item</div><button class="modal-close" onclick="closeModal('modal-detail')">✕</button></div>
     <div class="modal-body">
+      <div id="detail-image-container"></div>
       <div id="detail-badge" class="detail-badge">📦 <span id="detail-cat">—</span></div>
       <div style="margin-bottom:16px;">
         <div class="form-label" style="margin-bottom:8px;">Adjust Quantity</div>
@@ -2009,7 +2019,34 @@ function buildItemCard(item) {
     .filter(Boolean)
     .join(' · ');
 
+  // Check for pending image upload in edit modal (for immediate preview)
+  const editId = document.getElementById('edit-id')?.value;
+  const pendingImageUrl = (editId === item.id) ? document.getElementById('f-image')?.dataset?.imageUrl : null;
+  const displayImageUrl = pendingImageUrl || item.imageUrl;
+
+  let imageHtml = '';
+  if (displayImageUrl) {
+    const imgContainer = document.createElement('div');
+    imgContainer.style.cssText = 'width:100%;height:120px;background:#f5f2ee;border-radius:12px 12px 0 0;overflow:hidden;margin-bottom:8px;';
+
+    const img = document.createElement('img');
+    img.src = displayImageUrl;
+    img.alt = item.name;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+    img.loading = 'lazy';
+    img.onload = () => console.log('✅ Image loaded successfully for ' + item.name);
+    img.onerror = () => {
+      console.error('❌ Image failed to load for ' + item.name + ':', displayImageUrl, 'Error:', event);
+      img.style.display = 'none';
+      imgContainer.innerHTML = '<div style="width:100%;height:100%;background:#ede9e3;display:flex;align-items:center;justify-content:center;font-size:24px;color:#9a9080;">📦</div>';
+    };
+
+    imgContainer.appendChild(img);
+    imageHtml = imgContainer.outerHTML;
+  }
+
   return `<div class="inv-card" onclick="openDetail('${item.id}')">
+    ${imageHtml}
     <div class="inv-card-header">
       <div><div class="inv-name">${esc(item.name)}</div><span class="category-chip">${esc(item.category)}</span></div>
       <div class="inv-qty-badge ${totalQty<=thresh?'low':'ok'}">${totalQty} ${esc(item.unit||'units')}</div>
@@ -2158,6 +2195,134 @@ function updateCalc() {
   me.textContent=m+'%'; me.className='calc-item-val '+(m>=0?'pos':'neg');
 }
 
+async function handleImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const preview = document.getElementById('image-preview');
+  const status = document.getElementById('image-status');
+
+  // Show loading state
+  preview.innerHTML = '⏳';
+  status.textContent = 'Uploading...';
+  status.style.display = 'block';
+
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch(`${API}/images?action=upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Upload failed');
+    }
+
+    const result = await response.json();
+
+    // Store the image URL for later use in saveItem
+    input.dataset.imageUrl = result.url;
+
+    // Show preview with improved retry logic and better error handling
+    const showPreviewWithRetry = async (url, maxRetries = 5) => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Preview attempt ${attempt}/${maxRetries} for: ${url}`);
+
+          // Create a promise that resolves when image loads or fails
+          const loadPromise = new Promise((resolve, reject) => {
+            const imgElement = document.createElement('img');
+            // Use cache busting but ensure proper URL construction
+            const separator = url.includes('?') ? '&' : '?';
+            imgElement.src = `${url}${separator}t=${Date.now()}`;
+            imgElement.alt = 'Preview';
+            imgElement.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:6px;';
+
+            let hasResolved = false;
+
+            imgElement.onload = () => {
+              if (hasResolved) return;
+              hasResolved = true;
+              console.log(`✅ Preview image loaded successfully on attempt ${attempt}`);
+              preview.innerHTML = '';
+              preview.appendChild(imgElement);
+              resolve();
+            };
+
+            imgElement.onerror = (event) => {
+              if (hasResolved) return;
+              hasResolved = true;
+              console.warn(`❌ Preview image failed to load on attempt ${attempt}:`, {
+                url: imgElement.src,
+                error: event,
+                status: imgElement.complete ? 'Image failed to load' : 'Network error'
+              });
+              reject(new Error(`Attempt ${attempt} failed: ${event.type}`));
+            };
+
+            // Add timeout for this attempt (increasing timeout for later attempts)
+            const timeoutMs = 2000 + (attempt * 500); // 2s, 2.5s, 3s, 3.5s, 4s
+            setTimeout(() => {
+              if (!hasResolved) {
+                hasResolved = true;
+                console.warn(`⏰ Preview image timed out on attempt ${attempt} after ${timeoutMs}ms:`, url);
+                reject(new Error(`Attempt ${attempt} timed out after ${timeoutMs}ms`));
+              }
+            }, timeoutMs);
+          });
+
+          await loadPromise;
+          return; // Success, exit the retry loop
+
+        } catch (error) {
+          console.warn(`⚠️ Preview attempt ${attempt} failed:`, error.message);
+
+          if (attempt === maxRetries) {
+            // All attempts failed - show failure state but don't throw
+            console.error('❌ All preview attempts failed after', maxRetries, 'retries:', error);
+            preview.innerHTML = '📦';
+            status.textContent = '❌ Preview failed to load after all retries';
+            status.style.color = 'var(--danger)';
+            return;
+          }
+
+          // Wait before next attempt with exponential backoff
+          const delay = Math.min(500 * Math.pow(1.5, attempt - 1), 3000); // 500ms, 750ms, 1125ms, 1688ms, 2531ms
+          console.log(`⏳ Waiting ${delay}ms before retry ${attempt + 1}/${maxRetries}...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    };
+
+    // Delay to allow blob storage to commit, then try to show preview
+    setTimeout(async () => {
+      try {
+        await showPreviewWithRetry(result.url);
+        status.textContent = '✓ Image uploaded and preview loaded';
+        status.style.color = 'var(--accent2)';
+      } catch (error) {
+        console.error('Preview loading failed after all retries:', error);
+        status.textContent = '❌ Preview failed to load';
+        status.style.color = 'var(--danger)';
+      }
+    }, 2000); // Increased delay for blob storage commit
+    status.textContent = '✓ Image uploaded successfully';
+    status.style.color = 'var(--accent2)';
+
+  } catch (error) {
+    console.error('Image upload error:', error);
+    preview.innerHTML = '📦';
+    status.textContent = `❌ Upload failed: ${error.message}`;
+    status.style.color = 'var(--danger)';
+    // Clear the file input
+    input.value = '';
+    delete input.dataset.imageUrl;
+  }
+}
+
 function openAddModal() {
   // Check if any active locations exist
   const activeLocations = locations.filter(loc => loc.active);
@@ -2180,6 +2345,12 @@ function openAddModal() {
   // Reset warehouse transfer checkbox
   document.getElementById('f-transfer-from-warehouse').checked = false;
   toggleWarehouseTransfer();
+
+  // Reset image upload
+  document.getElementById('f-image').value = '';
+  delete document.getElementById('f-image').dataset.imageUrl;
+  document.getElementById('image-preview').innerHTML = '📦';
+  document.getElementById('image-status').style.display = 'none';
 
   // Add event listener for item name to update warehouse info
   const nameInput = document.getElementById('f-name');
@@ -2204,6 +2375,27 @@ function openEditModal(id) {
   document.getElementById('f-suggested-price').value=item.suggestedPrice ?? item.salePrice ?? ''; // backward compat
   document.getElementById('f-notes').value=item.notes||'';
   populateUnitSelect(item.unit);
+
+  // Handle existing image
+  const imageInput = document.getElementById('f-image');
+  const imagePreview = document.getElementById('image-preview');
+  const imageStatus = document.getElementById('image-status');
+
+  if (item.imageUrl) {
+    imageInput.dataset.imageUrl = item.imageUrl;
+    imagePreview.innerHTML = `<img src="${esc(item.imageUrl)}" alt="Current image" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"><button type="button" onclick="removeImage()" style="position:absolute;top:4px;right:4px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;display:flex;align-items:center;justify-content:center;">×</button>`;
+    imagePreview.style.position = 'relative';
+    imageStatus.textContent = 'Current image loaded';
+    imageStatus.style.color = 'var(--accent2)';
+    imageStatus.style.display = 'block';
+  } else {
+    imageInput.value = '';
+    delete imageInput.dataset.imageUrl;
+    imagePreview.innerHTML = '📦';
+    imagePreview.style.position = '';
+    imageStatus.style.display = 'none';
+  }
+
   document.getElementById('btn-delete-item').style.display='block';
   updateCalc();
   document.getElementById('modal-add').classList.add('open');
@@ -2217,6 +2409,23 @@ async function saveItem() {
   const qty=parseInt(document.getElementById('f-qty').value)||0;
   const transferFromWarehouse = document.getElementById('f-transfer-from-warehouse').checked;
 
+  // Preserve existing image URL if no new image was uploaded
+  const imageInput = document.getElementById('f-image');
+  const newImageUrl = imageInput.dataset.imageUrl;
+  const existingImageUrl = existing?.imageUrl || null;
+
+  // Use new image URL if available, otherwise keep existing one
+  const finalImageUrl = newImageUrl || existingImageUrl;
+
+  console.log('Save item - image handling:', {
+    editId,
+    newImageUrl,
+    existingImageUrl,
+    finalImageUrl,
+    hasExisting: !!existing,
+    datasetValue: imageInput.dataset.imageUrl
+  });
+
   const item={
     id:editId||uid(), name,
     category:document.getElementById('f-category').value,
@@ -2226,62 +2435,95 @@ async function saveItem() {
     labor:parseFloat(document.getElementById('f-labor').value)||0,
     suggestedPrice:parseFloat(document.getElementById('f-suggested-price').value)||0,
     notes:document.getElementById('f-notes').value.trim(),
+    imageUrl: finalImageUrl,
     sales:existing?existing.sales||[]:[], // preserve sale history on edit
     inventory: existing ? existing.inventory || {} : {}, // preserve existing inventory
   };
 
-  // Handle warehouse transfer for new items - save first so item exists on server
-  if (transferFromWarehouse && qty > 0 && !editId) {
-    // Save item first so it exists on the server
-    inventory.unshift(item);
-    await new Promise(resolve => { saveInventory(); setTimeout(resolve, 500); });
-  }
+  // Store original inventory state for rollback
+  const originalInventory = [...inventory];
+  const originalItemIndex = editId ? inventory.findIndex(i => i.id === editId) : -1;
+  const originalItem = originalItemIndex >= 0 ? { ...inventory[originalItemIndex] } : null;
 
-  // Handle warehouse transfer
-  if (transferFromWarehouse && qty > 0) {
-    try {
-      await performWarehouseTransfer(item.id, location, qty);
-      showToast(`✓ Transferred ${qty} units from warehouse to ${locations.find(l => l.id === location)?.name || location}`);
-
-      // After successful transfer, reload item from server to get updated inventory
-      try {
-        const response = await fetch(`${API}/inventory`);
-        const updatedInventory = await response.json();
-        const updatedItem = Array.isArray(updatedInventory) ? updatedInventory.find(i => i.id === item.id) : null;
-        if (updatedItem) {
-          // Update local item with server state
-          Object.assign(item, updatedItem);
-          // Update in inventory array
-          const idx = inventory.findIndex(i => i.id === item.id);
-          if (idx > -1) inventory[idx] = item;
-        }
-      } catch (refreshError) {
-        console.warn('Failed to refresh item after transfer:', refreshError);
-      }
-
-      // Don't call saveInventory() again after successful transfer
-      closeModal('modal-add'); renderList();
-      showToast(editId?'✓ Item updated with transfer':'✓ Item added with transfer');
-      return;
-    } catch (error) {
-      showToast('⚠ Transfer failed: ' + error.message);
-      // For new items that failed transfer, remove from local inventory since save already happened
-      if (!editId) {
-        inventory = inventory.filter(i => i.id !== item.id);
-      }
-      return;
+  try {
+    // Handle warehouse transfer for new items - save first so item exists on server
+    if (transferFromWarehouse && qty > 0 && !editId) {
+      // Save item first so it exists on the server
+      inventory.unshift(item);
+      await new Promise(resolve => { saveInventory(); setTimeout(resolve, 500); });
     }
-  } else {
-    // Set quantity for the selected location (regular add)
-    item.inventory[location] = {
-      qty: qty,
-      lastUpdated: new Date().toISOString()
-    };
-  }
 
-  if(editId){const idx=inventory.findIndex(i=>i.id===editId);if(idx>-1)inventory[idx]=item;}else inventory.unshift(item);
-  saveInventory(); closeModal('modal-add'); renderList();
-  showToast(editId?'✓ Item updated':'✓ Item added');
+    // Handle warehouse transfer
+    if (transferFromWarehouse && qty > 0) {
+      try {
+        await performWarehouseTransfer(item.id, location, qty);
+        showToast(`✓ Transferred ${qty} units from warehouse to ${locations.find(l => l.id === location)?.name || location}`);
+
+        // After successful transfer, reload item from server to get updated inventory
+        try {
+          const response = await fetch(`${API}/inventory`);
+          const updatedInventory = await response.json();
+          const updatedItem = Array.isArray(updatedInventory) ? updatedInventory.find(i => i.id === item.id) : null;
+          if (updatedItem) {
+            // Update local item with server state
+            Object.assign(item, updatedItem);
+            // Update in inventory array
+            const idx = inventory.findIndex(i => i.id === item.id);
+            if (idx > -1) inventory[idx] = item;
+          }
+        } catch (refreshError) {
+          console.warn('Failed to refresh item after transfer:', refreshError);
+        }
+
+        // Don't call saveInventory() again after successful transfer
+        closeModal('modal-add'); renderList();
+        showToast(editId?'✓ Item updated with transfer':'✓ Item added with transfer');
+        return;
+      } catch (error) {
+        // Rollback: restore original inventory state
+        inventory.splice(0, inventory.length, ...originalInventory);
+        showToast('⚠ Transfer failed: ' + error.message);
+        // For new items that failed transfer, remove from local inventory since save already happened
+        if (!editId) {
+          inventory = inventory.filter(i => i.id !== item.id);
+        }
+        return;
+      }
+    } else {
+      // Set quantity for the selected location (regular add)
+      item.inventory[location] = {
+        qty: qty,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+
+    // Update inventory array
+    if(editId){
+      const idx=inventory.findIndex(i=>i.id===editId);
+      if(idx>-1)inventory[idx]=item;
+    }else{
+      inventory.unshift(item);
+    }
+
+    // Save to server
+    await saveInventory();
+
+    // Success - close modal and refresh
+    closeModal('modal-add'); renderList();
+    showToast(editId?'✓ Item updated':'✓ Item added');
+
+  } catch (error) {
+    // Rollback: restore original inventory state
+    console.error('Save item error:', error);
+    inventory.splice(0, inventory.length, ...originalInventory);
+
+    // If editing, restore the original item
+    if (originalItem && originalItemIndex >= 0) {
+      inventory[originalItemIndex] = originalItem;
+    }
+
+    showToast('⚠ Failed to save item: ' + (error.message || 'Unknown error'));
+  }
 }
 
 async function confirmDeleteItem() {
@@ -2319,6 +2561,16 @@ function renderDetail() {
   document.getElementById('dd-labor').textContent=fmt(item.labor);
   document.getElementById('dd-suggested-price').textContent=fmt(suggested);
   document.getElementById('dd-total-val').textContent=fmt(suggested*totalQty);
+
+  // Handle image display
+  const imageContainer = document.getElementById('detail-image-container');
+  if (item.imageUrl) {
+    imageContainer.innerHTML = `<div style="width:100%;height:200px;background:#f5f2ee;border-radius:12px;overflow:hidden;margin-bottom:16px;"><img src="${esc(item.imageUrl)}" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:#ede9e3;display:flex;align-items:center;justify-content:center;font-size:32px;color:#9a9080;\\'>📦</div>';"></div>`;
+    imageContainer.style.display = 'block';
+  } else {
+    imageContainer.style.display = 'none';
+  }
+
   const nw=document.getElementById('detail-notes-wrap');
   if(item.notes){nw.style.display='block';document.getElementById('detail-notes').textContent=item.notes;}else nw.style.display='none';
 
@@ -2498,6 +2750,23 @@ function adjustQty(d) {
 
   saveInventory(); renderDetail(); renderList();
 }
+function removeImage() {
+  const imageInput = document.getElementById('f-image');
+  const imagePreview = document.getElementById('image-preview');
+  const imageStatus = document.getElementById('image-status');
+
+  // Clear the image URL
+  delete imageInput.dataset.imageUrl;
+
+  // Reset preview
+  imagePreview.innerHTML = '📦';
+  imagePreview.style.position = '';
+
+  // Update status
+  imageStatus.textContent = 'Image removed';
+  imageStatus.style.color = 'var(--text3)';
+}
+
 function editCurrentItem() { closeModal('modal-detail'); setTimeout(()=>openEditModal(currentDetailId),180); }
 
 // ── Finance Period & Location State ───────────────────────────────────

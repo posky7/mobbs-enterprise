@@ -1,6 +1,10 @@
 import { clearBlobStore, setBackupTimestamp } from './_blob-storage.mjs';
 
-export default async function handler(req) {
+/**
+ * @param {Request} req
+ * @param {import("@netlify/functions").Context} [context]
+ */
+export default async function handler(req, context) {
   const httpMethod = req.method;
 
   if (httpMethod !== 'POST' && httpMethod !== 'DELETE') {

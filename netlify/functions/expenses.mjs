@@ -1,7 +1,5 @@
 import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
-export const config = { runtime: 'nodejs' };
-
 // Monthly equivalent for any frequency
 function expMonthly(e) {
   if (e.frequency === 'One-Time') return 0;
@@ -86,7 +84,11 @@ function expYTD(e) {
   return expCostInPeriod(e, ytdBounds);
 }
 
-export default async function handler(req) {
+/**
+ * @param {Request} req
+ * @param {import("@netlify/functions").Context} [context]
+ */
+export default async function handler(req, context) {
   const httpMethod = req.method;
 
   try {
@@ -99,8 +101,8 @@ export default async function handler(req) {
     }
 
     if (httpMethod === 'PUT') {
-      const body = await req.text();
-      const expensesData = JSON.parse(body || '[]');
+      /** @type {any[]} */
+      const expensesData = await req.json().catch(() => []);
       await writeBlobData('expenses', expensesData);
       return new Response(JSON.stringify({ success: true }), {
         status: 200,

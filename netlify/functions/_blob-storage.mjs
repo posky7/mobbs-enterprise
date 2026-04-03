@@ -5,7 +5,8 @@ const STORES = {
   locations: 'locations',
   expenses: 'expenses',
   loans: 'loans',
-  backupTimestamp: 'backup-timestamp'
+  backupTimestamp: 'backup-timestamp',
+  images: 'images'
 };
 
 export async function getBlobStore(name) {
@@ -61,5 +62,46 @@ export async function setBackupTimestamp(timestamp) {
     await store.setJSON('timestamp', timestamp);
   } catch (error) {
     console.error('Error setting backup timestamp:', error);
+  }
+}
+
+export async function uploadImage(imageId, imageData, contentType) {
+  try {
+    console.log(`Blob storage: Uploading image ${imageId}, size: ${imageData.length}, type: ${contentType}`);
+    const store = await getBlobStore('images');
+    await store.set(imageId, imageData, { metadata: { contentType } });
+    console.log(`Blob storage: Successfully uploaded ${imageId}`);
+    return true;
+  } catch (error) {
+    console.error(`Blob storage: Error uploading image ${imageId}:`, error);
+    throw error;
+  }
+}
+
+export async function getImage(imageId) {
+  try {
+    console.log(`Blob storage: Retrieving image ${imageId}`);
+    const store = await getBlobStore('images');
+    const blob = await store.get(imageId);
+    if (blob) {
+      console.log(`Blob storage: Found image ${imageId}, size: ${blob.size}`);
+    } else {
+      console.log(`Blob storage: Image ${imageId} not found`);
+    }
+    return blob;
+  } catch (error) {
+    console.error(`Blob storage: Error retrieving image ${imageId}:`, error);
+    return null;
+  }
+}
+
+export async function deleteImage(imageId) {
+  try {
+    const store = await getBlobStore('images');
+    await store.delete(imageId);
+    return true;
+  } catch (error) {
+    console.error(`Error deleting image ${imageId}:`, error);
+    throw error;
   }
 }

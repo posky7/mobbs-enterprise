@@ -1,8 +1,10 @@
 import { readBlobData, writeBlobData } from './_blob-storage.mjs';
 
-export const config = { runtime: 'nodejs' };
-
-export default async function handler(req) {
+/**
+ * @param {Request} req
+ * @param {import("@netlify/functions").Context} [context]
+ */
+export default async function handler(req, context) {
   const httpMethod = req.method;
 
   try {
@@ -15,8 +17,8 @@ export default async function handler(req) {
     }
 
     if (httpMethod === 'PUT') {
-      const body = await req.text();
-      const locationsData = JSON.parse(body || '[]');
+      /** @type {any[]} */
+      const locationsData = await req.json().catch(() => []);
       await writeBlobData('locations', locationsData);
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
