@@ -117,6 +117,7 @@ html,body { height:100%; width:100%; overflow:hidden; background:var(--bg); font
 .inv-metric-value.highlight { color:var(--accent2); }
 .inv-metric-value.cost      { color:var(--accent3); }
 .inv-metric-value.price     { color:var(--accent); }
+.inv-notes { border-top:1px solid var(--border); padding:10px 14px; font-size:12px; color:var(--text2); line-height:1.4; word-wrap:break-word; white-space:pre-wrap; }
 .margin-bar  { height:3px; background:var(--surface2); margin:0 14px 12px; border-radius:2px; overflow:hidden; }
 .margin-fill { height:100%; background:linear-gradient(90deg,var(--accent2),var(--accent)); border-radius:2px; }
 
@@ -667,6 +668,7 @@ select.form-input option { background:#fff; color:#1a1612; }
     <div class="data-tools">
       <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
       <button class="btn-tool" onclick="importCSV(event)">⬆ Import CSV</button>
+      <button class="btn-tool" onclick="reprocessImages()" style="color:var(--accent);border-color:var(--accent);">🔄 Fix Image Orientation</button>
       <button class="btn-tool" onclick="openResetInventoryModal()" style="color:var(--danger);border-color:var(--danger);">🔄 Reset Inventory</button>
       <button class="btn-tool" onclick="openResetExpensesModal()" style="color:var(--danger);border-color:var(--danger);">💸 Reset Expenses</button>
       <button class="btn-tool" onclick="openResetLoansModal()" style="color:var(--danger);border-color:var(--danger);">🏦 Reset Loans</button>
@@ -902,7 +904,11 @@ select.form-input option { background:#fff; color:#1a1612; }
         </div>
         <div id="image-status" style="font-size:11px;color:var(--text3);margin-top:4px;display:none;"></div>
       </div>
-      <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="f-notes" placeholder="Any additional details…" autocomplete="off"></div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-input" id="f-notes" placeholder="Special handling instructions, booth display ideas, customer requests, repair notes, fragile items, etc." autocomplete="off" rows="3" maxlength="2000" oninput="updateNotesCounter()"></textarea>
+        <div id="notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;display:none;"></div>
+      </div>
       <button class="btn-save" onclick="saveItem()">Save Item</button>
       <button class="btn-delete" id="btn-delete-item" style="display:none" onclick="confirmDeleteItem()">Delete Item</button>
       <div style="height:12px"></div>
@@ -973,7 +979,15 @@ select.form-input option { background:#fff; color:#1a1612; }
         <div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Suggested Price</div><div class="detail-stat-value green" id="dd-suggested-price">$0.00</div></div>
       </div>
       <div class="detail-grid"><div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Total Value (Suggested × Qty)</div><div class="detail-stat-value green" id="dd-total-val">$0.00</div></div></div>
-      <div id="detail-notes-wrap" style="margin-bottom:16px;display:none"><div class="form-label" style="margin-bottom:4px">Notes</div><div style="font-size:14px;color:var(--text2);font-family:var(--font-mono);line-height:1.5" id="detail-notes"></div></div>
+      <div id="detail-notes-wrap" style="margin-bottom:16px;display:none">
+        <div class="form-label" style="margin-bottom:4px">Notes</div>
+        <textarea class="form-input" id="detail-notes-edit" placeholder="Add notes about this item…" autocomplete="off" rows="3" maxlength="2000" oninput="updateDetailNotesCounter()" style="margin-bottom:4px;"></textarea>
+        <div id="detail-notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;display:none;"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn-save" onclick="saveDetailNotes()" style="flex:1;font-size:13px;padding:8px 16px;">✓ Save Notes</button>
+          <button class="btn-tool" onclick="cancelDetailNotesEdit()" style="font-size:13px;padding:8px 16px;">Cancel</button>
+        </div>
+      </div>
 
       <!-- Record Sale -->
       <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">Record a Sale</div>
@@ -1438,31 +1452,63 @@ function loanBalance(l) { return Math.max(0, Number(l.amount)-loanPaid(l)); }
 // ── Client-side thumbnail generation fallback ──────────────────────────────────
 async function generateClientThumbnail(imageUrl, maxSize = 200) {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
 
-        // Calculate dimensions for square crop
-        const size = Math.min(img.width, img.height);
-        const x = (img.width - size) / 2;
-        const y = (img.height - size) / 2;
+      img.onload = () => {
+        try {
+          console.log('🔍 Image loaded successfully for thumbnail generation:', imageUrl, 'Size:', img.width, 'x', img.height);
 
-        canvas.width = maxSize;
-        canvas.height = maxSize;
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
 
-        // Draw cropped square and scale to thumbnail size
-        ctx.drawImage(img, x, y, size, size, 0, 0, maxSize, maxSize);
+          if (!ctx) {
+            throw new Error('Canvas 2D context not available');
+          }
 
-        canvas.toBlob(resolve, 'image/jpeg', 0.8);
-      } catch (error) {
-        reject(error);
-      }
-    };
-    img.onerror = reject;
-    img.src = imageUrl;
+          // Calculate dimensions for square crop
+          const size = Math.min(img.width, img.height);
+          const x = (img.width - size) / 2;
+          const y = (img.height - size) / 2;
+
+          canvas.width = maxSize;
+          canvas.height = maxSize;
+
+          console.log('🎨 Creating thumbnail canvas:', maxSize, 'x', maxSize, 'from crop:', x, y, size, size);
+
+          // Draw cropped square and scale to thumbnail size
+          ctx.drawImage(img, x, y, size, size, 0, 0, maxSize, maxSize);
+
+          if (typeof canvas.toBlob === 'function') {
+            canvas.toBlob((blob) => {
+              if (blob) {
+                console.log('✅ Thumbnail blob created successfully, size:', blob.size, 'bytes');
+                resolve(blob);
+              } else {
+                throw new Error('Canvas toBlob returned null');
+              }
+            }, 'image/jpeg', 0.8);
+          } else {
+            throw new Error('Canvas toBlob method not supported');
+          }
+        } catch (error) {
+          console.error('❌ Canvas processing error:', error);
+          reject(error);
+        }
+      };
+
+      img.onerror = (error) => {
+        console.error('❌ Image failed to load for thumbnail generation:', imageUrl, error);
+        reject(new Error('Image failed to load: ' + imageUrl));
+      };
+
+      console.log('📥 Loading image for thumbnail generation:', imageUrl);
+      img.src = imageUrl;
+    } catch (error) {
+      console.error('❌ Thumbnail generation setup error:', error);
+      reject(error);
+    }
   });
 }
 
@@ -1489,6 +1535,58 @@ function populateUnitSelect(selected) {
   }
 }
 function onCategoryChange() { populateUnitSelect(document.getElementById('f-unit').value); }
+
+function updateNotesCounter() {
+  const textarea = document.getElementById('f-notes');
+  const counter = document.getElementById('notes-counter');
+  const length = textarea.value.length;
+
+  if (length > 100) {
+    counter.textContent = `${length}/2000`;
+    counter.style.display = 'block';
+  } else {
+    counter.style.display = 'none';
+  }
+}
+
+function updateDetailNotesCounter() {
+  const textarea = document.getElementById('detail-notes-edit');
+  const counter = document.getElementById('detail-notes-counter');
+  const length = textarea.value.length;
+
+  if (length > 100) {
+    counter.textContent = `${length}/2000`;
+    counter.style.display = 'block';
+  } else {
+    counter.style.display = 'none';
+  }
+}
+
+async function saveDetailNotes() {
+  const item = inventory.find(i => i.id === currentDetailId);
+  if (!item) return;
+
+  const newNotes = document.getElementById('detail-notes-edit').value.trim();
+  item.notes = newNotes;
+
+  try {
+    await saveInventory();
+    renderDetail(); // Refresh the detail view
+    showToast('✓ Notes saved');
+  } catch (error) {
+    console.error('Save notes error:', error);
+    showToast('⚠ Failed to save notes');
+  }
+}
+
+function cancelDetailNotesEdit() {
+  // Reset the textarea to current notes value
+  const item = inventory.find(i => i.id === currentDetailId);
+  if (item) {
+    document.getElementById('detail-notes-edit').value = item.notes || '';
+    updateDetailNotesCounter();
+  }
+}
 
 function toggleWarehouseTransfer() {
   const checkbox = document.getElementById('f-transfer-from-warehouse');
@@ -2093,7 +2191,7 @@ function calculateTotalQty(item) {
 
 function renderList() {
   const q = (document.getElementById('search-box').value||'').toLowerCase();
-  const allMatch = inventory.filter(i=>i.name.toLowerCase().includes(q)||i.category.toLowerCase().includes(q));
+  const allMatch = inventory.filter(i=>i.name.toLowerCase().includes(q)||i.category.toLowerCase().includes(q)||(i.notes?.toLowerCase().includes(q)));
 
   // Calculate totals across all locations for each item (consistent with server)
   allMatch.forEach(item => {
@@ -2237,7 +2335,7 @@ function buildItemCard(item) {
     imageHtml = imgContainer.outerHTML;
   }
 
-  return `<div class="inv-card" onclick="openDetail('${item.id}')">
+  return `<div class="inv-card" onclick="openDetail('${item.id}')" style="position:relative;">
     ${imageHtml}
     <div class="inv-card-header">
       <div><div class="inv-name">${esc(item.name)}</div><span class="category-chip">${esc(item.category)}</span></div>
@@ -2251,7 +2349,7 @@ function buildItemCard(item) {
       <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${transactionFeePercent}%</div></div>
       <div class="inv-metric"><div class="inv-metric-label">Sug.</div><div class="inv-metric-value highlight">${fmt(suggested)}</div></div>
       <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value price">${adjustedMargin}%</div></div>
-    </div></div>`;
+    </div>${item.notes && item.notes.trim() ? `<div class="inv-notes">${esc(item.notes)}</div>` : ''}</div>`;
 }
 
 function renderSoldList(soldItems) {
@@ -2805,7 +2903,8 @@ function renderDetail() {
   }
 
   const nw=document.getElementById('detail-notes-wrap');
-  if(item.notes){nw.style.display='block';document.getElementById('detail-notes').textContent=item.notes;}else nw.style.display='none';
+  if(item.notes){nw.style.display='block';document.getElementById('detail-notes-edit').value=item.notes;}else nw.style.display='none';
+  updateDetailNotesCounter();
 
   // Pre-fill sale section with suggested price
   document.getElementById('sale-qty').value='1';
@@ -5670,6 +5769,83 @@ async function confirmResetLocations() {
   } catch (error) {
     console.error('Reset locations error:', error);
     showToast('⚠ Reset failed — check connection');
+  }
+}
+
+// ── Reprocess Images for Orientation Fix ────────────────────
+async function reprocessImages() {
+  const ok = await showConfirm(
+    'Fix Image Orientation?',
+    'This will reprocess all existing images to correct portrait orientation issues from iPhone photos. This may take a few minutes depending on the number of images.',
+    'Start Reprocessing'
+  );
+
+  if (!ok) return;
+
+  try {
+    showToast('🔄 Starting image reprocessing…');
+
+    // Get all items with images
+    const itemsWithImages = inventory.filter(item => item.imageId);
+    if (itemsWithImages.length === 0) {
+      showToast('No images found to reprocess');
+      return;
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Process images in batches to avoid overwhelming the server
+    const batchSize = 5;
+    for (let i = 0; i < itemsWithImages.length; i += batchSize) {
+      const batch = itemsWithImages.slice(i, i + batchSize);
+
+      // Process batch concurrently
+      const promises = batch.map(async (item) => {
+        try {
+          const response = await fetch(`${API}/images?action=reprocess&id=${item.imageId}`, {
+            method: 'POST'
+          });
+
+          if (response.ok) {
+            successCount++;
+            console.log(`✅ Reprocessed image for ${item.name}`);
+          } else {
+            const error = await response.json();
+            console.error(`❌ Failed to reprocess image for ${item.name}:`, error.details || error.error);
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`❌ Network error reprocessing image for ${item.name}:`, error);
+          errorCount++;
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Update progress
+      const processed = Math.min(i + batchSize, itemsWithImages.length);
+      showToast(`🔄 Reprocessing images... ${processed}/${itemsWithImages.length} completed`);
+
+      // Small delay between batches to be gentle on the server
+      if (i + batchSize < itemsWithImages.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    // Final status
+    if (errorCount === 0) {
+      showToast(`✅ Successfully reprocessed ${successCount} image${successCount !== 1 ? 's' : ''}`);
+    } else {
+      showToast(`⚠️ Reprocessed ${successCount} image${successCount !== 1 ? 's' : ''}, ${errorCount} failed`);
+    }
+
+    // Refresh the inventory display to show updated images
+    renderList();
+
+  } catch (error) {
+    console.error('Image reprocessing error:', error);
+    showToast('⚠️ Image reprocessing failed — check console for details');
   }
 }
 

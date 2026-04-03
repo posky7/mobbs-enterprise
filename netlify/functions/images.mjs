@@ -109,14 +109,35 @@ export default async function handler(req, context) {
         });
       }
 
-      // Generate unique image ID
-      const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+       // Generate unique image ID
+       const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      // Convert file to buffer for storage
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+       // Convert file to buffer for processing
+       const arrayBuffer = await file.arrayBuffer();
+       const originalBuffer = Buffer.from(arrayBuffer);
 
-      await uploadImage(imageId, buffer, file.type);
+       // Auto-orient the image based on EXIF data to fix iPhone portrait orientation issues
+       let processedBuffer;
+       try {
+         console.log(`Processing image ${imageId} for auto-orientation, original size: ${originalBuffer.length} bytes`);
+
+         // Use Sharp to auto-rotate based on EXIF orientation and maintain quality
+         processedBuffer = await sharp(originalBuffer)
+           .rotate() // Automatically rotates based on EXIF orientation data
+           .jpeg({
+             quality: 90, // Maintain high quality while allowing some compression
+             progressive: true
+           })
+           .toBuffer();
+
+         console.log(`Image auto-orientation completed for ${imageId}, processed size: ${processedBuffer.length} bytes`);
+       } catch (orientationError) {
+         console.warn(`Auto-orientation failed for ${imageId}, using original image:`, orientationError.message);
+         // Fall back to original buffer if orientation processing fails
+         processedBuffer = originalBuffer;
+       }
+
+       await uploadImage(imageId, processedBuffer, 'image/jpeg'); // Store as JPEG after processing
 
       return new Response(JSON.stringify({
         success: true,
@@ -126,6 +147,54 @@ export default async function handler(req, context) {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // POST - Reprocess existing image for orientation (backward compatibility)
+    if (httpMethod === 'POST' && action === 'reprocess' && imageId) {
+      try {
+        // Get the existing image
+        const imageResult = await getImage(imageId);
+        if (!imageResult) {
+          return new Response(JSON.stringify({ error: 'Image not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        console.log(`Reprocessing existing image ${imageId} for auto-orientation`);
+
+        // Auto-orient the existing image
+        const processedBuffer = await sharp(imageResult.data)
+          .rotate() // Automatically rotates based on EXIF orientation data
+          .jpeg({
+            quality: 90, // Maintain high quality
+            progressive: true
+          })
+          .toBuffer();
+
+        // Replace the existing image with the oriented version
+        await uploadImage(imageId, processedBuffer, 'image/jpeg');
+
+        console.log(`Successfully reprocessed image ${imageId}, new size: ${processedBuffer.length} bytes`);
+
+        return new Response(JSON.stringify({
+          success: true,
+          imageId: imageId,
+          message: 'Image reprocessed successfully'
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (reprocessError) {
+        console.error(`Reprocessing failed for image ${imageId}:`, reprocessError);
+        return new Response(JSON.stringify({
+          error: 'Reprocessing failed',
+          details: reprocessError.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // DELETE - Delete an image
