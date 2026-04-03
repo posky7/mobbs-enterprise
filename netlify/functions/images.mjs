@@ -31,7 +31,7 @@ export default async function handler(req, context) {
     }
 
     // POST - Upload an image
-    if (httpMethod === 'POST' && action === 'upload') {
+    if (httpMethod === 'POST') {
       const contentType = req.headers.get('content-type');
 
       if (!contentType || !contentType.startsWith('multipart/form-data')) {

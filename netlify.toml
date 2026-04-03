@@ -36,6 +36,11 @@
   to = "/.netlify/functions/backup-timestamp"
   status = 200
 
+[[redirects]]
+  from = "/images"
+  to = "/.netlify/functions/images"
+  status = 200
+
 # SPA fallback for the frontend
 [[redirects]]
   from = "/*"

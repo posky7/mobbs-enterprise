@@ -6,7 +6,7 @@ const STORES = {
   expenses: 'expenses',
   loans: 'loans',
   backupTimestamp: 'backup-timestamp',
-  images: 'images'
+  images: 'item-images'
 };
 
 export async function getBlobStore(name) {
@@ -70,11 +70,18 @@ export async function uploadImage(imageId, imageData, contentType) {
     console.log(`Blob storage: Uploading image ${imageId}, size: ${imageData.length}, type: ${contentType}`);
     const store = await getBlobStore('images');
     await store.set(imageId, imageData, { metadata: { contentType } });
-    console.log(`Blob storage: Successfully uploaded ${imageId}`);
+
+    // Verify the upload by attempting to retrieve the image
+    const verifyBlob = await store.get(imageId);
+    if (!verifyBlob) {
+      throw new Error(`Upload verification failed: image ${imageId} not found after upload`);
+    }
+
+    console.log(`Blob storage: Successfully uploaded and verified ${imageId}`);
     return true;
   } catch (error) {
     console.error(`Blob storage: Error uploading image ${imageId}:`, error);
-    throw error;
+    throw new Error(`Failed to upload image ${imageId}: ${error.message}`);
   }
 }
 

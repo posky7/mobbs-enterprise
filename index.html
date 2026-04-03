@@ -2022,7 +2022,7 @@ function buildItemCard(item) {
   // Check for pending image upload in edit modal (for immediate preview)
   const editId = document.getElementById('edit-id')?.value;
   const pendingImageUrl = (editId === item.id) ? document.getElementById('f-image')?.dataset?.imageUrl : null;
-  const displayImageUrl = pendingImageUrl || item.imageUrl;
+  const displayImageUrl = pendingImageUrl || (item.imageId ? `/.netlify/functions/images?id=${item.imageId}` : null);
 
   let imageHtml = '';
   if (displayImageUrl) {
@@ -2211,7 +2211,7 @@ async function handleImageUpload(input) {
     const formData = new FormData();
     formData.append('image', file);
 
-    const response = await fetch(`${API}/images?action=upload`, {
+    const response = await fetch(`${API}/images`, {
       method: 'POST',
       body: formData
     });
@@ -2223,7 +2223,8 @@ async function handleImageUpload(input) {
 
     const result = await response.json();
 
-    // Store the image URL for later use in saveItem
+    // Store the image ID for later use in saveItem
+    input.dataset.imageId = result.imageId;
     input.dataset.imageUrl = result.url;
 
     // Show preview with improved retry logic and better error handling
@@ -2312,15 +2313,16 @@ async function handleImageUpload(input) {
     status.textContent = '✓ Image uploaded successfully';
     status.style.color = 'var(--accent2)';
 
-  } catch (error) {
-    console.error('Image upload error:', error);
-    preview.innerHTML = '📦';
-    status.textContent = `❌ Upload failed: ${error.message}`;
-    status.style.color = 'var(--danger)';
-    // Clear the file input
-    input.value = '';
-    delete input.dataset.imageUrl;
-  }
+   } catch (error) {
+     console.error('Image upload error:', error);
+     preview.innerHTML = '📦';
+     status.textContent = `❌ Upload failed: ${error.message}`;
+     status.style.color = 'var(--danger)';
+     // Clear the file input and any stored image data
+     input.value = '';
+     delete input.dataset.imageUrl;
+     delete input.dataset.imageId;
+   }
 }
 
 function openAddModal() {
@@ -2381,15 +2383,18 @@ function openEditModal(id) {
   const imagePreview = document.getElementById('image-preview');
   const imageStatus = document.getElementById('image-status');
 
-  if (item.imageUrl) {
-    imageInput.dataset.imageUrl = item.imageUrl;
-    imagePreview.innerHTML = `<img src="${esc(item.imageUrl)}" alt="Current image" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"><button type="button" onclick="removeImage()" style="position:absolute;top:4px;right:4px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;display:flex;align-items:center;justify-content:center;">×</button>`;
+  if (item.imageId) {
+    const imageUrl = `/.netlify/functions/images?id=${item.imageId}`;
+    imageInput.dataset.imageId = item.imageId;
+    imageInput.dataset.imageUrl = imageUrl;
+    imagePreview.innerHTML = `<img src="${esc(imageUrl)}" alt="Current image" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"><button type="button" onclick="removeImage()" style="position:absolute;top:4px;right:4px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;display:flex;align-items:center;justify-content:center;">×</button>`;
     imagePreview.style.position = 'relative';
     imageStatus.textContent = 'Current image loaded';
     imageStatus.style.color = 'var(--accent2)';
     imageStatus.style.display = 'block';
   } else {
     imageInput.value = '';
+    delete imageInput.dataset.imageId;
     delete imageInput.dataset.imageUrl;
     imagePreview.innerHTML = '📦';
     imagePreview.style.position = '';
@@ -2409,21 +2414,31 @@ async function saveItem() {
   const qty=parseInt(document.getElementById('f-qty').value)||0;
   const transferFromWarehouse = document.getElementById('f-transfer-from-warehouse').checked;
 
-  // Preserve existing image URL if no new image was uploaded
+  // Preserve existing image ID if no new image was uploaded
   const imageInput = document.getElementById('f-image');
-  const newImageUrl = imageInput.dataset.imageUrl;
-  const existingImageUrl = existing?.imageUrl || null;
+  const newImageId = imageInput.dataset.imageId;
 
-  // Use new image URL if available, otherwise keep existing one
-  const finalImageUrl = newImageUrl || existingImageUrl;
+  // Handle both legacy imageUrl and new imageId formats
+  let existingImageId = existing?.imageId || null;
+
+  // If no imageId but there's an imageUrl (legacy format), extract the ID from the URL
+  if (!existingImageId && existing?.imageUrl) {
+    const urlMatch = existing.imageUrl.match(/[?&]id=([^&]+)/);
+    if (urlMatch) {
+      existingImageId = urlMatch[1];
+    }
+  }
+
+  // Use new image ID if available, otherwise keep existing one
+  const finalImageId = newImageId || existingImageId;
 
   console.log('Save item - image handling:', {
     editId,
-    newImageUrl,
-    existingImageUrl,
-    finalImageUrl,
+    newImageId,
+    existingImageId,
+    finalImageId,
     hasExisting: !!existing,
-    datasetValue: imageInput.dataset.imageUrl
+    datasetValue: imageInput.dataset.imageId
   });
 
   const item={
@@ -2435,7 +2450,7 @@ async function saveItem() {
     labor:parseFloat(document.getElementById('f-labor').value)||0,
     suggestedPrice:parseFloat(document.getElementById('f-suggested-price').value)||0,
     notes:document.getElementById('f-notes').value.trim(),
-    imageUrl: finalImageUrl,
+    imageId: finalImageId,
     sales:existing?existing.sales||[]:[], // preserve sale history on edit
     inventory: existing ? existing.inventory || {} : {}, // preserve existing inventory
   };
@@ -2564,8 +2579,9 @@ function renderDetail() {
 
   // Handle image display
   const imageContainer = document.getElementById('detail-image-container');
-  if (item.imageUrl) {
-    imageContainer.innerHTML = `<div style="width:100%;height:200px;background:#f5f2ee;border-radius:12px;overflow:hidden;margin-bottom:16px;"><img src="${esc(item.imageUrl)}" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:#ede9e3;display:flex;align-items:center;justify-content:center;font-size:32px;color:#9a9080;\\'>📦</div>';"></div>`;
+  if (item.imageId) {
+    const imageUrl = `/.netlify/functions/images?id=${item.imageId}`;
+    imageContainer.innerHTML = `<div style="width:100%;height:200px;background:#f5f2ee;border-radius:12px;overflow:hidden;margin-bottom:16px;"><img src="${esc(imageUrl)}" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:#ede9e3;display:flex;align-items:center;justify-content:center;font-size:32px;color:#9a9080;\\'>📦</div>';"></div>`;
     imageContainer.style.display = 'block';
   } else {
     imageContainer.style.display = 'none';
