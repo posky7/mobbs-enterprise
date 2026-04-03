@@ -9,6 +9,7 @@
 # Force esbuild bundler for stable ESM function handling
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["sharp"]
 
 # Clean function URLs
 [[redirects]]

@@ -1,4 +1,5 @@
 import { uploadImage, getImage, deleteImage } from './_blob-storage.mjs';
+import sharp from 'sharp';
 
 /**
  * @param {Request} req
@@ -9,6 +10,7 @@ export default async function handler(req, context) {
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
   const imageId = url.searchParams.get('id');
+  const size = url.searchParams.get('size');
 
   try {
     // GET - Retrieve an image
@@ -21,10 +23,44 @@ export default async function handler(req, context) {
         });
       }
 
-      return new Response(imageResult.data, {
+      let imageData = imageResult.data;
+      let contentType = imageResult.metadata.contentType || 'image/jpeg';
+
+      // Generate thumbnail if requested
+      if (size === 'thumb') {
+        try {
+          console.log(`Generating thumbnail for image ${imageId}, original size: ${imageResult.data.length} bytes, content-type: ${contentType}`);
+
+          // Use Sharp to resize to 200x200px square with cover fit
+          imageData = await sharp(imageResult.data)
+            .resize(200, 200, {
+              fit: 'cover',
+              position: 'center'
+            })
+            .jpeg({
+              quality: 80,
+              progressive: true
+            })
+            .toBuffer();
+
+          contentType = 'image/jpeg';
+          console.log(`Thumbnail generated successfully for ${imageId}, new size: ${imageData.length} bytes`);
+        } catch (resizeError) {
+          console.error(`Thumbnail generation failed for ${imageId}:`, {
+            error: resizeError.message,
+            stack: resizeError.stack,
+            originalSize: imageResult.data.length,
+            contentType: contentType
+          });
+          // Fall back to original image if resizing fails
+          console.log(`Falling back to original image for ${imageId}`);
+        }
+      }
+
+      return new Response(imageData, {
         status: 200,
         headers: {
-          'Content-Type': imageResult.metadata.contentType || 'image/jpeg',
+          'Content-Type': contentType,
           'Cache-Control': 'public, max-age=31536000' // Cache for 1 year
         }
       });
