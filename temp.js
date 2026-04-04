@@ -1,1303 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Cheshire & Co">
-<meta name="theme-color" content="#f5f2ee">
-<meta name="description" content="Home decor vendor booth inventory tracker">
-<title>Cheshire & Co — Booth Inventory</title>
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%235b4fcf'/%3E%3Ctext x='90' y='118' font-size='90' text-anchor='middle' font-family='system-ui'%3E📦%3C/text%3E%3C/svg%3E">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<style>
-:root {
-  --bg:       #f5f2ee;
-  --surface:  #ffffff;
-  --surface2: #ede9e3;
-  --border:   #d8d0c6;
-  --accent:   #5b4fcf;
-  --accent2:  #1a9e6e;
-  --accent3:  #c4670f;
-  --danger:   #c93030;
-  --text:     #1a1612;
-  --text2:    #5a5248;
-  --text3:    #9a9080;
-  --radius:   16px;
-  --radius-sm:10px;
-  --font-main:'Syne','Helvetica Neue',Arial,sans-serif;
-  --font-mono:'DM Mono','Courier New',monospace;
-}
-* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
-html,body { height:100%; width:100%; overflow:hidden; background:var(--bg); font-family:var(--font-main); color:var(--text); -webkit-text-size-adjust:100%; }
-
-/* Install Banner */
-#install-banner { position:fixed; bottom:0; left:0; right:0; background:var(--accent); color:#fff; padding:14px 20px calc(14px + env(safe-area-inset-bottom,0px)); z-index:9999; display:none; flex-direction:column; gap:8px; box-shadow:0 -4px 20px rgba(0,0,0,.15); }
-#install-banner.show { display:flex; }
-.install-title { font-size:14px; font-weight:800; }
-.install-steps { font-size:12px; opacity:.9; line-height:1.5; }
-.install-close { position:absolute; top:12px; right:16px; background:rgba(255,255,255,.2); border:none; color:#fff; width:26px; height:26px; border-radius:50%; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-
-/* Toast (FIX #14) */
-#toast { position:fixed; bottom:calc(90px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%) translateY(20px); background:#1a1612; color:#fff; padding:10px 20px; border-radius:22px; font-size:13px; font-weight:700; z-index:9998; opacity:0; transition:opacity .2s,transform .2s; white-space:nowrap; pointer-events:none; }
-#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-
-/* Confirm Dialog (FIX #2) */
-#confirm-overlay { position:fixed; inset:0; background:rgba(26,22,18,.5); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:9000; display:none; align-items:center; justify-content:center; padding:24px; }
-#confirm-overlay.open { display:flex; }
-#confirm-box { background:var(--surface); border-radius:var(--radius); padding:24px 20px 16px; width:100%; max-width:320px; box-shadow:0 8px 40px rgba(0,0,0,.15); }
-#confirm-title { font-size:17px; font-weight:800; color:var(--text); margin-bottom:8px; }
-#confirm-msg   { font-size:14px; color:var(--text2); line-height:1.5; margin-bottom:20px; }
-.confirm-btns  { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.confirm-cancel { background:var(--surface2); border:1px solid var(--border); color:var(--text2); border-radius:var(--radius-sm); padding:13px; font-family:var(--font-main); font-size:14px; font-weight:700; cursor:pointer; min-height:48px; }
-.confirm-ok     { background:var(--danger); color:#fff; border:none; border-radius:var(--radius-sm); padding:13px; font-family:var(--font-main); font-size:14px; font-weight:700; cursor:pointer; min-height:48px; }
-
-/* App Shell */
-#app { display:flex; flex-direction:column; height:100%; height:100dvh; padding-top:env(safe-area-inset-top,0px); padding-left:env(safe-area-inset-left,0px); padding-right:env(safe-area-inset-right,0px); background:var(--bg); }
-
-/* Tab Content */
-.tab-content { display:none; flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:calc(80px + env(safe-area-inset-bottom,0px)); }
-.tab-content::-webkit-scrollbar { display:none; }
-.tab-content.active { display:block; }
-
-/* Header (FIX #13 — live clock) */
-.app-header { padding:18px 20px 0; }
-.header-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:2px; }
-.app-logo   { font-size:11px; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--accent); }
-.header-clock { text-align:right; }
-.header-clock-time { font-family:var(--font-mono); font-size:13px; font-weight:500; color:var(--text2); }
-.header-clock-date { font-family:var(--font-mono); font-size:10px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
-.header-title { font-size:30px; font-weight:800; color:var(--text); letter-spacing:-.5px; line-height:1.1; margin-bottom:2px; }
-
-/* Summary Cards */
-.summary-strip { padding:12px 16px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; position:relative; overflow:hidden; }
-.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
-.stat-card.purple::before { background:linear-gradient(90deg,var(--accent),transparent); }
-.stat-card.green::before  { background:linear-gradient(90deg,var(--accent2),transparent); }
-.stat-card.orange::before { background:linear-gradient(90deg,var(--accent3),transparent); }
-.stat-card.red::before    { background:linear-gradient(90deg,var(--danger),transparent); }
-.stat-label { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); margin-bottom:5px; }
-.stat-value { font-family:var(--font-mono); font-size:22px; font-weight:600; color:var(--text); letter-spacing:-.5px; }
-.stat-sub   { font-size:11px; color:var(--text3); margin-top:2px; }
-
-/* Section Header */
-.section-header { padding:4px 16px 10px; display:flex; justify-content:space-between; align-items:center; }
-.section-title  { font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text2); }
-.btn-add { background:var(--accent); color:#fff; border:none; border-radius:22px; padding:8px 18px; font-family:var(--font-main); font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:opacity .15s; min-height:44px; }
-.btn-add:active { opacity:.75; }
-
-/* Search */
-.search-wrap { padding:0 16px 12px; }
-.search-input { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px 12px 40px; font-family:var(--font-mono); font-size:15px; color:var(--text); outline:none; appearance:none; -webkit-appearance:none; min-height:44px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239a9080' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:13px center; }
-.search-input::placeholder { color:var(--text3); }
-.search-input:focus { border-color:var(--accent); }
-
-/* Data Tools (FIX #1) */
-.data-tools { display:flex; gap:8px; padding:0 16px 14px; }
-.btn-tool { flex:1; background:var(--surface); border:1.5px solid var(--border); color:var(--text2); border-radius:var(--radius-sm); padding:10px 8px; font-family:var(--font-main); font-size:11px; font-weight:700; letter-spacing:.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; min-height:44px; transition:background .15s; }
-.btn-tool:active { background:var(--surface2); }
-
-/* Cards */
-.inv-list { padding:0 16px; display:flex; flex-direction:column; gap:10px; }
-.inv-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); overflow:hidden; cursor:pointer; transition:border-color .15s,transform .1s; }
-.inv-card:active { transform:scale(.985); border-color:var(--accent); }
-.inv-card-header { padding:14px 14px 10px; display:flex; justify-content:space-between; align-items:flex-start; }
-.inv-name { font-size:16px; font-weight:700; color:var(--text); letter-spacing:-.2px; flex:1; padding-right:10px; line-height:1.25; }
-.inv-qty-badge { background:var(--surface2); border:1.5px solid var(--border); border-radius:9px; padding:5px 11px; font-family:var(--font-mono); font-size:14px; font-weight:600; color:var(--text); white-space:nowrap; }
-.inv-qty-badge.low { border-color:var(--danger); color:var(--danger); background:#fff0f0; }
-.inv-qty-badge.ok  { border-color:var(--accent2); color:var(--accent2); background:#f0faf6; }
-.category-chip { display:inline-block; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); margin-top:3px; }
-.inv-metrics { display:flex; border-top:1px solid var(--border); padding:8px 12px; gap:12px; justify-content:space-between; align-items:center; }
-.inv-metric  { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
-.inv-metric-label { font-size:8px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); }
-.inv-metric-value { font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--text); text-align:right; }
-.inv-metric-value.highlight { color:var(--accent2); }
-.inv-metric-value.cost      { color:var(--accent3); }
-.inv-metric-value.price     { color:var(--accent); }
-.inv-notes { border-top:1px solid var(--border); padding:10px 14px; font-size:12px; color:var(--text2); line-height:1.4; word-wrap:break-word; white-space:pre-wrap; }
-.margin-bar  { height:3px; background:var(--surface2); margin:0 14px 12px; border-radius:2px; overflow:hidden; }
-.margin-fill { height:100%; background:linear-gradient(90deg,var(--accent2),var(--accent)); border-radius:2px; }
-
-/* Bottom Nav */
-.bottom-nav { position:fixed; bottom:0; left:0; right:0; padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px)); background:var(--surface); border-top:1px solid var(--border); display:flex; justify-content:space-around; align-items:center; z-index:100; }
-.nav-btn { display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; cursor:pointer; padding:6px 20px; border-radius:14px; transition:background .15s; min-width:72px; min-height:44px; justify-content:center; }
-.nav-btn:active { background:var(--surface2); }
-.nav-icon  { font-size:22px; line-height:1; }
-.nav-label { font-family:var(--font-main); font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text3); }
-.nav-btn.active .nav-label { color:var(--accent); }
-
-/* Modals (FIX #5 swipe handle) */
-.modal-overlay { position:fixed; inset:0; background:rgba(26,22,18,.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:500; display:none; align-items:flex-end; }
-.modal-overlay.open { display:flex; }
-.modal-sheet { width:100%; background:var(--surface); border-radius:26px 26px 0 0; border-top:1px solid var(--border); padding-bottom:calc(20px + env(safe-area-inset-bottom,0px)); max-height:92dvh; display:flex; flex-direction:column; animation:slideUp .28s cubic-bezier(.32,.72,0,1); }
-@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-.modal-handle { width:40px; height:4px; background:var(--border); border-radius:2px; margin:14px auto 0; flex-shrink:0; cursor:grab; touch-action:none; }
-.modal-header { padding:16px 20px 14px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; border-bottom:1px solid var(--border); }
-.modal-title  { font-size:20px; font-weight:800; color:var(--text); letter-spacing:-.3px; }
-.modal-close  { background:var(--surface2); border:1px solid var(--border); color:var(--text2); border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:16px; cursor:pointer; }
-.modal-body   { overflow-y:auto; flex:1; padding:16px 20px; -webkit-overflow-scrolling:touch; }
-.modal-body::-webkit-scrollbar { display:none; }
-
-/* Forms */
-.form-group   { margin-bottom:16px; }
-.form-label   { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); margin-bottom:7px; display:block; }
-.form-input   { width:100%; background:var(--bg); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:13px 14px; font-family:var(--font-mono); font-size:16px; color:var(--text); outline:none; appearance:none; -webkit-appearance:none; transition:border-color .15s; min-height:48px; }
-.form-input:focus { border-color:var(--accent); background:#fff; }
-.form-input::placeholder { color:var(--text3); }
-.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.form-section       { margin-bottom:8px; padding:14px 0 8px; border-bottom:1px solid var(--border); }
-.form-section-title { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent); margin-bottom:14px; }
-.calc-preview { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; margin-bottom:16px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-.calc-item       { text-align:center; }
-.calc-item-label { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); font-weight:700; margin-bottom:5px; }
-.calc-item-val   { font-family:var(--font-mono); font-size:15px; font-weight:600; color:var(--text2); }
-.calc-item-val.pos { color:var(--accent2); }
-.calc-item-val.neg { color:var(--danger); }
-
-/* Reorder Point (FIX #6) */
-.reorder-row { display:flex; align-items:center; gap:10px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:16px; }
-.reorder-label { font-size:12px; color:var(--text2); font-weight:600; flex:1; }
-.reorder-input { width:70px; background:var(--surface); border:1.5px solid var(--border); border-radius:8px; padding:8px 10px; font-family:var(--font-mono); font-size:15px; color:var(--text); text-align:center; outline:none; appearance:none; -webkit-appearance:none; min-height:40px; }
-.reorder-input:focus { border-color:var(--accent); }
-
-.btn-save { width:100%; background:linear-gradient(135deg,var(--accent),#4a3fb8); color:#fff; border:none; border-radius:var(--radius-sm); padding:16px; font-family:var(--font-main); font-size:15px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; margin-top:8px; min-height:52px; transition:opacity .15s; }
-.btn-save:active { opacity:.8; }
-.btn-delete { width:100%; background:transparent; color:var(--danger); border:1.5px solid var(--danger); border-radius:var(--radius-sm); padding:14px; font-family:var(--font-main); font-size:14px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; margin-top:10px; min-height:52px; transition:background .15s; }
-.btn-delete:active { background:rgba(201,48,48,.08); }
-
-/* Detail View */
-.detail-badge { display:inline-flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:7px 14px; font-family:var(--font-mono); font-size:12px; color:var(--text2); margin-bottom:16px; }
-.detail-grid  { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
-.detail-stat  { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; }
-.detail-stat-label { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); font-weight:700; margin-bottom:6px; }
-.detail-stat-value { font-family:var(--font-mono); font-size:20px; font-weight:600; color:var(--text); }
-.detail-stat-value.accent { color:var(--accent); }
-.detail-stat-value.green  { color:var(--accent2); }
-.detail-stat-value.orange { color:var(--accent3); }
-.profit-summary { background:linear-gradient(135deg,rgba(26,158,110,.08),rgba(91,79,207,.06)); border:1px solid rgba(26,158,110,.25); border-radius:var(--radius-sm); padding:18px; margin-bottom:16px; text-align:center; }
-.profit-label  { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent2); margin-bottom:4px; }
-.profit-value  { font-family:var(--font-mono); font-size:32px; font-weight:600; color:var(--text); }
-.profit-margin { font-size:13px; color:var(--text2); margin-top:3px; }
-.qty-controls  { display:flex; align-items:center; gap:14px; background:var(--bg); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:16px; }
-.qty-btn       { width:44px; height:44px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; color:var(--text); font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:300; transition:background .15s; flex-shrink:0; }
-.qty-btn:active { background:var(--accent); border-color:var(--accent); color:#fff; }
-.qty-display   { flex:1; text-align:center; font-family:var(--font-mono); font-size:26px; font-weight:600; color:var(--text); }
-.qty-unit      { font-size:12px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
-
-/* Empty State */
-.empty-state { text-align:center; padding:50px 20px; }
-.empty-icon  { font-size:48px; margin-bottom:14px; }
-.empty-text  { font-size:16px; color:var(--text2); margin-bottom:5px; font-weight:700; }
-.empty-sub   { font-size:13px; color:var(--text3); }
-
-/* Reports */
-.rpt-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
-.rpt-card-title { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); margin-bottom:14px; }
-.rpt-chart-wrap { position:relative; width:100%; height:200px; }
-.rpt-chart-wrap.rpt-chart-sm { height:220px; }
-
-/* P&L Period Selector */
-.pnl-period-btn {
-  background: transparent; border: none; border-radius: 8px;
-  padding: 9px 4px; font-family: var(--font-main); font-size: 11px;
-  font-weight: 700; letter-spacing: 0.3px; color: var(--text3);
-  cursor: pointer; transition: background .15s, color .15s; width: 100%;
-  white-space: nowrap;
-}
-.pnl-period-btn.active {
-  background: var(--surface); color: var(--accent);
-  box-shadow: 0 1px 4px rgba(0,0,0,.08);
-}
-.pnl-period-btn:active { opacity: .75; }
-
-/* Hunt Category Tabs */
-.category-tab {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text2);
-  border-radius: 20px;
-  padding: 6px 14px;
-  font-family: var(--font-main);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: all .15s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.category-tab:hover {
-  background: var(--surface);
-  border-color: var(--accent);
-}
-.category-tab.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-.category-tab:active { opacity: .75; }
-
-/* P&L */
-.pnl-section { padding:0 16px; }
-.pnl-card    { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:12px; }
-.pnl-row     { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border); }
-.pnl-row:last-child { border-bottom:none; }
-.pnl-row-label { font-size:14px; color:var(--text2); font-weight:600; }
-.pnl-row-val   { font-family:var(--font-mono); font-size:15px; font-weight:600; color:var(--text); }
-.pnl-row-val.pos { color:var(--accent2); }
-.pnl-row-val.neg { color:var(--danger); }
-
-/* Select */
-select.form-input { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%239a9080' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:36px; appearance:none; -webkit-appearance:none; }
-select.form-input option { background:#fff; color:#1a1612; }
-
-/* Image Modal Styles */
-.image-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  z-index: 10000;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.image-modal-overlay.open { display: flex; }
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.image-modal-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  box-sizing: border-box;
-}
-
-.image-modal-content {
-  position: relative;
-  max-width: 100%;
-  max-height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  touch-action: none; /* Prevent default touch behaviors */
-}
-
-.image-modal-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  transition: transform 0.1s ease-out;
-   cursor: grab;
-   user-select: none;
-   -webkit-user-drag: none;
-}
-
-/* iPad (FIX #15) */
-@media (min-width:768px) {
-  .summary-strip,
-  .inv-list,.pnl-section,.section-header,.search-wrap,.app-header,.data-tools { max-width:680px; margin-left:auto; margin-right:auto; }
-  .summary-strip { grid-template-columns:repeat(4,1fr); }
-  .modal-sheet   { max-width:540px; margin:0 auto; border-radius:26px; margin-bottom:40px; }
-  .modal-overlay { align-items:center; justify-content:center; }
-  .bottom-nav    { justify-content:center; }
-  .nav-btn       { padding:6px 36px; }
-}
-
-/* iPad Pro specific styles for Finance Hub */
-@media (min-width:1024px) {
-  /* Finance Hub icons - 3 columns for iPad Pro */
-  #tab-pnl .inv-card {
-    padding: 24px 16px !important;
-  }
-  #tab-pnl .inv-card .inv-name {
-    font-size: 18px !important;
-  }
-  #tab-pnl .inv-card div[style*="font-size:42px"] {
-    font-size: 48px !important;
-  }
-}
-</style>
-</head>
-<body>
-
-<div id="install-banner">
-  <button class="install-close" onclick="dismissBanner()">✕</button>
-  <div class="install-title">📲 Add Cheshire & Co to your Home Screen</div>
-  <div class="install-steps">Tap the <strong>Share</strong> button ( ⎙ ) in Safari's toolbar, then choose <strong>"Add to Home Screen"</strong> → tap <strong>Add</strong>.</div>
-</div>
-
-<div id="toast"></div>
-
-<div id="confirm-overlay">
-  <div id="confirm-box">
-    <div id="confirm-title">Are you sure?</div>
-    <div id="confirm-msg"></div>
-    <div class="confirm-btns">
-      <button class="confirm-cancel" onclick="confirmResolve(false)">Cancel</button>
-      <button class="confirm-ok" id="confirm-ok-btn" onclick="confirmResolve(true)">Delete</button>
-    </div>
-  </div>
-</div>
-
-<div id="app">
-
-  <!-- Inventory Tab -->
-  <div id="tab-inventory" class="tab-content active">
-    <div class="app-header">
-      <div class="header-top">
-        <div class="app-logo">Cheshire & Co</div>
-        <div class="header-clock"><div class="header-clock-time" id="clock-time">—</div><div class="header-clock-date" id="clock-date">—</div></div>
-      </div>
-      <div class="header-title">Inventory</div>
-    </div>
-    <!-- Location filter -->
-    <div style="padding:12px 16px 0;">
-      <div style="margin-bottom:12px;text-align:center;">
-        <label class="form-label" style="margin-bottom:8px;display:block;">Location</label>
-        <select class="form-input" id="inventory-location-filter" onchange="setInventoryLocationFilter()" style="max-width:300px;">
-          <option value="all">All Locations</option>
-        </select>
-      </div>
-    </div>
-
-
-    <div class="section-header"><div style="display:flex;gap:8px;"><button class="btn-add" onclick="openMoveInventoryModal()">📦 Move Inventory</button><button class="btn-add" onclick="openAddModal()">＋ Add Item</button></div></div>
-    <div class="search-wrap"><input class="search-input" type="search" placeholder="Search inventory…" id="search-box" oninput="renderList()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
-
-    <div class="inv-list" id="inv-list"></div>
-
-    <!-- Sold section -->
-    <div id="sold-section" style="display:none;">
-      <div class="section-header" style="cursor:pointer;padding-top:8px;" onclick="toggleSoldSection()">
-        <div class="section-title" style="display:flex;align-items:center;gap:8px;">
-          <span>✅ Sold</span>
-          <span id="sold-count-badge" style="background:var(--accent2);color:#fff;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:1px;">0</span>
-        </div>
-        <span id="sold-toggle-arrow" style="font-size:18px;color:var(--text3);transition:transform .2s;">▾</span>
-      </div>
-      <div id="sold-list" class="inv-list" style="padding-bottom:16px;"></div>
-    </div>
-  </div>
-
-  <!-- P&L Tab -->
-  <div id="tab-pnl" class="tab-content">
-
-    <!-- Finance Hub Landing (shown by default, hidden when a sub-view is open) -->
-    <div id="finance-hub-landing">
-      <div class="app-header">
-        <div class="header-top">
-          <div class="app-logo">Cheshire & Co</div>
-          <div class="header-clock"><div class="header-clock-time" id="pnl-clock">—</div><div class="header-clock-date" id="pnl-date">—</div></div>
-        </div>
-        <div class="header-title">Finance Hub</div>
-      </div>
-
-      <!-- Location setup message (hidden by default) -->
-      <div id="pnl-location-setup" class="pnl-section" style="display:none;padding:40px 20px;text-align:center;">
-        <div style="font-size:48px;margin-bottom:16px;">📍</div>
-        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px;">No Locations Configured</div>
-        <div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:20px;">You need at least one location to track inventory and view financial reports.</div>
-        <button class="btn-save" onclick="switchTab('settings')">Go to Settings</button>
-      </div>
-
-      <div style="padding:0 0 0;">
-        <div class="summary-strip" id="finance-hub-kpi">
-          <div class="stat-card green"><div class="stat-label">Revenue</div><div class="stat-value" id="hub-revenue">$0</div><div class="stat-sub">this period</div></div>
-          <div class="stat-card purple"><div class="stat-label">Profit</div><div class="stat-value" id="hub-profit">$0</div><div class="stat-sub">after costs</div></div>
-          <div class="stat-card orange"><div class="stat-label">Units Sold</div><div class="stat-value" id="hub-units">0</div><div class="stat-sub">items</div></div>
-          <div class="stat-card red"><div class="stat-label">Margin</div><div class="stat-value" id="hub-margin">0%</div><div class="stat-sub">avg profit</div></div>
-        </div>
-      </div>
-
-      <div class="section-header" style="padding-top:8px;"><div class="section-title">Finance Hub</div></div>
-
-      <div id="finance-hub-icons" style="padding:0 16px 20px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
-        <div class="inv-card" onclick="openFinanceSub('expenses')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">💸</div>
-          <div class="inv-name" style="font-size:17px;">Expenses</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('loans')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">🏦</div>
-          <div class="inv-name" style="font-size:17px;">Loans</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('reports')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">📈</div>
-          <div class="inv-name" style="font-size:17px;">Reports</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('income')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">📊</div>
-          <div class="inv-name" style="font-size:17px;">Income Summary</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('pnl')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">📉</div>
-          <div class="inv-name" style="font-size:17px;">P&amp;L</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('individual')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">🧾</div>
-          <div class="inv-name" style="font-size:17px;">Individual Sales</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('inventory-summary')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">📦</div>
-          <div class="inv-name" style="font-size:17px;">Inventory Summary</div>
-        </div>
-      </div>
-
-      <!-- Last Updated timestamp -->
-      <div style="padding:0 16px 16px;text-align:center;color:var(--text3);font-size:12px;font-family:var(--font-mono);">
-        Last updated: <span id="pnl-last-updated">—</span>
-      </div>
-    </div><!-- /#finance-hub-landing -->
-
-    <!-- Finance Loans Sub-view -->
-    <div id="finance-loans-view" class="finance-subview" style="display:none;">
-      <div class="app-header">
-        <div class="header-top">
-          <div class="header-clock"><div class="header-clock-time" id="loans-clock">—</div><div class="header-clock-date" id="loans-date">—</div></div>
-        </div>
-        <div class="header-title">Loans</div>
-        <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
-      </div>
-      <div class="summary-strip">
-        <div class="stat-card purple"><div class="stat-label">Active</div><div class="stat-value" id="loan-sum-count">0</div><div class="stat-sub">loans</div></div>
-        <div class="stat-card red"><div class="stat-label">Borrowed</div><div class="stat-value" id="loan-sum-borrowed">$0</div><div class="stat-sub">original total</div></div>
-        <div class="stat-card orange"><div class="stat-label">Total Paid</div><div class="stat-value" id="loan-sum-paid">$0</div><div class="stat-sub">payments made</div></div>
-        <div class="stat-card green"><div class="stat-label">Balance</div><div class="stat-value" id="loan-sum-balance">$0</div><div class="stat-sub">remaining</div></div>
-      </div>
-      <div class="section-header"><div class="section-title">Loan Accounts</div><button class="btn-add" onclick="openAddLoanModal()">＋ Add Loan</button></div>
-      <div class="search-wrap"><input class="search-input" type="search" placeholder="Search loans…" id="loan-search-box" oninput="renderLoans()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
-      <div class="inv-list" id="loan-list"></div>
-    </div>
-
-    <!-- Finance Expenses Sub-view -->
-    <div id="finance-expenses-view" class="finance-subview" style="display:none;">
-      <div class="app-header">
-        <div class="header-top">
-          <div class="header-clock"><div class="header-clock-time" id="exp-clock">—</div><div class="header-clock-date" id="exp-date">—</div></div>
-        </div>
-        <div class="header-title">Expenses</div>
-        <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
-      </div>
-      <div class="summary-strip">
-        <div class="stat-card purple"><div class="stat-label">Total Expenses</div><div class="stat-value" id="exp-sum-count">0</div><div class="stat-sub">tracked items</div></div>
-        <div class="stat-card red"><div class="stat-label">Monthly Total</div><div class="stat-value" id="exp-sum-monthly">$0</div><div class="stat-sub">recurring/mo</div></div>
-        <div class="stat-card orange"><div class="stat-label">Annual Total</div><div class="stat-value" id="exp-sum-annual">$0</div><div class="stat-sub">projected/yr</div></div>
-        <div class="stat-card green"><div class="stat-label">Paid YTD</div><div class="stat-value" id="exp-sum-ytd">$0</div><div class="stat-sub">this year</div></div>
-      </div>
-      <div class="section-header"><div class="section-title">All Expenses</div><button class="btn-add" onclick="openAddExpenseModal()">＋ Add Expense</button></div>
-      <div class="search-wrap"><input class="search-input" type="search" placeholder="Search expenses…" id="exp-search-box" oninput="renderExpenses()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
-      <div class="inv-list" id="exp-list"></div>
-    </div>
-
-    <!-- Finance Reports Sub-view -->
-    <div id="finance-reports-view" class="finance-subview" style="display:none;">
-      <div class="app-header">
-        <div class="header-top">
-          <div class="header-clock"><div class="header-clock-time" id="rpt-clock">—</div><div class="header-clock-date" id="rpt-date">—</div></div>
-        </div>
-        <div class="header-title">Reports</div>
-        <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
-      </div>
-
-      <!-- Period selector -->
-      <div style="padding:12px 16px 0;">
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface2);border-radius:var(--radius-sm);padding:3px;gap:3px;">
-          <button id="rpt-period-ytd"    class="pnl-period-btn active" onclick="setRptPeriod('ytd')">YTD</button>
-          <button id="rpt-period-month"  class="pnl-period-btn"        onclick="setRptPeriod('month')">Month</button>
-          <button id="rpt-period-last"   class="pnl-period-btn"        onclick="setRptPeriod('last')">Last Mo.</button>
-          <button id="rpt-period-all"    class="pnl-period-btn"        onclick="setRptPeriod('all')">All Time</button>
-        </div>
-      </div>
-
-      <!-- KPI strip -->
-      <div class="summary-strip" id="rpt-kpi-strip">
-        <div class="stat-card green"><div class="stat-label">Revenue</div><div class="stat-value" id="rpt-revenue">$0</div><div class="stat-sub">period total</div></div>
-        <div class="stat-card purple"><div class="stat-label">Profit</div><div class="stat-value" id="rpt-profit">$0</div><div class="stat-sub">after costs</div></div>
-        <div class="stat-card orange"><div class="stat-label">Units Sold</div><div class="stat-value" id="rpt-units">0</div><div class="stat-sub">items</div></div>
-        <div class="stat-card red"><div class="stat-label">Margin</div><div class="stat-value" id="rpt-margin">0%</div><div class="stat-sub">avg profit %</div></div>
-      </div>
-
-      <!-- Charts -->
-      <div style="padding:0 16px;">
-
-        <!-- Revenue over time -->
-        <div class="rpt-card">
-          <div class="rpt-card-title">Revenue & Profit Over Time</div>
-          <div class="rpt-chart-wrap"><canvas id="chart-revenue"></canvas></div>
-        </div>
-
-        <!-- Sales by category donut -->
-        <div class="rpt-card">
-          <div class="rpt-card-title">Revenue by Category</div>
-          <div class="rpt-chart-wrap rpt-chart-sm"><canvas id="chart-category"></canvas></div>
-        </div>
-
-        <!-- Top items bar -->
-        <div class="rpt-card">
-          <div class="rpt-card-title">Top Items by Revenue</div>
-          <div class="rpt-chart-wrap"><canvas id="chart-items"></canvas></div>
-        </div>
-
-        <!-- Expenses vs Revenue -->
-        <div class="rpt-card">
-          <div class="rpt-card-title">Revenue vs Expenses</div>
-          <div class="rpt-chart-wrap"><canvas id="chart-exp"></canvas></div>
-        </div>
-
-      </div>
-
-      <!-- Export buttons -->
-      <div style="padding:8px 16px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <button class="btn-save" onclick="exportReportCSV()" style="margin-top:0;font-size:13px;">⬇ Export CSV</button>
-        <button class="btn-save" onclick="exportReportPDF()" style="margin-top:0;background:linear-gradient(135deg,var(--accent3),#a8540a);font-size:13px;">⬇ Export PDF</button>
-      </div>
-
-    </div>
-
-    <!-- Finance Income Summary Sub-view -->
-    <div id="finance-income-view" class="finance-subview" style="display:none;">
-      <div class="app-header">
-        <div class="header-top">
-          <div class="header-clock"><div class="header-clock-time" id="income-clock">—</div><div class="header-clock-date" id="income-date">—</div></div>
-        </div>
-        <div class="header-title">Income Summary</div>
-        <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
-      </div>
-      <div class="summary-strip">
-        <div class="stat-card green"><div class="stat-label">Total Revenue</div><div class="stat-value" id="income-total-revenue">$0</div><div class="stat-sub">all time</div></div>
-        <div class="stat-card purple"><div class="stat-label">Avg Sale Price</div><div class="stat-value" id="income-avg-price">$0</div><div class="stat-sub">per item</div></div>
-        <div class="stat-card orange"><div class="stat-label">Total Items Sold</div><div class="stat-value" id="income-total-units">0</div><div class="stat-sub">units</div></div>
-        <div class="stat-card red"><div class="stat-label">Best Seller</div><div class="stat-value" id="income-best-seller">—</div><div class="stat-sub">by revenue</div></div>
-      </div>
-      <div class="section-header"><div class="section-title">Revenue by Category</div></div>
-      <div class="pnl-section" id="income-category-breakdown">
-        <!-- Content will be populated by renderIncomeSummary() -->
-      </div>
-    </div>
-
-    <!-- Finance Individual Sales Sub-view -->
-    <div id="finance-individual-view" class="finance-subview" style="display:none;">
-      <div class="app-header">
-        <div class="header-top">
-          <div class="header-clock"><div class="header-clock-time" id="individual-clock">—</div><div class="header-clock-date" id="individual-date">—</div></div>
-        </div>
-        <div class="header-title">Individual Sales</div>
-        <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
-      </div>
-      <div class="summary-strip">
-        <div class="stat-card green"><div class="stat-label">Recent Sales</div><div class="stat-value" id="individual-recent-count">0</div><div class="stat-sub">last 30 days</div></div>
-        <div class="stat-card purple"><div class="stat-label">Avg Sale Value</div><div class="stat-value" id="individual-avg-value">$0</div><div class="stat-sub">per sale</div></div>
-        <div class="stat-card orange"><div class="stat-label">Top Item</div><div class="stat-value" id="individual-top-item">—</div><div class="stat-sub">this month</div></div>
-        <div class="stat-card red"><div class="stat-label">Total Profit</div><div class="stat-value" id="individual-total-profit">$0</div><div class="stat-sub">all sales</div></div>
-      </div>
-      <div class="section-header"><div class="section-title">Recent Sales</div></div>
-      <div class="inv-list" id="individual-sales-list">
-        <!-- Content will be populated by renderIndividualSales() -->
-      </div>
-    </div>
-
-    <!-- Finance Inventory Summary Sub-view -->
-    <div id="finance-inventory-summary-view" class="finance-subview" style="display:none;">
-      <div class="app-header">
-        <div class="header-top">
-          <div class="header-clock"><div class="header-clock-time" id="inventory-summary-clock">—</div><div class="header-clock-date" id="inventory-summary-date">—</div></div>
-        </div>
-        <div class="header-title">Inventory Summary</div>
-        <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
-      </div>
-      <div class="summary-strip">
-        <div class="stat-card green"><div class="stat-label">Total Items</div><div class="stat-value" id="inventory-summary-total-items">0</div><div class="stat-sub">in stock</div></div>
-        <div class="stat-card purple"><div class="stat-label">Total Value</div><div class="stat-value" id="inventory-summary-total-value">$0</div><div class="stat-sub">at cost</div></div>
-        <div class="stat-card orange"><div class="stat-label">Avg Item Value</div><div class="stat-value" id="inventory-summary-avg-value">$0</div><div class="stat-sub">per item</div></div>
-        <div class="stat-card red"><div class="stat-label">Low Stock Items</div><div class="stat-value" id="inventory-summary-low-stock">0</div><div class="stat-sub">need reorder</div></div>
-      </div>
-      <div class="section-header"><div class="section-title">Inventory by Category</div></div>
-      <div class="pnl-section" id="inventory-summary-breakdown">
-        <!-- Content will be populated by renderInventorySummary() -->
-      </div>
-    </div>
-
-    <!-- Finance P&L Sub-view -->
-    <div id="finance-pnl-view" class="finance-subview" style="display:none;">
-      <div class="app-header">
-        <div class="header-top">
-          <div class="header-clock"><div class="header-clock-time" id="sub-pnl-clock">—</div><div class="header-clock-date" id="sub-pnl-date">—</div></div>
-        </div>
-        <div class="header-title">Profit & Loss</div>
-        <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
-      </div>
-
-      <!-- P&L Controls -->
-      <div id="pnl-controls-container" style="padding:12px 16px 0;display:none;">
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface2);border-radius:var(--radius-sm);padding:3px;gap:3px;margin-bottom:12px;">
-          <button id="pnl-period-ytd"    class="pnl-period-btn active" onclick="setPnLPeriod('ytd')">YTD</button>
-          <button id="pnl-period-month"  class="pnl-period-btn"        onclick="setPnLPeriod('month')">Month</button>
-          <button id="pnl-period-quarter" class="pnl-period-btn"       onclick="setPnLPeriod('quarter')">Quarter</button>
-          <button id="pnl-period-all"    class="pnl-period-btn"        onclick="setPnLPeriod('all')">All Time</button>
-        </div>
-        <div style="margin-bottom:8px;">
-          <select id="pnl-location-filter" onchange="setPnLLocationFilter()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-family:var(--font-main);font-size:14px;color:var(--text);">
-            <option value="all">All Locations</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- P&L Content -->
-      <div id="pnl-section" class="pnl-section" style="display:none;">
-        <!-- Content will be populated by renderPnL() -->
-      </div>
-
-      <!-- Last Updated -->
-      <div style="padding:16px;text-align:center;color:var(--text3);font-size:12px;font-family:var(--font-mono);">
-        Last updated: <span id="sub-pnl-last-updated">—</span>
-      </div>
-    </div>
-
-    <!-- Finance View Controls -->
-    <div id="finance-view-controls" style="padding:12px 16px 0;display:none;">
-      <div style="margin-bottom:8px;">
-        <select id="finance-view-selector" onchange="setFinanceView()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-family:var(--font-main);font-size:14px;color:var(--text);">
-          <option value="income-statement">Income Statement</option>
-          <option value="pnl">Profit & Loss</option>
-          <option value="inventory-summary">Inventory Summary</option>
-          <option value="individual-sales">Individual Sales</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Income Statement Section -->
-    <div id="income-statement-section" style="display:none;">
-      <div style="padding:16px 16px 8px;">
-        <div style="font-size:18px;font-weight:600;color:var(--text);margin-bottom:8px;">Income Statement</div>
-        <div style="font-size:14px;color:var(--text3);margin-bottom:16px;">
-          Period: <span id="income-statement-period" style="font-weight:500;">—</span>
-        </div>
-      </div>
-
-      <div style="padding:0 16px;">
-        <!-- Revenue Section -->
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:600;">Revenue</div>
-        </div>
-        <div class="pnl-row">
-          <div class="pnl-row-label">Gross Revenue</div>
-          <div class="pnl-row-val pos" id="is-gross-revenue">—</div>
-        </div>
-        <div class="pnl-row">
-          <div class="pnl-row-label">Transaction Fees</div>
-          <div class="pnl-row-val neg" id="is-transaction-fees">—</div>
-        </div>
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:500;">Net Revenue</div>
-          <div class="pnl-row-val" id="is-net-revenue">—</div>
-        </div>
-
-        <!-- Cost of Goods Sold -->
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:500;">Cost of Goods Sold</div>
-          <div class="pnl-row-val neg" id="is-cogs">—</div>
-        </div>
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:600;">Gross Profit</div>
-          <div class="pnl-row-val" id="is-gross-profit">—</div>
-        </div>
-
-        <!-- Operating Expenses -->
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:500;">Operating Expenses</div>
-          <div class="pnl-row-val neg" id="is-operating-expenses">—</div>
-        </div>
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:600;">Operating Income</div>
-          <div class="pnl-row-val" id="is-operating-income">—</div>
-        </div>
-
-        <!-- Expense Breakdown -->
-        <div id="is-expense-breakdown"></div>
-
-        <!-- Other Income/Expenses -->
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:500;">Other Income/Expenses</div>
-          <div class="pnl-row-val" id="is-other-income-expenses">—</div>
-        </div>
-
-        <!-- Other Breakdown -->
-        <div id="is-other-breakdown"></div>
-
-        <!-- Net Income -->
-        <div class="pnl-row" style="border-top:2px solid var(--border);padding-top:12px;margin-top:12px;">
-          <div class="pnl-row-label" style="font-weight:700;font-size:16px;">Net Income</div>
-          <div class="pnl-row-val" id="is-net-income" style="font-weight:700;font-size:16px;">—</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Inventory Summary Section -->
-    <div id="inventory-summary-section" style="display:none;">
-      <!-- Inventory Summary Controls -->
-      <div id="inventory-summary-controls" style="padding:12px 16px 0;display:none;">
-        <div style="margin-bottom:8px;">
-          <select id="inventory-summary-location-filter" onchange="setInventorySummaryLocationFilter()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-family:var(--font-main);font-size:14px;color:var(--text);">
-            <option value="all">All Locations</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Inventory Summary Content -->
-      <div class="inv-list" id="inventory-summary-list">
-        <!-- Content will be populated by renderInventorySummary() -->
-      </div>
-    </div>
-
-    <!-- Individual Sales Section -->
-    <div id="individual-sales-section" style="display:none;">
-      <!-- Individual Sales Controls -->
-      <div id="individual-sales-controls" style="padding:12px 16px 0;display:none;">
-        <div style="margin-bottom:8px;">
-          <select id="individual-sales-location-filter" onchange="setIndividualSalesLocationFilter()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-family:var(--font-main);font-size:14px;color:var(--text);">
-            <option value="all">All Locations</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Individual Sales Content -->
-      <div class="inv-list" id="legacy-individual-sales-list">
-        <!-- Content will be populated by renderIndividualSales() -->
-      </div>
-    </div>
-
-  </div><!-- /#tab-pnl -->
-
-  <!-- Settings Tab -->
-  <div id="tab-settings" class="tab-content">
-    <div class="app-header">
-      <div class="header-top">
-        <div class="app-logo">Cheshire & Co</div>
-        <div class="header-clock"><div class="header-clock-time" id="settings-clock">—</div><div class="header-clock-date" id="settings-date">—</div></div>
-      </div>
-      <div class="header-title">Settings</div>
-    </div>
-
-    <!-- Location Management -->
-    <div class="section-header"><div class="section-title">Locations</div><button class="btn-add" onclick="addLocation()">＋ Add Location</button></div>
-    <div class="inv-list" id="location-settings-list"></div>
-
-    <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px;">
-      Manage your retail booth locations and storage facility. Each location can track inventory separately.
-    </div>
-
-    <!-- Data Management -->
-    <div class="section-header"><div class="section-title">Data Management</div></div>
-    <div class="data-tools">
-      <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
-      <button class="btn-tool" onclick="importCSV(event)">⬆ Import CSV</button>
-      <button class="btn-tool" onclick="reprocessImages()" style="color:var(--accent);border-color:var(--accent);">🔄 Fix Image Orientation</button>
-      <button class="btn-tool" onclick="openResetInventoryModal()" style="color:var(--danger);border-color:var(--danger);">🔄 Reset Inventory</button>
-      <button class="btn-tool" onclick="openResetExpensesModal()" style="color:var(--danger);border-color:var(--danger);">💸 Reset Expenses</button>
-      <button class="btn-tool" onclick="openResetLoansModal()" style="color:var(--danger);border-color:var(--danger);">🏦 Reset Loans</button>
-      <button class="btn-tool" onclick="openResetLocationsModal()" style="color:var(--danger);border-color:var(--danger);">📍 Reset Locations</button>
-      <button class="btn-tool" onclick="openBackupModal()" style="color:var(--accent);border-color:var(--accent);">🔒 Backup</button>
-      <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importCSV(event)">
-      <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
-    </div>
-    <div id="backup-status" style="padding:0 16px 10px;font-size:11px;color:var(--text3);font-family:var(--font-mono);display:none;text-align:center;">
-      Last backup: <span id="backup-date">never</span>
-    </div>
-
-    <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px;">
-      Export and import inventory data, reset inventory levels, and manage backups of your data.
-    </div>
-  </div>
-
-  <!-- Hunt Tab -->
-  <div id="tab-hunt" class="tab-content">
-    <div class="app-header">
-      <div class="header-top">
-        <div class="app-logo">Cheshire & Co</div>
-        <div class="header-clock"><div class="header-clock-time" id="hunt-clock">—</div><div class="header-clock-date" id="hunt-date">—</div></div>
-      </div>
-      <div class="header-title">The HUNT</div>
-    </div>
-
-    <!-- Category filter tabs -->
-    <div id="hunt-category-tabs" style="padding:0 16px 12px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
-      <button class="category-tab active" onclick="setHuntCategoryFilter('all')">All</button>
-    </div>
-
-    <div class="section-header"><button class="btn-add" onclick="openAddHuntModal()">＋ Add Item on the Hunt</button></div>
-
-    <div class="search-wrap"><input class="search-input" type="search" placeholder="Search hunt items…" id="hunt-search-box" oninput="renderHunt()" autocomplete="off" autocorrect="off" spellcheck="false"></div>
-
-    <div class="inv-list" id="hunt-list"></div>
-  </div>
-
-
-
-<nav class="bottom-nav">
-  <button class="nav-btn active" id="nav-inventory" onclick="switchTab('inventory')"><span class="nav-icon">📦</span><span class="nav-label">Inventory</span></button>
-  <button class="nav-btn" id="nav-hunt" onclick="switchTab('hunt')"><span class="nav-icon">🎯</span><span class="nav-label">HUNT</span></button>
-  <button class="nav-btn" id="nav-pnl" onclick="switchTab('pnl')"><span class="nav-icon">📊</span><span class="nav-label">Finance</span></button>
-  <button class="nav-btn" id="nav-settings" onclick="switchTab('settings')"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></button>
-</nav>
-</div>
-
-<!-- Location Add Modal -->
-<div class="modal-overlay" id="modal-location-add">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title">Add Location</div><button class="modal-close" onclick="closeModal('modal-location-add')">✕</button></div>
-    <div class="modal-body">
-      <input type="hidden" id="location-add-id">
-      <div class="form-section">
-        <div class="form-section-title">Location Details</div>
-        <div class="form-group"><label class="form-label">Location Name</label><input class="form-input" type="text" id="location-add-name" placeholder="e.g. Downtown Booth" autocomplete="off"></div>
-        <div class="form-group">
-          <label class="form-label">Type</label>
-          <select class="form-input" id="location-add-type">
-            <option value="retail">Retail Booth</option>
-            <option value="storage">Storage</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Monthly Rent ($)</label><input class="form-input" type="number" id="location-add-rent" placeholder="0.00" step="0.01" min="0" inputmode="decimal"></div>
-          <div class="form-group"><label class="form-label">Transaction Fee (%)</label><input class="form-input" type="number" id="location-add-fee" placeholder="0.00" step="0.01" min="0" max="100" inputmode="decimal"></div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="location-add-active" style="width:16px;height:16px;" checked>
-            Active (can track inventory)
-          </label>
-        </div>
-        <div class="form-group">
-          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="location-add-warehouse" style="width:16px;height:16px;">
-            Set as warehouse (can transfer inventory from here)
-          </label>
-        </div>
-      </div>
-      <button class="btn-save" onclick="saveLocationAdd()">Add Location</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Location Edit Modal -->
-<div class="modal-overlay" id="modal-location-edit">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title">Edit Location</div><button class="modal-close" onclick="closeModal('modal-location-edit')">✕</button></div>
-    <div class="modal-body">
-      <input type="hidden" id="location-edit-id">
-      <div class="form-section">
-        <div class="form-section-title">Location Details</div>
-        <div class="form-group"><label class="form-label">Location Name</label><input class="form-input" type="text" id="location-name" placeholder="e.g. Downtown Booth" autocomplete="off"></div>
-        <div class="form-group">
-          <label class="form-label">Type</label>
-          <select class="form-input" id="location-type">
-            <option value="retail">Retail Booth</option>
-            <option value="storage">Storage</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Monthly Rent ($)</label><input class="form-input" type="number" id="location-rent" placeholder="0.00" step="0.01" min="0" inputmode="decimal"></div>
-          <div class="form-group"><label class="form-label">Transaction Fee (%)</label><input class="form-input" type="number" id="location-fee" placeholder="0.00" step="0.01" min="0" max="100" inputmode="decimal"></div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="location-active" style="width:16px;height:16px;">
-            Active (can track inventory)
-          </label>
-        </div>
-        <div class="form-group">
-          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="location-warehouse" style="width:16px;height:16px;">
-            Set as warehouse (can transfer inventory from here)
-          </label>
-        </div>
-      </div>
-      <button class="btn-save" onclick="saveLocationEdit()">Save Changes</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Add/Edit Item Modal -->
-<div class="modal-overlay" id="modal-add">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title" id="modal-title">Add Item</div><button class="modal-close" onclick="closeModal('modal-add')">✕</button></div>
-    <div class="modal-body">
-      <input type="hidden" id="edit-id">
-      <div class="form-section">
-        <div class="form-section-title">Item Info</div>
-        <div class="form-group"><label class="form-label">Item Name</label><input class="form-input" type="text" id="f-name" placeholder="e.g. Terracotta Vase Set" autocomplete="off"></div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Category</label>
-            <select class="form-input" id="f-category" onchange="onCategoryChange()">
-              <option value="Art">Art</option>
-              <option value="Ceramic Tableware">Ceramic Tableware</option>
-              <option value="Clear Glassware">Clear Glassware</option>
-              <option value="Lamps">Lamps</option>
-              <option value="Seasonal">Seasonal</option>
-              <option value="Self Filler">Self Filler</option>
-            </select>
-          </div>
-          <div class="form-group"><label class="form-label">Unit Type</label><select class="form-input" id="f-unit"></select></div>
-        </div>
-        <div class="form-group"><label class="form-label">Location *</label><select class="form-input" id="f-location" required></select></div>
-        <div class="form-group"><label class="form-label">Quantity at Location</label><input class="form-input" type="number" id="f-qty" placeholder="0" min="0" inputmode="numeric"></div>
-
-        <!-- Warehouse Transfer Option -->
-        <div class="form-group" id="warehouse-transfer-section" style="display:none;">
-          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="f-transfer-from-warehouse" onchange="toggleWarehouseTransfer()" style="width:16px;height:16px;">
-            Transfer from warehouse
-          </label>
-          <div id="warehouse-info" style="display:none;margin-top:8px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);">
-            <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Warehouse inventory for this item:</div>
-            <div style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text);" id="warehouse-qty">0 units</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:4px;" id="warehouse-transfer-note">Select quantity to transfer below</div>
-          </div>
-        </div>
-
-        <div class="reorder-row"><span class="reorder-label">🔔 Low stock alert when qty ≤</span><input class="reorder-input" type="number" id="f-reorder" value="5" min="0" inputmode="numeric"></div>
-      </div>
-      <div class="form-section">
-        <div class="form-section-title">Pricing &amp; Costs</div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Initial Cost ($)</label><input class="form-input" type="number" id="f-cost" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateCalc()"></div>
-          <div class="form-group"><label class="form-label">Labor Cost ($)</label><input class="form-input" type="number" id="f-labor" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateCalc()"></div>
-        </div>
-        <div class="form-group"><label class="form-label">Suggested Price ($)</label><input class="form-input" type="number" id="f-suggested-price" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateCalc()"></div>
-        <div class="calc-preview">
-          <div class="calc-item"><div class="calc-item-label">Total Cost</div><div class="calc-item-val" id="calc-total-cost">$0.00</div></div>
-          <div class="calc-item"><div class="calc-item-label">Profit/Unit</div><div class="calc-item-val pos" id="calc-profit">$0.00</div></div>
-          <div class="calc-item"><div class="calc-item-label">Margin</div><div class="calc-item-val pos" id="calc-margin">0%</div></div>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Photo (optional)</label>
-        <input type="file" id="f-image" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleImageUpload(this)">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button type="button" class="btn-tool" onclick="document.getElementById('f-image').click()" style="flex:1;padding:10px 12px;">📷 Choose Photo</button>
-          <div id="image-preview" style="width:60px;height:60px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text3);flex-shrink:0;">📦</div>
-        </div>
-        <div id="image-status" style="font-size:11px;color:var(--text3);margin-top:4px;display:none;"></div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Notes (optional)</label>
-        <textarea class="form-input" id="f-notes" placeholder="Special handling instructions, booth display ideas, customer requests, repair notes, fragile items, etc." autocomplete="off" rows="3" maxlength="2000" oninput="updateNotesCounter()"></textarea>
-        <div id="notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;display:none;"></div>
-      </div>
-      <button class="btn-save" onclick="saveItem()">Save Item</button>
-      <button class="btn-delete" id="btn-delete-item" style="display:none" onclick="confirmDeleteItem()">Delete Item</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Move Inventory Modal -->
-<div class="modal-overlay" id="modal-move-inventory">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title">Move Inventory</div><button class="modal-close" onclick="closeModal('modal-move-inventory')">X</button></div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Move to Location</label>
-        <select class="form-input" id="move-destination" onchange="updateMoveList()"></select>
-      </div>
-
-      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin:16px 0 8px;">Select Items to Move</div>
-
-      <div id="move-inventory-list" style="max-height:400px;overflow-y:auto;margin-bottom:16px;">
-        <!-- Items populated dynamically -->
-      </div>
-
-      <div id="move-summary" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;display:none;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;">Move Summary</div>
-        <div id="move-summary-content"></div>
-      </div>
-
-      <button class="btn-save" onclick="executeMove()" id="move-btn" disabled>Move Selected Items</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Image Modal -->
-<div class="image-modal-overlay" id="image-modal">
-  <div class="image-modal-container">
-    <div class="image-modal-content">
-      <img id="image-modal-img" class="image-modal-img" src="" alt="" style="transform: scale(1) rotate(0deg);">
-      <div class="image-modal-caption" id="image-modal-caption"></div>
-    </div>
-    <button class="image-modal-close" onclick="closeImageModal()">✕</button>
-    <button class="image-modal-download" onclick="downloadImage()">⬇</button>
-  </div>
-</div>
-
-<!-- Item Detail Modal -->
-<div class="modal-overlay" id="modal-detail">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title" id="detail-name">Item</div><button class="modal-close" onclick="closeModal('modal-detail')">✕</button></div>
-    <div class="modal-body">
-      <div id="detail-image-container"></div>
-      <div id="detail-badge" class="detail-badge">📦 <span id="detail-cat">—</span></div>
-      <div style="margin-bottom:16px;">
-        <div class="form-label" style="margin-bottom:8px;">Adjust Quantity</div>
-        <div class="qty-controls">
-          <button class="qty-btn" onclick="adjustQty(-1)">−</button>
-          <div style="flex:1;text-align:center;"><div class="qty-display" id="detail-qty">0</div><div class="qty-unit" id="detail-unit">units</div></div>
-          <button class="qty-btn" onclick="adjustQty(1)">+</button>
-        </div>
-      </div>
-      <div class="profit-summary"><div class="profit-label">Profit per Unit</div><div class="profit-value" id="detail-profit">$0.00</div><div class="profit-margin" id="detail-margin">0% margin</div></div>
-      <div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">Initial Cost</div><div class="detail-stat-value orange" id="dd-cost">$0.00</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Labor Cost</div><div class="detail-stat-value orange" id="dd-labor">$0.00</div></div>
-        <div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Suggested Price</div><div class="detail-stat-value green" id="dd-suggested-price">$0.00</div></div>
-      </div>
-      <div class="detail-grid"><div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Total Value (Suggested × Qty)</div><div class="detail-stat-value green" id="dd-total-val">$0.00</div></div></div>
-      <div id="detail-notes-wrap" style="margin-bottom:16px;display:none">
-        <div class="form-label" style="margin-bottom:4px">Notes</div>
-        <textarea class="form-input" id="detail-notes-edit" placeholder="Add notes about this item…" autocomplete="off" rows="3" maxlength="2000" oninput="updateDetailNotesCounter()" style="margin-bottom:4px;"></textarea>
-        <div id="detail-notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;display:none;"></div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <button class="btn-save" onclick="saveDetailNotes()" style="flex:1;font-size:13px;padding:8px 16px;">✓ Save Notes</button>
-          <button class="btn-tool" onclick="cancelDetailNotesEdit()" style="font-size:13px;padding:8px 16px;">Cancel</button>
-        </div>
-      </div>
-
-      <!-- Record Sale -->
-      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">Record a Sale</div>
-      <div class="form-row" style="margin-bottom:10px;">
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">Qty Sold</label>
-          <input class="form-input" type="number" id="sale-qty" placeholder="1" min="1" inputmode="numeric" value="1">
-        </div>
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">Sale Price ($)</label>
-          <input class="form-input" type="number" id="sale-price-override" placeholder="Suggested price" step="0.01" inputmode="decimal">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Sale Date</label>
-        <input class="form-input" type="date" id="sale-date">
-      </div>
-      <div class="form-group" id="sale-location-group" style="display:none;">
-        <label class="form-label">Location *</label>
-        <select class="form-input" id="sale-location">
-          <option value="">Select location...</option>
-        </select>
-      </div>
-      <button class="btn-save" onclick="recordSale()" id="record-sale-btn" style="background:linear-gradient(135deg,var(--accent2),#138a5c);">✓ Record Sale</button>
-
-      <!-- Sale history for this item -->
-      <div id="detail-sale-history-wrap" style="margin-top:16px;display:none;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;">Sale History</div>
-        <div id="detail-sale-history" class="pnl-card"></div>
-      </div>
-
-      <button class="btn-save" onclick="editCurrentItem()" style="margin-top:14px;">Edit Item</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Add/Edit Loan Modal -->
-<div class="modal-overlay" id="modal-loan">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title" id="loan-modal-title">Add Loan</div><button class="modal-close" onclick="closeModal('modal-loan')">✕</button></div>
-    <div class="modal-body">
-      <input type="hidden" id="loan-edit-id">
-      <div class="form-section">
-        <div class="form-section-title">Loan Details</div>
-        <div class="form-group"><label class="form-label">Lender / Description</label><input class="form-input" type="text" id="l-name" placeholder="e.g. Small Business Loan" autocomplete="off"></div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Date Received</label><input class="form-input" type="date" id="l-date"></div>
-          <div class="form-group"><label class="form-label">Original Amount ($)</label><input class="form-input" type="number" id="l-amount" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateLoanCalc()"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Interest Rate (%)</label><input class="form-input" type="number" id="l-rate" placeholder="0.00" step="0.01" inputmode="decimal"></div>
-          <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="l-status"><option value="Active">Active</option><option value="Paid Off">Paid Off</option></select></div>
-        </div>
-        <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="l-notes" placeholder="e.g. Monthly payments of $200" autocomplete="off"></div>
-      </div>
-      <div class="form-section">
-        <div class="form-section-title">Payment Summary</div>
-        <div class="calc-preview">
-          <div class="calc-item"><div class="calc-item-label">Borrowed</div><div class="calc-item-val" id="lc-borrowed">$0.00</div></div>
-          <div class="calc-item"><div class="calc-item-label">Total Paid</div><div class="calc-item-val pos" id="lc-paid">$0.00</div></div>
-          <div class="calc-item"><div class="calc-item-label">Balance</div><div class="calc-item-val neg" id="lc-balance">$0.00</div></div>
-        </div>
-      </div>
-      <button class="btn-save" onclick="saveLoan()">Save Loan</button>
-      <button class="btn-delete" id="btn-delete-loan" style="display:none" onclick="confirmDeleteLoan()">Delete Loan</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Loan Detail Modal -->
-<div class="modal-overlay" id="modal-loan-detail">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title" id="ld-name">Loan</div><button class="modal-close" onclick="closeModal('modal-loan-detail')">✕</button></div>
-    <div class="modal-body">
-      <div class="profit-summary" id="ld-hero">
-        <div class="profit-label">Remaining Balance</div>
-        <div class="profit-value" id="ld-balance">$0.00</div>
-        <div class="profit-margin" id="ld-progress">0% paid off</div>
-      </div>
-      <div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">Date Received</div><div class="detail-stat-value" style="font-size:15px" id="ld-date">—</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Original Amount</div><div class="detail-stat-value orange" id="ld-amount">$0.00</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Total Paid</div><div class="detail-stat-value green" id="ld-paid">$0.00</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Interest Rate</div><div class="detail-stat-value accent" id="ld-rate">0%</div></div>
-      </div>
-      <div style="margin-bottom:16px;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);">Payoff Progress</span><span style="font-size:11px;font-family:var(--font-mono);color:var(--text2);" id="ld-pct">0%</span></div>
-        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;border:1px solid var(--border);"><div id="ld-bar" style="height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:4px;transition:width .4s ease;width:0%"></div></div>
-      </div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">Record a Payment</div>
-      <div class="form-row" style="margin-bottom:10px;">
-        <div class="form-group" style="margin-bottom:0"><label class="form-label">Payment Date</label><input class="form-input" type="date" id="p-date"></div>
-        <div class="form-group" style="margin-bottom:0"><label class="form-label">Amount ($)</label><input class="form-input" type="number" id="p-amount" placeholder="0.00" step="0.01" inputmode="decimal"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Payment Note (optional)</label><input class="form-input" type="text" id="p-note" placeholder="e.g. Monthly payment" autocomplete="off"></div>
-      <button class="btn-save" onclick="addPayment()" style="background:linear-gradient(135deg,var(--accent2),#138a5c);margin-bottom:14px;">Add Payment</button>
-      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:10px;">Payment History</div>
-      <div id="ld-payments" class="pnl-card"></div>
-      <button class="btn-save" onclick="editCurrentLoan()" style="margin-top:14px;">Edit Loan</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-  </div>
-
-<!-- Add Hunt Modal -->
-<div class="modal-overlay" id="modal-hunt-add">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title">Add Item on the Hunt</div><button class="modal-close" onclick="closeModal('modal-hunt-add')">✕</button></div>
-    <div class="modal-body">
-      <div class="form-section">
-        <div class="form-section-title">Item Details</div>
-        <div class="form-group"><label class="form-label">Item Name *</label><input class="form-input" type="text" id="hunt-add-name" placeholder="e.g. Vintage Terracotta Vase" autocomplete="off"></div>
-        <div class="form-group"><label class="form-label">Category *</label>
-          <select class="form-input" id="hunt-add-category">
-            <option value="Art">Art</option>
-            <option value="Ceramic Tableware">Ceramic Tableware</option>
-            <option value="Clear Glassware">Clear Glassware</option>
-            <option value="Lamps">Lamps</option>
-            <option value="Seasonal">Seasonal</option>
-            <option value="Self Filler">Self Filler</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Photo (optional)</label>
-          <input type="file" id="hunt-add-image" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleHuntImageUpload(this)">
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button type="button" class="btn-tool" onclick="document.getElementById('hunt-add-image').click()" style="flex:1;padding:10px 12px;">📷 Choose Photo</button>
-            <div id="hunt-add-image-preview" style="width:60px;height:60px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text3);flex-shrink:0;">🎯</div>
-          </div>
-          <div id="hunt-add-image-status" style="font-size:11px;color:var(--text3);margin-top:4px;display:none;"></div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Notes (optional)</label>
-          <textarea class="form-input" id="hunt-add-notes" placeholder="Special features, condition notes, where you've seen it, etc." autocomplete="off" rows="3" maxlength="2000" oninput="updateHuntNotesCounter('hunt-add-notes', 'hunt-add-notes-counter')"></textarea>
-          <div id="hunt-add-notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;display:none;"></div>
-        </div>
-      </div>
-      <button class="btn-save" onclick="saveHuntItem()">Add to Hunt</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Edit Hunt Modal -->
-<div class="modal-overlay" id="modal-hunt-edit">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title">Edit Hunt Item</div><button class="modal-close" onclick="closeModal('modal-hunt-edit')">✕</button></div>
-    <div class="modal-body">
-      <input type="hidden" id="hunt-edit-id">
-      <div class="form-section">
-        <div class="form-section-title">Item Details</div>
-        <div class="form-group"><label class="form-label">Item Name *</label><input class="form-input" type="text" id="hunt-edit-name" placeholder="e.g. Vintage Terracotta Vase" autocomplete="off"></div>
-        <div class="form-group"><label class="form-label">Category *</label>
-          <select class="form-input" id="hunt-edit-category">
-            <option value="Art">Art</option>
-            <option value="Ceramic Tableware">Ceramic Tableware</option>
-            <option value="Clear Glassware">Clear Glassware</option>
-            <option value="Lamps">Lamps</option>
-            <option value="Seasonal">Seasonal</option>
-            <option value="Self Filler">Self Filler</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Photo (optional)</label>
-          <input type="file" id="hunt-edit-image" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleHuntImageUpload(this)">
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button type="button" class="btn-tool" onclick="document.getElementById('hunt-edit-image').click()" style="flex:1;padding:10px 12px;">📷 Choose Photo</button>
-            <div id="hunt-edit-image-preview" style="width:60px;height:60px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text3);flex-shrink:0;">🎯</div>
-          </div>
-          <div id="hunt-edit-image-status" style="font-size:11px;color:var(--text3);margin-top:4px;display:none;"></div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Notes (optional)</label>
-          <textarea class="form-input" id="hunt-edit-notes" placeholder="Special features, condition notes, where you've seen it, etc." autocomplete="off" rows="3" maxlength="2000" oninput="updateHuntNotesCounter('hunt-edit-notes', 'hunt-edit-notes-counter')"></textarea>
-          <div id="hunt-edit-notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;display:none;"></div>
-        </div>
-      </div>
-      <button class="btn-save" onclick="saveHuntItem()">Save Changes</button>
-      <button class="btn-delete" id="btn-delete-hunt-item" style="display:none" onclick="confirmDeleteHuntItem()">Delete Item</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Hunt Detail Modal -->
-<div class="modal-overlay" id="modal-hunt-detail">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title" id="hunt-detail-name">Hunt Item</div><button class="modal-close" onclick="closeModal('modal-hunt-detail')">✕</button></div>
-    <div class="modal-body">
-      <div id="hunt-detail-image-container"></div>
-      <div class="detail-badge">🎯 <span id="hunt-detail-category">—</span></div>
-      <div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">Added</div><div class="detail-stat-value" style="font-size:15px" id="hunt-detail-created">—</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Last Updated</div><div class="detail-stat-value" style="font-size:15px" id="hunt-detail-updated">—</div></div>
-      </div>
-      <div id="hunt-detail-notes-wrap" style="margin-bottom:16px;display:none">
-        <div class="form-label" style="margin-bottom:4px">Notes</div>
-        <div class="form-input" id="hunt-detail-notes-display" style="background:var(--bg);border:1px solid var(--border);padding:12px;border-radius:var(--radius-sm);line-height:1.4;white-space:pre-wrap;"></div>
-      </div>
-      <button class="btn-save" onclick="editCurrentHuntItem()" style="margin-top:14px;">Edit Item</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<script>
 'use strict';
 
 // ── Utilities ──────────────────────────────────────────────
@@ -1331,139 +31,16 @@ function confirmResolve(v) {
   if (_cr) { _cr(v); _cr = null; }
 }
 
-// ── Modal utilities ───────────────────────────────────────
-function closeModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) {
-    modal.classList.remove('open');
-  }
-}
-
 // ── Clock (FIX #13) ───────────────────────────────────────
 function updateClock() {
   const now  = new Date();
   const time = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
   const date = now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-  ['clock-time','pnl-clock','loans-clock','exp-clock','rpt-clock','settings-clock','sub-pnl-clock','income-clock','individual-clock','inventory-summary-clock'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=time; });
-  ['clock-date','pnl-date','loans-date','exp-date','rpt-date','settings-date','sub-pnl-date','income-date','individual-date','inventory-summary-date'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=date; });
+  ['clock-time','pnl-clock','loans-clock','exp-clock','rpt-clock','settings-clock'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=time; });
+  ['clock-date','pnl-date','loans-date','exp-date','rpt-date','settings-date'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=date; });
 }
 updateClock();
 setInterval(updateClock, 10000);
-
-// ── Tab Navigation ─────────────────────────────────────────
-/**
- * Switches to the specified tab, updating UI state and refreshing tab content
- * @param {string} tab - The tab name to switch to (e.g., 'inventory', 'pnl', 'loans', etc.)
- */
-function switchTab(tab) {
-  // Remove 'active' class from all tab content elements
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-
-  // Add 'active' class to target tab content
-  document.getElementById('tab-' + tab).classList.add('active');
-
-  // Remove 'active' class from all nav buttons
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-  // Find and activate the correct nav button by matching onclick attribute
-  document.querySelectorAll('.nav-btn').forEach(btn => {
-    if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("switchTab('" + tab + "')")) {
-      btn.classList.add('active');
-    }
-  });
-
-  if (tab === 'pnl') {
-    // Hide all finance sub-views (now correctly inside #tab-pnl so selector works)
-    document.querySelectorAll('#tab-pnl .finance-subview').forEach(el => el.style.display = 'none');
-
-    // Hide legacy sections that may have been shown by setFinanceView
-    const sectionsToHide = [
-      'income-statement-section',
-      'inventory-summary-section',
-      'individual-sales-section',
-      'pnl-section',
-      'pnl-controls-container',
-      'finance-view-controls',
-      'inventory-summary-controls',
-      'individual-sales-controls'
-    ];
-    sectionsToHide.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
-    });
-
-    // Show Finance Hub landing (wraps KPI strip + icon grid + last-updated)
-    document.getElementById('finance-hub-landing').style.display = 'block';
-
-    // Scroll back to top
-    const pnlTab = document.getElementById('tab-pnl');
-    if (pnlTab) pnlTab.scrollTop = 0;
-  }
-
-  // Update clock display
-  updateClock();
-
-  // Call tab-specific refresh functions safely
-  if (tab === 'inventory' && typeof renderList === 'function') renderList();
-  if (tab === 'loans' && typeof renderLoans === 'function') renderLoans();
-  if (tab === 'expenses' && typeof renderExpenses === 'function') renderExpenses();
-  if (tab === 'reports' && typeof renderReports === 'function') renderReports();
-  if (tab === 'settings' && typeof renderLocationSettings === 'function') renderLocationSettings();
-  if (tab === 'hunt') {
-    if (typeof loadHuntItems === 'function') loadHuntItems();
-    if (typeof renderHunt === 'function') renderHunt();
-    if (typeof updateHuntCategoryTabs === 'function') updateHuntCategoryTabs();
-  }
-
-  console.log('Switched to tab:', tab);
-}
-
-function openFinanceSub(view) {
-  // Hide all sub-views and the landing hub
-  document.querySelectorAll('#tab-pnl .finance-subview').forEach(el => el.style.display = 'none');
-  document.getElementById('finance-hub-landing').style.display = 'none';
-
-  // Show only the requested sub-view
-  const viewMap = {
-    'expenses':          'finance-expenses-view',
-    'loans':             'finance-loans-view',
-    'reports':           'finance-reports-view',
-    'income':            'finance-income-view',
-    'pnl':               'finance-pnl-view',
-    'individual':        'finance-individual-view',
-    'inventory-summary': 'finance-inventory-summary-view'
-  };
-  const targetId = viewMap[view];
-  if (targetId) document.getElementById(targetId).style.display = 'block';
-
-  // Scroll back to top of the pnl tab
-  const pnlTab = document.getElementById('tab-pnl');
-  if (pnlTab) pnlTab.scrollTop = 0;
-}
-
-function renderFinanceHub() {
-  // Hide all finance sub-views
-  document.querySelectorAll('#tab-pnl .finance-subview').forEach(el => el.style.display = 'none');
-
-  // Hide all legacy sections that could be visible from setFinanceView
-  const sectionsToHide = [
-    'income-statement-section',
-    'inventory-summary-section',
-    'individual-sales-section',
-    'pnl-section',
-    'pnl-controls-container',
-    'finance-view-controls',
-    'inventory-summary-controls',
-    'individual-sales-controls'
-  ];
-  sectionsToHide.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-
-  // Show the landing hub wrapper
-  document.getElementById('finance-hub-landing').style.display = 'block';
-}
 
 // ── Install Banner ─────────────────────────────────────────
 const isStandalone = window.navigator.standalone===true || window.matchMedia('(display-mode:standalone)').matches;
@@ -1482,7 +59,6 @@ let huntItems = [];
 let currentLoanId = null, currentDetailId = null, currentLocationId = 'storage';
 let inventoryLocationFilter = 'all';
 let huntCategoryFilter = 'all';
-let huntSearchQuery = '';
 
 // ── Global Utility Functions ──────────────────────────────────
 // Shared calculation utilities for P&L and Reports
@@ -1570,30 +146,6 @@ async function saveHuntItems() {
   }
 }
 
-function updateHuntCategoryTabs() {
-  const container = document.getElementById('hunt-category-tabs');
-  if (!container) return;
-
-  // Get unique categories from hunt items
-  const categories = [...new Set(huntItems.map(item => item.category).filter(cat => cat && cat.trim()))];
-  categories.sort();
-
-  // Clear existing tabs except "All"
-  container.innerHTML = '<button class="category-tab active" onclick="setHuntCategoryFilter(\'all\')">All</button>';
-
-  // Add category tabs
-  categories.forEach(category => {
-    const button = document.createElement('button');
-    button.className = 'category-tab';
-    button.onclick = () => setHuntCategoryFilter(category);
-    button.textContent = category;
-    container.appendChild(button);
-  });
-
-  // Re-apply active state
-  setHuntCategoryFilter(huntCategoryFilter || 'all');
-}
-
 function setHuntCategoryFilter(category) {
   huntCategoryFilter = category;
 
@@ -1610,36 +162,17 @@ function renderHunt() {
   const container = document.getElementById('hunt-list');
   if (!container) return;
 
-  // Get search query
-  const q = (document.getElementById('hunt-search-box').value||'').toLowerCase();
-
-  // Filter items by search query (name, category, notes)
-  let filteredItems = huntItems;
-  if (q) {
-    filteredItems = huntItems.filter(item =>
-      item.name.toLowerCase().includes(q) ||
-      item.category.toLowerCase().includes(q) ||
-      (item.notes?.toLowerCase().includes(q))
-    );
-  }
-
   // Filter items by category
+  let filteredItems = huntItems;
   if (huntCategoryFilter !== 'all') {
-    filteredItems = filteredItems.filter(item => {
-      const itemCategory = item.category || 'Other';
-      return itemCategory === huntCategoryFilter;
-    });
+    filteredItems = huntItems.filter(item => item.category === huntCategoryFilter);
   }
 
   // Sort by name
   filteredItems.sort((a, b) => a.name.localeCompare(b.name));
 
   if (!filteredItems.length) {
-    if (q && huntCategoryFilter === 'all') {
-      container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No items match "${esc(document.getElementById('hunt-search-box').value)}"</div><div class="empty-sub">Try adjusting your search or clearing the search box</div></div>`;
-    } else if (q) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No ${huntCategoryFilter} items match "${esc(document.getElementById('hunt-search-box').value)}"</div><div class="empty-sub">Try adjusting your search or selecting a different category</div></div>`;
-    } else if (huntCategoryFilter === 'all') {
+    if (huntCategoryFilter === 'all') {
       container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">No items on the hunt</div><div class="empty-sub">Tap + Add Item on the Hunt to start tracking items you're looking for</div></div>`;
     } else {
       container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No ${huntCategoryFilter} items</div><div class="empty-sub">Try selecting a different category</div></div>`;
@@ -1737,24 +270,12 @@ function openEditHuntModal(itemId) {
 
   // Handle image preview
   const preview = document.getElementById('hunt-edit-image-preview');
-  const imageInput = document.getElementById('hunt-edit-image');
-  const imageStatus = document.getElementById('hunt-edit-image-status');
-
   if (item.photos && item.photos.length > 0) {
-    // Set the image ID on the input for proper upload handling
-    imageInput.dataset.imageId = item.photos[0];
-    imageInput.dataset.imageUrl = `/.netlify/functions/images?id=${item.photos[0]}`;
     preview.innerHTML = `<img src="/.netlify/functions/images?id=${item.photos[0]}&size=thumb" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" loading="lazy">`;
-    imageStatus.textContent = 'Current image loaded';
-    imageStatus.style.color = 'var(--accent2)';
-    imageStatus.style.display = 'block';
   } else {
-    // Clear any existing image data
-    delete imageInput.dataset.imageId;
-    delete imageInput.dataset.imageUrl;
     preview.innerHTML = '🎯';
-    imageStatus.style.display = 'none';
   }
+  document.getElementById('hunt-edit-image-status').style.display = 'none';
 
   // Show/hide notes counter
   const notesCounter = document.getElementById('hunt-edit-notes-counter');
@@ -1796,13 +317,6 @@ async function saveHuntItem() {
     return;
   }
 
-  // Validate category
-  const validCategories = ['Art', 'Ceramic Tableware', 'Clear Glassware', 'Lamps', 'Seasonal', 'Self Filler', 'Other'];
-  if (!category || !validCategories.includes(category)) {
-    showToast('Please select a valid category');
-    return;
-  }
-
   // Create item object
   const item = {
     name,
@@ -1832,10 +346,9 @@ async function saveHuntItem() {
   const imageInput = document.getElementById(isEdit ? 'hunt-edit-image' : 'hunt-add-image');
   if (imageInput.files && imageInput.files[0]) {
     try {
-      await handleImageUpload(imageInput);
-      // Get the image ID from the dataset after upload completes
-      if (imageInput.dataset.imageId) {
-        item.photos = [imageInput.dataset.imageId];
+      const result = await handleImageUpload(imageInput);
+      if (result && result.imageId) {
+        item.photos = [result.imageId]; // Replace existing photos for simplicity
       }
     } catch (error) {
       console.error('Image upload failed:', error);
@@ -1858,11 +371,7 @@ async function saveHuntItem() {
     await saveHuntItems();
     showToast(isEdit ? 'Hunt item updated!' : 'Hunt item added!');
     closeModal(modalId);
-
-    // Refresh data from server and update UI
-    await loadHuntItems();
     renderHunt();
-    updateHuntCategoryTabs();
   } catch (error) {
     console.error('Failed to save hunt item:', error);
     showToast('Failed to save hunt item');
@@ -1885,11 +394,7 @@ async function confirmDeleteHuntItem() {
     await saveHuntItems();
     showToast('Hunt item deleted');
     closeModal('modal-hunt-edit');
-
-    // Refresh data from server and update UI
-    await loadHuntItems();
     renderHunt();
-    updateHuntCategoryTabs();
   } catch (error) {
     console.error('Failed to delete hunt item:', error);
     showToast('Failed to delete hunt item');
@@ -1903,28 +408,6 @@ function handleHuntImageUpload(input) {
 function updateHuntNotesCounter(textareaId, counterId) {
   const textarea = document.getElementById(textareaId);
   const counter = document.getElementById(counterId);
-  const length = textarea.value.length;
-
-  if (length > 0) {
-    counter.textContent = `${length}/2000`;
-    counter.style.display = 'block';
-  } else {
-    counter.style.display = 'none';
-  }
-
-  // Change color if approaching limit
-  if (length > 1800) {
-    counter.style.color = 'var(--red)';
-  } else if (length > 1500) {
-    counter.style.color = 'var(--orange)';
-  } else {
-    counter.style.color = 'var(--text3)';
-  }
-}
-
-function updateDetailNotesCounter() {
-  const textarea = document.getElementById('detail-notes-edit');
-  const counter = document.getElementById('detail-notes-counter');
   const length = textarea.value.length;
 
   if (length > 0) {
@@ -2003,6 +486,26 @@ const fetchWithRetry = async (url, options = {}, maxRetries = 2) => {
   }
 };
 
+// ── Save Functions ──────────────────────────────────────────────
+async function saveLocations() {
+  try {
+    const response = await fetch(`${API}/locations`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(locations)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(error.error || 'Failed to save locations');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('saveLocations error:', error);
+    showToast('⚠ Failed to save locations');
+    throw error;
+  }
+}
+
 function cancelDetailNotesEdit() {
   // Reset the textarea to current notes value
   const item = inventory.find(i => i.id === currentDetailId);
@@ -2026,14 +529,23 @@ function toggleWarehouseTransfer() {
   }
 }
 
+function onCategoryChange() {
+  // Called when category selection changes in the add item modal
+  // Could be used to show/hide category-specific options
+  showWarehouseTransferSection();
+}
+
 function showWarehouseTransferSection() {
   const warehouse = locations.find(loc => loc.isWarehouse);
   const section = document.getElementById('warehouse-transfer-section');
 
-  if (warehouse && locations.filter(loc => loc.active).length > 1) {
-    section.style.display = 'block';
-  } else {
-    section.style.display = 'none';
+  // Only manipulate the element if it exists (i.e., when the modal is open)
+  if (section) {
+    if (warehouse && locations.filter(loc => loc.active).length > 1) {
+      section.style.display = 'block';
+    } else {
+      section.style.display = 'none';
+    }
   }
 }
 
@@ -2061,26 +573,6 @@ async function performWarehouseTransfer(itemId, toLocation, quantity) {
 
   const result = await response.json();
   return result;
-}
-
-// ── Save Functions ──────────────────────────────────────────────
-async function saveLocations() {
-  try {
-    const response = await fetch(`${API}/locations`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(locations)
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(error.error || 'Failed to save locations');
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('saveLocations error:', error);
-    showToast('⚠ Failed to save locations');
-    throw error;
-  }
 }
 
 // ── Location Setup Validation ────────────────────────────────────
@@ -2261,91 +753,6 @@ async function deleteLocation(id) {
   showToast('✓ Location deleted - data may be orphaned');
 }
 
-function addLocation() {
-  // Reset form fields
-  document.getElementById('location-add-id').value = '';
-  document.getElementById('location-add-name').value = '';
-  document.getElementById('location-add-type').value = 'retail';
-  document.getElementById('location-add-rent').value = '';
-  document.getElementById('location-add-fee').value = '';
-  document.getElementById('location-add-active').checked = true;
-  document.getElementById('location-add-warehouse').checked = false;
-
-  // Show modal
-  document.getElementById('modal-location-add').classList.add('open');
-  document.getElementById('location-add-name').focus();
-}
-
-async function saveLocationAdd() {
-  // Get form values
-  const name = document.getElementById('location-add-name').value.trim();
-  const type = document.getElementById('location-add-type').value;
-  const monthlyRent = parseFloat(document.getElementById('location-add-rent').value) || 0;
-  const transactionFeePercent = parseFloat(document.getElementById('location-add-fee').value) || 0;
-  const active = document.getElementById('location-add-active').checked;
-  const isWarehouse = document.getElementById('location-add-warehouse').checked;
-
-  // Validate required fields
-  if (!name) {
-    showToast('Please enter a location name');
-    document.getElementById('location-add-name').focus();
-    return;
-  }
-
-  // Validate transaction fee percentage
-  if (transactionFeePercent < 0 || transactionFeePercent > 100) {
-    showToast('Transaction fee must be between 0% and 100%');
-    document.getElementById('location-add-fee').focus();
-    return;
-  }
-
-  // Prepare location data
-  const locationData = {
-    name,
-    type,
-    monthlyRent,
-    transactionFeePercent,
-    active,
-    isWarehouse
-  };
-
-  try {
-    // Send POST request to add location
-    const response = await fetchWithRetry(`${API}/locations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(locationData)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to add location');
-    }
-
-    const result = await response.json();
-
-    // Close modal
-    closeModal('modal-location-add');
-
-    // Refresh locations data
-    await loadLocations();
-
-    // Update all location-dependent UI
-    renderLocationSettings();
-    renderList();
-    populateInventoryLocationFilter();
-    populatePnLLocationFilter();
-    populateExpenseLocationSelect();
-    populateLocationSelect();
-
-    showToast('✓ Location added successfully');
-
-  } catch (error) {
-    console.error('Failed to add location:', error);
-    showToast('⚠ Failed to add location: ' + error.message);
-  }
-}
-
 function openEditLocationModal(id) {
   const loc = locations.find(l => l.id === id);
   if (!loc) return;
@@ -2490,6 +897,20 @@ function renderLocationSettings() {
   }
 
   container.innerHTML = html;
+}
+
+// ── Tabs ───────────────────────────────────────────────────
+function switchTab(n) {
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+n).classList.add('active');
+  document.getElementById('nav-'+n).classList.add('active');
+  if(n==='inventory') populateInventoryLocationFilter();
+  if(n==='pnl')      { renderPnL(); renderIncomeStatement(); }
+  if(n==='loans')    renderLoans();
+  if(n==='expenses') renderExpenses();
+  if(n==='reports')  renderReports();
+  if(n==='settings') renderLocationSettings();
 }
 
 // ── Render Inventory ───────────────────────────────────────
@@ -2801,16 +1222,8 @@ async function handleImageUpload(input) {
   const file = input.files[0];
   if (!file) return;
 
-  // Determine which elements to update based on input ID
-  let preview, status;
-  if (input.id.includes('hunt')) {
-    const modalType = input.id.includes('edit') ? 'edit' : 'add';
-    preview = document.getElementById(`hunt-${modalType}-image-preview`);
-    status = document.getElementById(`hunt-${modalType}-image-status`);
-  } else {
-    preview = document.getElementById('image-preview');
-    status = document.getElementById('image-status');
-  }
+  const preview = document.getElementById('image-preview');
+  const status = document.getElementById('image-status');
 
   // Show loading state
   preview.innerHTML = '⏳';
@@ -3026,15 +1439,6 @@ function openEditModal(id) {
     imagePreview.style.position = '';
     imageStatus.style.display = 'none';
   }
-
-  // Show delete button for editing
-  document.getElementById('btn-delete-item').style.display='block';
-
-  // Open the modal
-  document.getElementById('modal-add').classList.add('open');
-
-  // Focus on name field
-  document.getElementById('f-name').focus();
 }
 
 async function saveItem() {
@@ -3096,21 +1500,6 @@ async function saveItem() {
       created: new Date().toISOString()
     };
     inventory.push(item);
-  }
-
-  // Handle image upload if present
-  const imageInput = document.getElementById('f-image');
-  if (imageInput.files && imageInput.files[0]) {
-    try {
-      await handleImageUpload(imageInput);
-      // Get the image ID from the dataset after upload completes
-      if (imageInput.dataset.imageId) {
-        item.imageId = imageInput.dataset.imageId;
-      }
-    } catch (error) {
-      console.error('Image upload failed:', error);
-      showToast('Failed to upload image, but saving item without it');
-    }
   }
 
   // Handle warehouse transfer
@@ -3670,16 +2059,16 @@ function setFinanceView() {
   const individualSalesControls = document.getElementById('individual-sales-controls');
 
   // Always show view selector for navigation between finance views
-  if (financeViewControls) financeViewControls.style.display = 'block';
+  financeViewControls.style.display = 'block';
 
-  // First, hide all sections and controls (with null checks)
-  if (incomeStatementSection) incomeStatementSection.style.display = 'none';
-  if (pnlSection) pnlSection.style.display = 'none';
-  if (pnlControlsContainer) pnlControlsContainer.style.display = 'none';
-  if (inventorySummarySection) inventorySummarySection.style.display = 'none';
-  if (inventorySummaryControls) inventorySummaryControls.style.display = 'none';
-  if (individualSalesSection) individualSalesSection.style.display = 'none';
-  if (individualSalesControls) individualSalesControls.style.display = 'none';
+  // First, hide all sections and controls
+  incomeStatementSection.style.display = 'none';
+  pnlSection.style.display = 'none';
+  pnlControlsContainer.style.display = 'none';
+  inventorySummarySection.style.display = 'none';
+  inventorySummaryControls.style.display = 'none';
+  individualSalesSection.style.display = 'none';
+  individualSalesControls.style.display = 'none';
 
   // Clear content from all sections to prevent content leakage
   document.getElementById('individual-sales-list').innerHTML = '';
@@ -3728,30 +2117,6 @@ function populatePnLLocationFilter() {
     pnlLocationFilter = 'all';
   }
   select.value = pnlLocationFilter;
-}
-
-function populateInventoryLocationFilter() {
-  const select = document.getElementById('inventory-location-filter');
-  if (!select) return;
-
-  // Clear existing options except "All Locations"
-  select.innerHTML = '<option value="all">All Locations</option>';
-
-  // Add active (non-archived) locations
-  const activeLocations = locations.filter(loc => loc.active && !loc.archived);
-  activeLocations.forEach(loc => {
-    const option = document.createElement('option');
-    option.value = loc.id;
-    option.textContent = loc.name;
-    select.appendChild(option);
-  });
-
-  // Set current selection - if current filter is archived, reset to "all"
-  const currentLoc = locations.find(loc => loc.id === inventoryLocationFilter);
-  if (currentLoc && currentLoc.archived) {
-    inventoryLocationFilter = 'all';
-  }
-  select.value = inventoryLocationFilter;
 }
 
 // ── Individual Sales ────────────────────────────────────────
@@ -4336,12 +2701,6 @@ function renderPnL() {
 
   if (setupMsg) setupMsg.style.display = 'none';
   if (section) section.style.display = 'block';
-
-  // Defensive check: ensure required DOM elements exist
-  if (!section) {
-    console.error('P&L section element not found - cannot render P&L dashboard');
-    return;
-  }
 
   // Populate location filter if not already done
   populatePnLLocationFilter();
@@ -6387,337 +4746,15 @@ async function executeMove() {
   }
 }
 
-// ── Modal Functions ──────────────────────────────────────────
-function initSwipeDismiss(modalId) {
-  const modal = document.getElementById(modalId);
-  if (!modal) return;
-
-  const sheet = modal.querySelector('.modal-sheet');
-  const handle = modal.querySelector('.modal-handle');
-  if (!sheet || !handle) return;
-
-  let startY = 0;
-  let currentY = 0;
-  let isDragging = false;
-
-  const startDrag = (e) => {
-    startY = e.touches ? e.touches[0].clientY : e.clientY;
-    isDragging = true;
-    sheet.style.transition = 'none';
-  };
-
-  const drag = (e) => {
-    if (!isDragging) return;
-    currentY = e.touches ? e.touches[0].clientY : e.clientY;
-    const deltaY = currentY - startY;
-    if (deltaY > 0) { // Only allow downward swipe
-      sheet.style.transform = `translateY(${deltaY}px)`;
-    }
-  };
-
-  const endDrag = () => {
-    if (!isDragging) return;
-    isDragging = false;
-    sheet.style.transition = '';
-
-    const deltaY = currentY - startY;
-    if (deltaY > 100) { // Swipe threshold
-      closeModal(modalId);
-    } else {
-      sheet.style.transform = '';
-    }
-  };
-
-  handle.addEventListener('mousedown', startDrag);
-  handle.addEventListener('touchstart', startDrag, { passive: true });
-  document.addEventListener('mousemove', drag);
-  document.addEventListener('touchmove', drag, { passive: true });
-  document.addEventListener('mouseup', endDrag);
-  document.addEventListener('touchend', endDrag);
-}
-
-function populateUnitSelect(context) {
-  // Populate unit type dropdowns
-  const selects = document.querySelectorAll('select[id$="-unit"], select[id="f-unit"]');
-  selects.forEach(select => {
-    if (select.children.length > 1) return; // Already populated
-
-    const units = ['pieces', 'boxes', 'sets', 'pairs', 'dozen', 'lbs', 'kg', 'oz', 'gallons', 'liters', 'yards', 'meters', 'feet', 'inches'];
-    select.innerHTML = '<option value="">Select unit...</option>' +
-      units.map(unit => `<option value="${unit}">${unit}</option>`).join('');
-  });
-}
-
-async function loadAllData() {
-  try {
-    // Load data from APIs
-    const [locationsData, inventoryData, loansData, expensesData] = await Promise.all([
-      fetchWithRetry(`${API}/locations`).then(r => r.json()).catch(() => []),
-      fetchWithRetry(`${API}/inventory`).then(r => r.json()).catch(() => []),
-      fetchWithRetry(`${API}/loans`).then(r => r.json()).catch(() => []),
-      fetchWithRetry(`${API}/expenses`).then(r => r.json()).catch(() => [])
-    ]);
-
-    locations = locationsData;
-    inventory = inventoryData;
-    loans = loansData;
-    expenses = expensesData;
-
-    // Load hunt items separately since it's already defined
-    await loadHuntItems();
-
-    console.log('All data loaded successfully');
-  } catch (error) {
-    console.error('Failed to load all data:', error);
-    showToast('⚠ Failed to load data - some features may not work');
-  }
-}
-
 // ── Init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup','modal-move-inventory','modal-location-edit','modal-location-add'].forEach(initSwipeDismiss);
+  ['modal-add','modal-detail','modal-loan','modal-loan-detail','modal-expense','modal-expense-detail','modal-backup','modal-move-inventory','modal-location-edit'].forEach(initSwipeDismiss);
   populateUnitSelect('print');
   await loadAllData();
-  if(typeof populateInventoryLocationFilter === 'function') populateInventoryLocationFilter();
-  if(typeof renderList === 'function') renderList();
-  if(typeof updateBackupStatus === 'function') updateBackupStatus();
-
+  populateInventoryLocationFilter();
+  renderList();
+  updateBackupStatus();
+  // Initialize Finance view to show Income Statement by default
+  document.getElementById('finance-view-selector').value = 'income-statement';
+  setFinanceView();
 });
-</script>
-
-<!-- Add/Edit Expense Modal -->
-<div class="modal-overlay" id="modal-expense">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title" id="exp-modal-title">Add Expense</div><button class="modal-close" onclick="closeModal('modal-expense')">✕</button></div>
-    <div class="modal-body">
-      <input type="hidden" id="exp-edit-id">
-      <div class="form-section">
-        <div class="form-section-title">Expense Details</div>
-        <div class="form-group"><label class="form-label">Expense Name</label><input class="form-input" type="text" id="e-name" placeholder="e.g. Booth Rent" autocomplete="off"></div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Category</label>
-            <select class="form-input" id="e-category">
-              <option value="Rent & Venue">Rent &amp; Venue</option>
-              <option value="Supplies">Supplies</option>
-              <option value="Packaging">Packaging</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Transportation">Transportation</option>
-              <option value="Utilities">Utilities</option>
-              <option value="Software & Tools">Software &amp; Tools</option>
-              <option value="Insurance">Insurance</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Frequency</label>
-            <select class="form-input" id="e-frequency" onchange="updateExpenseCalc()">
-              <option value="Monthly">Monthly</option>
-              <option value="Weekly">Weekly</option>
-              <option value="Annual">Annual</option>
-              <option value="Quarterly">Quarterly</option>
-              <option value="One-Time">One-Time</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Amount ($)</label><input class="form-input" type="number" id="e-amount" placeholder="0.00" step="0.01" inputmode="decimal" oninput="updateExpenseCalc()"></div>
-          <div class="form-group"><label class="form-label" id="e-due-label">Date Paid</label><input class="form-input" type="date" id="e-due"></div>
-        </div>
-        <div class="form-group"><label class="form-label">Location *</label><select class="form-input" id="e-location" required></select></div>
-        <!-- Recurring-only fields -->
-        <div id="e-recurring-fields">
-          <div class="form-row">
-            <div class="form-group"><label class="form-label">Start Date</label><input class="form-input" type="date" id="e-start"></div>
-            <div class="form-group"><label class="form-label" id="e-payday-label">Payment Day</label><input class="form-input" type="number" id="e-payday" placeholder="e.g. 1" min="1" max="31" inputmode="numeric"></div>
-          </div>
-        </div>
-        <div class="form-group" id="e-status-wrap">
-          <label class="form-label">Status</label>
-          <select class="form-input" id="e-status">
-            <option value="Active">Active</option>
-            <option value="Paused">Paused</option>
-          </select>
-        </div>
-        <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="e-notes" placeholder="e.g. Paid on the 1st of each month" autocomplete="off"></div>
-      </div>
-      <div class="form-section">
-        <div class="form-section-title">Cost Projection</div>
-        <div class="calc-preview">
-          <div class="calc-item"><div class="calc-item-label">Per Month</div><div class="calc-item-val neg" id="ec-monthly">$0.00</div></div>
-          <div class="calc-item"><div class="calc-item-label">Per Quarter</div><div class="calc-item-val neg" id="ec-quarterly">$0.00</div></div>
-          <div class="calc-item"><div class="calc-item-label">Per Year</div><div class="calc-item-val neg" id="ec-annual">$0.00</div></div>
-        </div>
-      </div>
-      <button class="btn-save" onclick="saveExpense()">Save Expense</button>
-      <button class="btn-delete" id="btn-delete-expense" style="display:none" onclick="confirmDeleteExpense()">Delete Expense</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Expense Detail Modal -->
-<div class="modal-overlay" id="modal-expense-detail">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title" id="ed-name">Expense</div><button class="modal-close" onclick="closeModal('modal-expense-detail')">✕</button></div>
-    <div class="modal-body">
-      <div id="ed-hero" class="profit-summary" style="background:linear-gradient(135deg,rgba(201,48,48,.06),rgba(196,103,15,.04));border-color:rgba(201,48,48,.2);">
-        <div class="profit-label" style="color:var(--danger)" id="ed-hero-label">Amount</div>
-        <div class="profit-value" id="ed-amount" style="color:var(--danger)">$0.00</div>
-        <div class="profit-margin" id="ed-frequency">Monthly</div>
-      </div>
-      <div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">Category</div><div class="detail-stat-value" style="font-size:14px;line-height:1.3" id="ed-category">—</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Status</div><div class="detail-stat-value" id="ed-status-val" style="font-size:16px">—</div></div>
-        <div class="detail-stat" id="ed-monthly-wrap"><div class="detail-stat-label">Monthly Cost</div><div class="detail-stat-value orange" id="ed-monthly">$0.00</div></div>
-        <div class="detail-stat" id="ed-annual-wrap"><div class="detail-stat-label">Annual Cost</div><div class="detail-stat-value orange" id="ed-annual">$0.00</div></div>
-      </div>
-
-      <!-- Recurring schedule info -->
-      <div id="ed-recurring-section">
-        <div class="detail-grid" style="margin-bottom:14px;">
-          <div class="detail-stat"><div class="detail-stat-label">Start Date</div><div class="detail-stat-value" style="font-size:14px" id="ed-start">—</div></div>
-          <div class="detail-stat"><div class="detail-stat-label">Payment Day</div><div class="detail-stat-value accent" id="ed-payday">—</div></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);">Payment Schedule</div>
-          <div style="font-size:11px;font-family:var(--font-mono);color:var(--accent2)" id="ed-total-paid-label"></div>
-        </div>
-        <div id="ed-schedule" class="pnl-card"></div>
-      </div>
-
-      <!-- One-Time confirmation -->
-      <div id="ed-onetime-section" style="display:none;">
-        <div class="detail-grid">
-          <div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Date Paid</div><div class="detail-stat-value" style="font-size:16px" id="ed-due">—</div></div>
-        </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent2);margin-bottom:6px;">✓ Recorded</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.5;">This one-time expense was recorded on the date entered. No further payments needed.</div>
-        </div>
-      </div>
-
-      <button class="btn-save" onclick="editCurrentExpense()" style="margin-top:14px;">Edit Expense</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Reset Inventory Modal -->
-<div class="modal-overlay" id="modal-reset-inventory">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header">
-      <div class="modal-title">Reset Inventory</div>
-      <button class="modal-close" onclick="closeModal('modal-reset-inventory')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="background:linear-gradient(135deg,rgba(201,48,48,.08),rgba(196,103,15,.04));border:1px solid rgba(201,48,48,.25);border-radius:var(--radius-sm);padding:16px;margin-bottom:20px;text-align:center;">
-        <div style="font-size:28px;margin-bottom:8px;">⚠️</div>
-        <div style="font-size:14px;font-weight:700;color:var(--danger);margin-bottom:4px;">Dangerous Operation</div>
-        <div style="font-size:12px;color:var(--text2);line-height:1.5;">This will permanently remove inventory quantities from selected locations. Sales history will be preserved, but stock levels will be reset to zero.</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Select Location(s) to Reset</label>
-        <div id="reset-location-options" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
-          <!-- Location checkboxes will be populated here -->
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Reset Options</label>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-top:8px;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <input type="checkbox" id="reset-all-locations" onchange="toggleAllLocations()" style="width:16px;height:16px;">
-            <label for="reset-all-locations" style="font-size:13px;color:var(--text2);margin:0;">Reset all locations</label>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <input type="checkbox" id="reset-only-zero-stock" style="width:16px;height:16px;">
-            <label for="reset-only-zero-stock" style="font-size:13px;color:var(--text2);margin:0;">Reset sold-out items only</label>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="reset-items-sold" onchange="updateResetPreview()" style="width:16px;height:16px;">
-            <label for="reset-items-sold" style="font-size:13px;color:var(--text2);margin:0;">Reset items sold (clear all sales history)</label>
-          </div>
-        </div>
-      </div>
-
-      <!-- Preview of what will be reset -->
-      <div id="reset-preview" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:16px;display:none;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:10px;">Items to be Reset</div>
-        <div id="reset-preview-content"></div>
-      </div>
-
-      <button class="btn-delete" onclick="confirmResetInventory()" id="reset-confirm-btn" disabled style="margin-top:20px;">Reset Selected Inventory</button>
-      <div style="height:12px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Backup & Restore Modal -->
-<div class="modal-overlay" id="modal-backup">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-header">
-      <div class="modal-title">Backup & Restore</div>
-      <button class="modal-close" onclick="closeModal('modal-backup')">✕</button>
-    </div>
-    <div class="modal-body">
-
-      <!-- Last backup status -->
-      <div id="bk-status-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
-        <div style="font-size:28px;line-height:1;">🔒</div>
-        <div style="flex:1;text-align:center;">
-          <div style="font-size:13px;font-weight:700;color:var(--text);">Data Protection</div>
-          <div style="font-size:12px;color:var(--text3);font-family:var(--font-mono);margin-top:2px;" id="bk-last-backup">Last backup: never</div>
-        </div>
-      </div>
-
-      <!-- Data summary -->
-      <div class="detail-grid" style="margin-bottom:20px;">
-        <div class="detail-stat"><div class="detail-stat-label">Inventory</div><div class="detail-stat-value" id="bk-inv-count">0</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Expenses</div><div class="detail-stat-value" id="bk-exp-count">0</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Loans</div><div class="detail-stat-value" id="bk-loan-count">0</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Sales Records</div><div class="detail-stat-value" id="bk-sales-count">0</div></div>
-      </div>
-
-      <!-- Backup -->
-      <div class="form-section" style="padding-top:0;border-bottom:none;margin-bottom:0;">
-        <div class="form-section-title">💾 Save Backup</div>
-        <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px;">Download a complete snapshot of all your inventory, sales, expenses, and loans as a JSON file. Store it in iCloud Drive, Google Drive, or email it to yourself.</p>
-        <button class="btn-save" onclick="downloadBackup()">⬇ Download Backup (.json)</button>
-      </div>
-
-      <div style="height:16px;border-bottom:1px solid var(--border);margin-bottom:16px;"></div>
-
-      <!-- Restore -->
-      <div class="form-section" style="padding-top:0;border-bottom:none;margin-bottom:0;">
-        <div class="form-section-title" style="color:var(--danger);">⚠ Restore from Backup</div>
-        <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px;">Load a previously saved <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:4px;">.json</code> backup file. <strong>This will replace all current data.</strong> Make sure to download a fresh backup first if you want to keep your current data.</p>
-        <button class="btn-delete" style="margin-top:0;" onclick="document.getElementById('restore-file').click()">⬆ Choose Backup File to Restore</button>
-      </div>
-
-      <!-- Restore preview (hidden until file chosen) -->
-      <div id="bk-preview" style="display:none;margin-top:16px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:10px;">Backup Preview</div>
-        <div class="pnl-card" id="bk-preview-content"></div>
-        <button class="btn-save" id="bk-confirm-restore" style="background:linear-gradient(135deg,var(--danger),#a02020);margin-top:12px;" onclick="confirmRestore()">Replace All Data with This Backup</button>
-      </div>
-
-      <!-- Danger Zone -->
-      <div style="margin-top:20px;border:1.5px solid var(--danger);border-radius:var(--radius-sm);padding:16px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--danger);margin-bottom:8px;">⚠ Danger Zone</div>
-        <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px;">Permanently delete <strong>all data</strong> from the server — inventory, sales, expenses, and loans. This cannot be undone. Download a backup first.</p>
-        <button class="btn-delete" style="margin-top:0;" onclick="deleteAllData()">🗑 Delete All Data from Server</button>
-      </div>
-
-       <div style="height:12px"></div>
-     </div>
-   </div>
- </div>
-
- </body>
-</html>
