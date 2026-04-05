@@ -60,6 +60,21 @@ let currentLoanId = null, currentDetailId = null, currentLocationId = 'storage';
 let inventoryLocationFilter = 'all';
 let huntCategoryFilter = 'all';
 
+console.log('Inventory data on load:', items?.length || 'no items loaded');
+
+window.loadAllData = function() {
+  console.log('loadAllData stub called - restoring inventory');
+  if (typeof renderList === 'function') renderList();
+};
+
+window.populateUnitSelect = function() {
+  console.log('populateUnitSelect stub called');
+};
+
+window.initSwipeDismiss = function() {
+  console.log('initSwipeDismiss stub called');
+};
+
 // ── Global Utility Functions ──────────────────────────────────
 // Shared calculation utilities for P&L and Reports
 function getSuggestedPrice(item) {
@@ -506,6 +521,25 @@ async function saveLocations() {
   }
 }
 
+async function saveInventory() {
+  try {
+    const response = await fetch(`${API}/inventory`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(inventory)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(error.error || 'Failed to save inventory');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('saveInventory error:', error);
+    showToast('⚠ Failed to save inventory');
+    throw error;
+  }
+}
+
 function cancelDetailNotesEdit() {
   // Reset the textarea to current notes value
   const item = inventory.find(i => i.id === currentDetailId);
@@ -513,6 +547,32 @@ function cancelDetailNotesEdit() {
     document.getElementById('detail-notes-edit').value = item.notes || '';
     updateDetailNotesCounter();
   }
+}
+
+function saveDetailNotes() {
+  const notes = document.getElementById('detail-notes-edit').value;
+  fetch('/.netlify/functions/inventory?action=updateNotes', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ itemId: currentDetailId, notes })
+  }).then(response => {
+    if (response.ok) {
+      return response.json();
+    } else {
+      throw new Error('Failed to save notes');
+    }
+  }).then(updatedItem => {
+    const itemIndex = inventory.findIndex(i => i.id === currentDetailId);
+    if (itemIndex !== -1) {
+      inventory[itemIndex] = updatedItem;
+    }
+    renderList();
+    showToast('Notes saved successfully');
+    closeModal('modal-detail');
+  }).catch(error => {
+    console.error(error);
+    showToast('Failed to save notes');
+  });
 }
 
 function toggleWarehouseTransfer() {
@@ -1532,14 +1592,42 @@ async function saveItem() {
 
   // Save to server
   try {
-    const response = await fetch(`${API}/inventory`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(inventory)
-    });
+    if (isEdit) {
+      // For edits, use the updateItem action
+      const patch = {
+        name,
+        category,
+        reorderPt,
+        cost,
+        labor,
+        suggestedPrice,
+        notes: notes || undefined
+      };
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const response = await fetch(`${API}/inventory?action=updateItem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: isEdit, patch })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      // Re-fetch inventory and re-render
+      const updatedInventory = await fetch(`${API}/inventory`);
+      inventory = await updatedInventory.json();
+    } else {
+      // For new items, still use PUT to save entire inventory
+      const response = await fetch(`${API}/inventory`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inventory)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
     }
 
     showToast(isEdit ? 'Item updated!' : 'Item added!');
@@ -1705,48 +1793,55 @@ function recordSale() {
     }
   }
 
-  // Check if there's enough stock at the selected location
-  if (!saleLocation || qty > availableQty) {
-    const totalQty = Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc.qty || 0), 0);
-    showToast(`Only ${availableQty || totalQty} in stock at selected location`);
-    return;
-  }
-
-   const costEach=Number(item.cost)+Number(item.labor);
-   const revenue=qty*priceEach;
-   const profit=(revenue-transactionFee)-(qty*costEach);
+   // Check if there's enough stock at the selected location
+   if (!saleLocation || qty > availableQty) {
+     const totalQty = Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc.qty || 0), 0);
+     showToast(`Only ${availableQty || totalQty} in stock at selected location`);
+     return;
+   }
 
   // Calculate transaction fee for this sale
   const location = locations.find(l => l.id === saleLocation);
   const transactionFeePercent = location?.transactionFeePercent || 0;
-  const transactionFee = revenue * (transactionFeePercent / 100);
 
-  if(!item.sales)item.sales=[];
-  item.sales.push({
-    sid:uid(),
-    date,
-    qty,
-    priceEach,
-    revenue,
-    profit,
-    location:saleLocation,
-    transactionFee,
-    transactionFeePercent
+  fetch('/.netlify/functions/inventory?action=recordSale', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      itemId: item.id,
+      location: saleLocation,
+      qtySold: qty,
+      actualPrice: priceEach,
+      date: date,
+      feePercent: transactionFeePercent
+    })
+  }).then(response => {
+    if (response.ok) {
+      return fetch('/.netlify/functions/inventory');
+    } else {
+      throw new Error('Failed to record sale');
+    }
+  }).then(response => response.json()).then(updatedInventory => {
+    inventory = updatedInventory;
+    renderList();
+    closeModal('modal-detail');
+    showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(qty*priceEach)}${transactionFeePercent > 0 ? ` (${transactionFeePercent}% fee)` : ''}`);
+  }).catch(error => {
+    console.error(error);
+    showToast('Failed to record sale');
   });
-
-  // Decrement quantity at the specific location
-  item.inventory[saleLocation].qty = Math.max(0, Number(item.inventory[saleLocation].qty) - qty);
-  item.inventory[saleLocation].lastUpdated = new Date().toISOString();
-
-  saveInventory(); renderDetail(); renderList();
-  showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(revenue)}${transactionFee > 0 ? ` (${fmt(transactionFee)} fee)` : ''}`);
 }
 
 function removeSale(sid) {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
   const sale=(item.sales||[]).find(s=>s.sid===sid); if(!sale) return;
-  // Restore qty
-  item.qty=Number(item.qty)+Number(sale.qty);
+  // Restore qty at the specific location where the sale occurred
+  if (!item.inventory) item.inventory = {};
+  if (!item.inventory[sale.location]) {
+    item.inventory[sale.location] = { qty: 0, lastUpdated: new Date().toISOString() };
+  }
+  item.inventory[sale.location].qty = Number(item.inventory[sale.location].qty) + Number(sale.qty);
+  item.inventory[sale.location].lastUpdated = new Date().toISOString();
   item.sales=item.sales.filter(s=>s.sid!==sid);
   saveInventory(); renderDetail(); renderList(); showToast('Sale removed');
 }
@@ -4744,6 +4839,38 @@ async function executeMove() {
     moveBtn.disabled = false;
     moveBtn.textContent = originalText;
   }
+}
+
+function saveDetailNotes() {
+  const currentDetailId = window.currentDetailId || window.currentEditId;
+  if (!currentDetailId) {
+    showToast('No item selected');
+    return;
+  }
+  const textarea = document.getElementById('detail-notes-edit');
+  const notes = textarea ? textarea.value.trim() : '';
+
+  fetch('/.netlify/functions/inventory?action=updateNotes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ itemId: currentDetailId, notes })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success || data.updated) {
+      const item = items.find(i => i.id === currentDetailId);
+      if (item) item.notes = notes;
+      if (typeof renderList === 'function') renderList();
+      showToast('Notes saved successfully');
+      if (typeof closeModal === 'function') closeModal('modal-detail');
+    } else {
+      showToast('Failed to save notes');
+    }
+  })
+  .catch(err => {
+    console.error('saveDetailNotes error:', err);
+    showToast('Failed to save notes');
+  });
 }
 
 // ── Init ───────────────────────────────────────────────────

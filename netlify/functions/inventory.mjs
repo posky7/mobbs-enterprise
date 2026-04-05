@@ -198,7 +198,7 @@ export default async function handler(req, context) {
       }
 
       let inventory = await readBlobData('inventory');
-      const item = inventory.find(i => i.id === itemId);
+      let item = inventory.find(i => i.id === itemId);
       if (!item) {
         return new Response(JSON.stringify({ error: 'Item not found' }), {
           status: 404,
@@ -251,6 +251,203 @@ export default async function handler(req, context) {
         success: true,
         message: `Transferred ${transferQty} units from ${fromLocation} to ${toLocation}`
       }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Update item action (used for partial item updates)
+    if (httpMethod === 'POST' && action === 'updateItem') {
+      /** @type {{ itemId?: string, patch?: object }} */
+      const { itemId, patch } = await req.json().catch(() => ({}));
+
+      if (!itemId || !patch) {
+        return new Response(JSON.stringify({ error: 'Missing required parameters: itemId, patch' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (typeof patch !== 'object' || patch === null) {
+        return new Response(JSON.stringify({ error: 'Patch must be a valid object' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      let inventory = await readBlobData('inventory');
+      let item = inventory.find(i => i.id === itemId);
+      if (!item) {
+        return new Response(JSON.stringify({ error: 'Item not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Merge patch fields into the item
+      Object.assign(item, patch);
+
+      // Migrate the updated item
+      try {
+        item = migrateItem(item);
+      } catch (migrationError) {
+        console.error('Migration failed for updated item:', migrationError);
+        return new Response(JSON.stringify({ error: 'Failed to migrate updated item data' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await writeBlobData('inventory', inventory);
+      return new Response(JSON.stringify(item), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Record sale action (used for recording item sales)
+    if (httpMethod === 'POST' && action === 'recordSale') {
+      /** @type {{ itemId?: string, location?: string, qtySold?: any, actualPrice?: any, date?: string, feePercent?: any }} */
+      const { itemId, location, qtySold, actualPrice, date, feePercent } = await req.json().catch(() => ({}));
+
+      if (!itemId || !location || !qtySold || !actualPrice || !date) {
+        return new Response(JSON.stringify({ error: 'Missing required parameters: itemId, location, qtySold, actualPrice, date' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const saleQty = Number(qtySold);
+      const salePrice = Number(actualPrice);
+      const feePct = Number(feePercent) || 0;
+
+      if (saleQty <= 0 || !Number.isInteger(saleQty)) {
+        return new Response(JSON.stringify({ error: 'qtySold must be a positive integer' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (salePrice < 0) {
+        return new Response(JSON.stringify({ error: 'actualPrice must be non-negative' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (feePct < 0 || feePct > 100) {
+        return new Response(JSON.stringify({ error: 'feePercent must be between 0 and 100' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      let inventory = await readBlobData('inventory');
+      let item = inventory.find(i => i.id === itemId);
+      if (!item) {
+        return new Response(JSON.stringify({ error: 'Item not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Ensure inventory object exists
+      if (!item.inventory) item.inventory = {};
+
+      // Validate location exists and has sufficient quantity
+      const currentQty = Number(item.inventory[location]?.qty || 0);
+      if (currentQty < saleQty) {
+        return new Response(JSON.stringify({
+          error: `Insufficient quantity at location. Available: ${currentQty}, Requested: ${saleQty}`
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Subtract quantity from inventory
+      item.inventory[location] = {
+        qty: currentQty - saleQty,
+        lastUpdated: new Date().toISOString()
+      };
+
+      // Ensure salesHistory array exists
+      if (!item.salesHistory) item.salesHistory = [];
+
+      // Calculate profit: (actualPrice - fee) - (qtySold * totalCostPerUnit)
+      const feeAmount = salePrice * (feePct / 100);
+      const effectiveRevenue = salePrice - feeAmount;
+      const totalCostPerUnit = Number(item.cost || 0) + Number(item.labor || 0);
+      const costOfGoods = saleQty * totalCostPerUnit;
+      const profit = effectiveRevenue - costOfGoods;
+
+      // Append sale record
+      const saleRecord = {
+        id: Date.now().toString(),
+        date,
+        location,
+        qtySold: saleQty,
+        actualPrice: salePrice,
+        feePercent: feePct,
+        profit
+      };
+      item.salesHistory.push(saleRecord);
+
+      // Migrate the updated item
+      try {
+        item = migrateItem(item);
+      } catch (migrationError) {
+        console.error('Migration failed for item after sale recording:', migrationError);
+        return new Response(JSON.stringify({ error: 'Failed to migrate item data after sale' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await writeBlobData('inventory', inventory);
+      return new Response(JSON.stringify(item), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Update notes action (used for updating item notes)
+    if (httpMethod === 'POST' && action === 'updateNotes') {
+      /** @type {{ itemId?: string, notes?: string }} */
+      const { itemId, notes } = await req.json().catch(() => ({}));
+
+      if (!itemId) {
+        return new Response(JSON.stringify({ error: 'Missing required parameter: itemId' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      let inventory = await readBlobData('inventory');
+      let item = inventory.find(i => i.id === itemId);
+      if (!item) {
+        return new Response(JSON.stringify({ error: 'Item not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Set notes field (create if it doesn't exist)
+      item.notes = notes;
+
+      // Migrate the updated item
+      try {
+        item = migrateItem(item);
+      } catch (migrationError) {
+        console.error('Migration failed for item after notes update:', migrationError);
+        return new Response(JSON.stringify({ error: 'Failed to migrate item data after notes update' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await writeBlobData('inventory', inventory);
+      return new Response(JSON.stringify(item), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });

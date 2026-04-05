@@ -885,7 +885,7 @@ function switchTab(n) {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+n).classList.add('active');
   document.getElementById('nav-'+n).classList.add('active');
-  if(n==='inventory') populateInventoryLocationFilter();
+  if(n==='inventory') { populateInventoryLocationFilter(); renderList(); }
   if(n==='pnl')      { renderPnL(); renderIncomeStatement(); }
   if(n==='loans')    renderLoans();
   if(n==='expenses') renderExpenses();
@@ -1694,12 +1694,13 @@ function recordSale() {
 
    const costEach=Number(item.cost)+Number(item.labor);
    const revenue=qty*priceEach;
-   const profit=(revenue-transactionFee)-(qty*costEach);
 
   // Calculate transaction fee for this sale
   const location = locations.find(l => l.id === saleLocation);
   const transactionFeePercent = location?.transactionFeePercent || 0;
   const transactionFee = revenue * (transactionFeePercent / 100);
+
+   const profit=(revenue-transactionFee)-(qty*costEach);
 
   if(!item.sales)item.sales=[];
   item.sales.push({
@@ -1725,8 +1726,13 @@ function recordSale() {
 function removeSale(sid) {
   const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
   const sale=(item.sales||[]).find(s=>s.sid===sid); if(!sale) return;
-  // Restore qty
-  item.qty=Number(item.qty)+Number(sale.qty);
+  // Restore qty at the specific location where the sale occurred
+  if (!item.inventory) item.inventory = {};
+  if (!item.inventory[sale.location]) {
+    item.inventory[sale.location] = { qty: 0, lastUpdated: new Date().toISOString() };
+  }
+  item.inventory[sale.location].qty = Number(item.inventory[sale.location].qty) + Number(sale.qty);
+  item.inventory[sale.location].lastUpdated = new Date().toISOString();
   item.sales=item.sales.filter(s=>s.sid!==sid);
   saveInventory(); renderDetail(); renderList(); showToast('Sale removed');
 }

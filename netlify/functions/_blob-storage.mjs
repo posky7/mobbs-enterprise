@@ -5,6 +5,7 @@ const STORES = {
   locations: 'locations',
   expenses: 'expenses',
   loans: 'loans',
+  hunt: 'hunt',
   backupTimestamp: 'backup-timestamp',
   images: 'item-images'
 };

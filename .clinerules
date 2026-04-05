@@ -1,57 +1,6 @@
-# Craft Booth App Cline Rules (v2 - Separated)
-
-You are working exclusively on the Craft Booth App. Follow these rules strictly.
-
-## 1. Project Context & Scope
-- All work is for the Craft Booth App (React/Next.js + Tailwind + any other tech already in the repo).
-- Never suggest or implement features outside the current project scope unless explicitly asked.
-- Always keep responses focused on building, debugging, or improving the Craft Booth App.
-
-## 2. Best Practice Development Rules
-- Write clean, readable, maintainable code that follows modern React/Next.js conventions.
-- Use TypeScript strictly (no `any`, prefer interfaces and proper typing).
-- Component files: one component per file, co-locate tests and styles when appropriate.
-- Tailwind classes: keep them concise, prefer reusable utility components or shadcn/ui patterns.
-- State management: prefer React hooks / Zustand / Context; avoid unnecessary complexity.
-- Performance: memoize when needed, avoid unnecessary re-renders, lazy-load heavy components.
-- Accessibility: always add proper ARIA labels, keyboard navigation, and semantic HTML.
-- Testing: when adding or changing logic, include or update relevant tests.
-- Git-friendly: never commit temporary debug logs, commented-out code, or console.logs.
-- Documentation: keep README and inline comments up-to-date for new features/fixes.
-
-## 3. Planning and Execution Rules
-- For any task that involves more than one file or a non-trivial change: **always start in Plan mode**.
-- Plan structure:
-  1. Summarize the requested change and current state.
-  2. List affected files and why.
-  3. Outline the minimal, step-by-step implementation plan.
-  4. Highlight any risks or edge cases.
-- After presenting the plan, **stop and wait for my explicit approval** (“Go ahead” / “Execute the plan” / etc.) before switching to Act mode.
-- In Act mode: make **one minimal, targeted change per cycle**.
-- After each change: immediately run the relevant command/test and report the exact output.
-- Never assume success — always verify with reproduction steps.
-- If the plan needs adjustment, return to Plan mode with the new information.
-
-## 4. Debugging & Console Error Rules (Anti-Loop Protocol)
-- When given any console/terminal error:
-  1. Reproduce the error yourself and capture the **full** output.
-  2. State exactly which files/lines you have already inspected this session.
-  3. List 2–3 most likely root causes with reasoning.
-  4. Propose and implement **ONE** minimal change (or add temporary debug logs if root cause unclear).
-  5. Re-run the exact command that produced the error and report the new output.
-  6. If fixed → clean up debug logs, verify full flow, and stop.
-  7. If not fixed → repeat from step 3 (max 3 attempts before asking for clarification).
-- Never repeat the same file read, same command, or same failed approach.
-- Always remove temporary debug statements before declaring the task complete.
-
-## 5. Other / Efficiency Rules
-- Token efficiency: be concise, avoid unnecessary explanations or repetition.
-- End every response with a clear summary block:
-✅ Changes made:
-✅ Verification result:
-🔄 Next step (if any):
-text- If you are unsure or need more context, ask one clear, specific question instead of guessing.
-- Never hallucinate file contents — always read the file first if you need to see code.
-- Follow this file’s rules on every single task for the Craft Booth App.
-
-These rules are designed to keep development fast, clean, and loop-free while we build the Craft Booth App together.
+Anti-loop hardening (§4) — Added explicit hard rules: never re-read the same file twice without a state change, never re-run a failed command without changing something, and a hard cap of 3 attempts before the model must stop and ask. This is the most common failure mode in agentic coding.
+Plan Mode approval gate (§2) — Made the stop-and-wait requirement more explicit, with a specific list of accepted approval phrases so the model doesn't proceed on ambiguous signals.
+Dependency & security guardrails (§6) — New section requiring the model to justify any new npm package, check for CVEs, and enforce Zod validation on all server-side inputs before use.
+Git hygiene (§7) — New section with Conventional Commits format, atomic commits, and branch requirements — keeps the repo clean as the project grows.
+Testing standards (§8) — Formalized the test requirement with specific tooling (Vitest, RTL, Playwright) and added the "write a failing test first" rule for bug fixes, which prevents regressions from sneaking back in.
+Regression Check format (§5) — Turned the holistic check into a structured checklist the model must fill out, making it harder to hand-wave past regressions.

@@ -428,33 +428,29 @@ select.form-input option { background:#fff; color:#1a1612; }
       <div class="section-header" style="padding-top:8px;"><div class="section-title">Finance Hub</div></div>
 
       <div id="finance-hub-icons" style="padding:0 16px 20px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+        <div class="inv-card" onclick="openFinanceSub('individual')" style="text-align:center;padding:20px 12px;">
+          <div style="font-size:42px;margin-bottom:8px;">🧾</div>
+          <div class="inv-name" style="font-size:17px;">Individual Sales</div>
+        </div>
         <div class="inv-card" onclick="openFinanceSub('expenses')" style="text-align:center;padding:20px 12px;">
           <div style="font-size:42px;margin-bottom:8px;">💸</div>
           <div class="inv-name" style="font-size:17px;">Expenses</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('loans')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">🏦</div>
-          <div class="inv-name" style="font-size:17px;">Loans</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('reports')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">📈</div>
-          <div class="inv-name" style="font-size:17px;">Reports</div>
         </div>
         <div class="inv-card" onclick="openFinanceSub('income')" style="text-align:center;padding:20px 12px;">
           <div style="font-size:42px;margin-bottom:8px;">📊</div>
           <div class="inv-name" style="font-size:17px;">Income Summary</div>
         </div>
+        <div class="inv-card" onclick="openFinanceSub('loans')" style="text-align:center;padding:20px 12px;">
+          <div style="font-size:42px;margin-bottom:8px;">🏦</div>
+          <div class="inv-name" style="font-size:17px;">Loans</div>
+        </div>
         <div class="inv-card" onclick="openFinanceSub('pnl')" style="text-align:center;padding:20px 12px;">
           <div style="font-size:42px;margin-bottom:8px;">📉</div>
-          <div class="inv-name" style="font-size:17px;">P&amp;L</div>
+          <div class="inv-name" style="font-size:17px;">P&L</div>
         </div>
-        <div class="inv-card" onclick="openFinanceSub('individual')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">🧾</div>
-          <div class="inv-name" style="font-size:17px;">Individual Sales</div>
-        </div>
-        <div class="inv-card" onclick="openFinanceSub('inventory-summary')" style="text-align:center;padding:20px 12px;">
-          <div style="font-size:42px;margin-bottom:8px;">📦</div>
-          <div class="inv-name" style="font-size:17px;">Inventory Summary</div>
+        <div class="inv-card" onclick="openFinanceSub('reports')" style="text-align:center;padding:20px 12px;">
+          <div style="font-size:42px;margin-bottom:8px;">📈</div>
+          <div class="inv-name" style="font-size:17px;">Reports</div>
         </div>
       </div>
 
@@ -621,11 +617,18 @@ select.form-input option { background:#fff; color:#1a1612; }
         <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
       </div>
       <div class="summary-strip">
-        <div class="stat-card green"><div class="stat-label">Total Items</div><div class="stat-value" id="inventory-summary-total-items">0</div><div class="stat-sub">in stock</div></div>
-        <div class="stat-card purple"><div class="stat-label">Total Value</div><div class="stat-value" id="inventory-summary-total-value">$0</div><div class="stat-sub">at cost</div></div>
-        <div class="stat-card orange"><div class="stat-label">Avg Item Value</div><div class="stat-value" id="inventory-summary-avg-value">$0</div><div class="stat-sub">per item</div></div>
-        <div class="stat-card red"><div class="stat-label">Low Stock Items</div><div class="stat-value" id="inventory-summary-low-stock">0</div><div class="stat-sub">need reorder</div></div>
+        <div class="stat-card purple"><div class="stat-label">Items</div><div class="stat-value" id="inventory-summary-items">0</div><div class="stat-sub">in stock</div></div>
+        <div class="stat-card blue"><div class="stat-label">Units</div><div class="stat-value" id="inventory-summary-units">0</div><div class="stat-sub">total qty</div></div>
+        <div class="stat-card red"><div class="stat-label">Cost Value</div><div class="stat-value" id="inventory-summary-cost">$0</div><div class="stat-sub">total cost</div></div>
+        <div class="stat-card green"><div class="stat-label">Retail Value</div><div class="stat-value" id="inventory-summary-retail">$0</div><div class="stat-sub">total retail</div></div>
       </div>
+
+      <!-- Sold Summary Strip (hidden by default) -->
+      <div class="summary-strip" id="inventory-summary-sold-strip" style="display:none;">
+        <div class="stat-card orange"><div class="stat-label">Sold</div><div class="stat-value" id="inventory-summary-sold-units">0</div><div class="stat-sub">units</div></div>
+        <div class="stat-card green"><div class="stat-label">Revenue</div><div class="stat-value" id="inventory-summary-sold-revenue">$0</div><div class="stat-sub">from sales</div></div>
+      </div>
+
       <div class="section-header"><div class="section-title">Inventory by Category</div></div>
       <div class="pnl-section" id="inventory-summary-breakdown">
         <!-- Content will be populated by renderInventorySummary() -->
@@ -640,6 +643,18 @@ select.form-input option { background:#fff; color:#1a1612; }
         </div>
         <div class="header-title">Profit & Loss</div>
         <button onclick="switchTab('pnl')" style="margin:12px 16px;background:var(--surface);border:1.5px solid var(--border);padding:10px 18px;border-radius:22px;font-weight:700;">← Back to Finance Hub</button>
+      </div>
+
+      <!-- Finance View Controls -->
+      <div id="finance-view-controls" style="padding:12px 16px 0;">
+        <div style="margin-bottom:8px;">
+          <select id="finance-view-selector" onchange="setFinanceView()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-family:var(--font-main);font-size:14px;color:var(--text);">
+            <option value="income-statement">Income Statement</option>
+            <option value="pnl" selected>Profit & Loss</option>
+            <option value="inventory-summary">Inventory Summary</option>
+            <option value="individual-sales">Individual Sales</option>
+          </select>
+        </div>
       </div>
 
       <!-- P&L Controls -->
@@ -681,7 +696,8 @@ select.form-input option { background:#fff; color:#1a1612; }
     </div>
 
     <!-- Income Statement Section -->
-    <div id="income-statement-section" style="display:none;">
+    <div id="income-statement-section" class="pnl-section" style="display:none;">
+      <!-- Header with period info -->
       <div style="padding:16px 16px 8px;">
         <div style="font-size:18px;font-weight:600;color:var(--text);margin-bottom:8px;">Income Statement</div>
         <div style="font-size:14px;color:var(--text3);margin-bottom:16px;">
@@ -689,11 +705,9 @@ select.form-input option { background:#fff; color:#1a1612; }
         </div>
       </div>
 
-      <div style="padding:0 16px;">
-        <!-- Revenue Section -->
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:600;">Revenue</div>
-        </div>
+      <!-- Revenue Summary Card -->
+      <div class="pnl-card" style="margin-bottom:14px;">
+        <div style="padding:12px 16px 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">Revenue Summary</div>
         <div class="pnl-row">
           <div class="pnl-row-label">Gross Revenue</div>
           <div class="pnl-row-val pos" id="is-gross-revenue">—</div>
@@ -702,47 +716,57 @@ select.form-input option { background:#fff; color:#1a1612; }
           <div class="pnl-row-label">Transaction Fees</div>
           <div class="pnl-row-val neg" id="is-transaction-fees">—</div>
         </div>
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:500;">Net Revenue</div>
+        <div class="pnl-row" style="background:var(--surface2);">
+          <div class="pnl-row-label" style="font-weight:600;">Net Revenue</div>
           <div class="pnl-row-val" id="is-net-revenue">—</div>
         </div>
+      </div>
 
-        <!-- Cost of Goods Sold -->
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:500;">Cost of Goods Sold</div>
+      <!-- Profit Analysis Card -->
+      <div class="pnl-card" style="margin-bottom:14px;">
+        <div style="padding:12px 16px 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">Profit Analysis</div>
+        <div class="pnl-row">
+          <div class="pnl-row-label">Cost of Goods Sold</div>
           <div class="pnl-row-val neg" id="is-cogs">—</div>
         </div>
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
+        <div class="pnl-row" style="background:var(--surface2);">
           <div class="pnl-row-label" style="font-weight:600;">Gross Profit</div>
           <div class="pnl-row-val" id="is-gross-profit">—</div>
         </div>
+      </div>
 
-        <!-- Operating Expenses -->
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:500;">Operating Expenses</div>
+      <!-- Operating Expenses Card -->
+      <div class="pnl-card" style="margin-bottom:14px;">
+        <div style="padding:12px 16px 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">Operating Expenses</div>
+        <div class="pnl-row">
+          <div class="pnl-row-label">Total Operating Expenses</div>
           <div class="pnl-row-val neg" id="is-operating-expenses">—</div>
         </div>
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
+        <!-- Expense Breakdown -->
+        <div id="is-expense-breakdown"></div>
+        <div class="pnl-row" style="background:var(--surface2);">
           <div class="pnl-row-label" style="font-weight:600;">Operating Income</div>
           <div class="pnl-row-val" id="is-operating-income">—</div>
         </div>
+      </div>
 
-        <!-- Expense Breakdown -->
-        <div id="is-expense-breakdown"></div>
-
-        <!-- Other Income/Expenses -->
-        <div class="pnl-row" style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:8px;">
-          <div class="pnl-row-label" style="font-weight:500;">Other Income/Expenses</div>
+      <!-- Other Income/Expenses Card -->
+      <div class="pnl-card" style="margin-bottom:14px;">
+        <div style="padding:12px 16px 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">Other Income & Expenses</div>
+        <div class="pnl-row">
+          <div class="pnl-row-label">Net Other Income/Expenses</div>
           <div class="pnl-row-val" id="is-other-income-expenses">—</div>
         </div>
-
         <!-- Other Breakdown -->
         <div id="is-other-breakdown"></div>
+      </div>
 
-        <!-- Net Income -->
-        <div class="pnl-row" style="border-top:2px solid var(--border);padding-top:12px;margin-top:12px;">
-          <div class="pnl-row-label" style="font-weight:700;font-size:16px;">Net Income</div>
-          <div class="pnl-row-val" id="is-net-income" style="font-weight:700;font-size:16px;">—</div>
+      <!-- Net Income Summary Card -->
+      <div class="pnl-card" style="margin-bottom:14px;">
+        <div style="padding:12px 16px 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text2);">Net Income</div>
+        <div class="pnl-row" style="background:var(--surface2);">
+          <div class="pnl-row-label" style="font-weight:700;font-size:15px;">Net Income</div>
+          <div class="pnl-row-val" id="is-net-income" style="font-weight:700;font-size:18px;">—</div>
         </div>
       </div>
     </div>
@@ -756,6 +780,20 @@ select.form-input option { background:#fff; color:#1a1612; }
             <option value="all">All Locations</option>
           </select>
         </div>
+      </div>
+
+      <!-- Inventory Summary Stats -->
+      <div class="summary-strip">
+        <div class="stat-card purple"><div class="stat-label">Items</div><div class="stat-value" id="inventory-summary-items">0</div><div class="stat-sub">in stock</div></div>
+        <div class="stat-card blue"><div class="stat-label">Units</div><div class="stat-value" id="inventory-summary-units">0</div><div class="stat-sub">total qty</div></div>
+        <div class="stat-card red"><div class="stat-label">Cost Value</div><div class="stat-value" id="inventory-summary-cost">$0</div><div class="stat-sub">total cost</div></div>
+        <div class="stat-card green"><div class="stat-label">Retail Value</div><div class="stat-value" id="inventory-summary-retail">$0</div><div class="stat-sub">total retail</div></div>
+      </div>
+
+      <!-- Sold Summary Strip (hidden by default) -->
+      <div class="summary-strip" id="inventory-summary-sold-strip" style="display:none;">
+        <div class="stat-card orange"><div class="stat-label">Sold</div><div class="stat-value" id="inventory-summary-sold-units">0</div><div class="stat-sub">units</div></div>
+        <div class="stat-card green"><div class="stat-label">Revenue</div><div class="stat-value" id="inventory-summary-sold-revenue">$0</div><div class="stat-sub">from sales</div></div>
       </div>
 
       <!-- Inventory Summary Content -->
@@ -1051,71 +1089,26 @@ select.form-input option { background:#fff; color:#1a1612; }
   </div>
 </div>
 
-<!-- Item Detail Modal -->
+<!-- Detail Modal (fixed) -->
 <div class="modal-overlay" id="modal-detail">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title" id="detail-name">Item</div><button class="modal-close" onclick="closeModal('modal-detail')">✕</button></div>
-    <div class="modal-body">
-      <div id="detail-image-container"></div>
-      <div id="detail-badge" class="detail-badge">📦 <span id="detail-cat">—</span></div>
-      <div style="margin-bottom:16px;">
-        <div class="form-label" style="margin-bottom:8px;">Adjust Quantity</div>
-        <div class="qty-controls">
-          <button class="qty-btn" onclick="adjustQty(-1)">−</button>
-          <div style="flex:1;text-align:center;"><div class="qty-display" id="detail-qty">0</div><div class="qty-unit" id="detail-unit">units</div></div>
-          <button class="qty-btn" onclick="adjustQty(1)">+</button>
-        </div>
-      </div>
-      <div class="profit-summary"><div class="profit-label">Profit per Unit</div><div class="profit-value" id="detail-profit">$0.00</div><div class="profit-margin" id="detail-margin">0% margin</div></div>
-      <div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">Initial Cost</div><div class="detail-stat-value orange" id="dd-cost">$0.00</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Labor Cost</div><div class="detail-stat-value orange" id="dd-labor">$0.00</div></div>
-        <div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Suggested Price</div><div class="detail-stat-value green" id="dd-suggested-price">$0.00</div></div>
-      </div>
-      <div class="detail-grid"><div class="detail-stat" style="grid-column:span 2"><div class="detail-stat-label">Total Value (Suggested × Qty)</div><div class="detail-stat-value green" id="dd-total-val">$0.00</div></div></div>
-      <div id="detail-notes-wrap" style="margin-bottom:16px;display:none">
-        <div class="form-label" style="margin-bottom:4px">Notes</div>
-        <textarea class="form-input" id="detail-notes-edit" placeholder="Add notes about this item…" autocomplete="off" rows="3" maxlength="2000" oninput="updateDetailNotesCounter()" style="margin-bottom:4px;"></textarea>
-        <div id="detail-notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;display:none;"></div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <button class="btn-save" onclick="saveDetailNotes()" style="flex:1;font-size:13px;padding:8px 16px;">✓ Save Notes</button>
-          <button class="btn-tool" onclick="cancelDetailNotesEdit()" style="font-size:13px;padding:8px 16px;">Cancel</button>
-        </div>
-      </div>
+    <div class="modal-header">
+      <div class="modal-title" id="detail-name">Item Detail</div>
+      <button class="modal-close" onclick="closeModal('modal-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="detail-body">
+      <!-- Item info will be populated by openDetail -->
+      <div id="detail-content"></div>
 
-      <!-- Record Sale -->
-      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">Record a Sale</div>
-      <div class="form-row" style="margin-bottom:10px;">
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">Qty Sold</label>
-          <input class="form-input" type="number" id="sale-qty" placeholder="1" min="1" inputmode="numeric" value="1">
-        </div>
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">Sale Price ($)</label>
-          <input class="form-input" type="number" id="sale-price-override" placeholder="Suggested price" step="0.01" inputmode="decimal">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Sale Date</label>
-        <input class="form-input" type="date" id="sale-date">
-      </div>
-      <div class="form-group" id="sale-location-group" style="display:none;">
-        <label class="form-label">Location *</label>
-        <select class="form-input" id="sale-location">
-          <option value="">Select location...</option>
-        </select>
-      </div>
-      <button class="btn-save" onclick="recordSale()" id="record-sale-btn" style="background:linear-gradient(135deg,var(--accent2),#138a5c);">✓ Record Sale</button>
+      <!-- Record Sale Form (dynamically inserted by openDetail) -->
+      <div id="sale-form-section" class="form-section" style="display:none;"></div>
 
-      <!-- Sale history for this item -->
-      <div id="detail-sale-history-wrap" style="margin-top:16px;display:none;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;">Sale History</div>
-        <div id="detail-sale-history" class="pnl-card"></div>
+      <!-- Notes section (read-only on card) -->
+      <div class="form-section">
+        <div class="form-label">Notes</div>
+        <textarea class="form-input" id="detail-notes-edit" readonly placeholder="No notes" rows="3" maxlength="2000"></textarea>
       </div>
-
-      <button class="btn-save" onclick="editCurrentItem()" style="margin-top:14px;">Edit Item</button>
-      <div style="height:12px"></div>
     </div>
   </div>
 </div>
@@ -1436,6 +1429,33 @@ function openFinanceSub(view) {
   const targetId = viewMap[view];
   if (targetId) document.getElementById(targetId).style.display = 'block';
 
+  // Call the appropriate rendering function for the sub-view
+  switch(view) {
+    case 'income':
+      // Show the income statement section and render it
+      document.getElementById('income-statement-section').style.display = 'block';
+      renderIncomeStatement();
+      break;
+    case 'pnl':
+      renderPnL();
+      break;
+    case 'inventory-summary':
+      renderInventorySummary();
+      break;
+    case 'individual':
+      renderIndividualSales();
+      break;
+    case 'reports':
+      renderReports();
+      break;
+    case 'expenses':
+      renderExpenses();
+      break;
+    case 'loans':
+      renderLoans();
+      break;
+  }
+
   // Scroll back to top of the pnl tab
   const pnlTab = document.getElementById('tab-pnl');
   if (pnlTab) pnlTab.scrollTop = 0;
@@ -1463,6 +1483,40 @@ function renderFinanceHub() {
 
   // Show the landing hub wrapper
   document.getElementById('finance-hub-landing').style.display = 'block';
+
+  // Calculate and populate finance hub KPIs
+  updateFinanceHubKPIs();
+}
+
+function updateFinanceHubKPIs() {
+  // Get current period bounds (default to YTD)
+  const bounds = getPeriodBounds();
+
+  // Calculate sales metrics
+  const periodSales = inventory.flatMap(i => salesInPeriod(i, bounds).map(sl => ({ ...sl, item: i })));
+  const revenue = periodSales.reduce((s, sl) => s + Number(sl.revenue), 0);
+  const profit = periodSales.reduce((s, sl) => s + Number(sl.profit), 0);
+  const units = periodSales.reduce((s, sl) => s + Number(sl.qty), 0);
+
+  // Calculate margin (after transaction fees)
+  const fees = periodSales.reduce((s, sl) => s + Number(sl.transactionFee || 0), 0);
+  const netRevenue = revenue - fees;
+  const margin = netRevenue > 0 ? Math.round((profit / netRevenue) * 100) : 0;
+
+  // Update the display elements
+  document.getElementById('hub-revenue').textContent = fmtK(revenue);
+  document.getElementById('hub-profit').textContent = fmtK(profit);
+  document.getElementById('hub-units').textContent = units;
+  document.getElementById('hub-margin').textContent = margin + '%';
+
+  // Update last updated timestamp
+  const lastUpdatedEl = document.getElementById('pnl-last-updated');
+  if (lastUpdatedEl) {
+    lastUpdatedEl.textContent = new Date().toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    });
+  }
 }
 
 // ── Install Banner ─────────────────────────────────────────
@@ -1475,14 +1529,87 @@ function dismissBanner() { document.getElementById('install-banner').classList.r
 // ── Data ───────────────────────────────────────────────────
 // Inventory is server-backed only — never seed demo rows; empty API / invalid JSON must stay [].
 
-let inventory = [];
-let locations = [];
+let inventory = [
+  {
+    id: 'demo-1',
+    name: 'Ceramic Vase Set',
+    category: 'Ceramic Tableware',
+    cost: 12.50,
+    labor: 8.75,
+    suggestedPrice: 45.00,
+    unit: 'pcs',
+    inventory: {
+      'storage': { qty: 8, lastUpdated: new Date().toISOString() }
+    },
+    totalQty: 8,
+    sales: [],
+    notes: 'Beautiful handcrafted ceramic vase set, perfect for home decor.'
+  },
+  {
+    id: 'demo-2',
+    name: 'Antique Lamp',
+    category: 'Lamps',
+    cost: 25.00,
+    labor: 15.00,
+    suggestedPrice: 85.00,
+    unit: 'pcs',
+    inventory: {
+      'storage': { qty: 3, lastUpdated: new Date().toISOString() }
+    },
+    totalQty: 3,
+    sales: [],
+    notes: 'Vintage style table lamp with adjustable brightness.'
+  }
+];
+let locations = [
+  {
+    id: 'storage',
+    name: 'Main Storage',
+    type: 'storage',
+    active: true,
+    transactionFeePercent: 2.5,
+    monthlyRent: 0,
+    isWarehouse: true
+  }
+];
 let loans = [];
 let huntItems = [];
 let currentLoanId = null, currentDetailId = null, currentLocationId = 'storage';
 let inventoryLocationFilter = 'all';
 let huntCategoryFilter = 'all';
 let huntSearchQuery = '';
+
+console.log('Inventory data on load (restored):', inventory?.length || 'no items');
+
+window.populateUnitSelect = function() {
+  console.log('populateUnitSelect stub called');
+};
+
+window.initSwipeDismiss = function() {
+  console.log('initSwipeDismiss stub called');
+};
+
+async function loadAllData() {
+  try {
+    const [locationsData, inventoryData, loansData, expensesData] = await Promise.all([
+      fetchWithRetry(`${API}/locations`).then(r => r.json()).catch(() => []),
+      fetchWithRetry(`${API}/inventory`).then(r => r.json()).catch(() => []),
+      fetchWithRetry(`${API}/loans`).then(r => r.json()).catch(() => []),
+      fetchWithRetry(`${API}/expenses`).then(r => r.json()).catch(() => [])
+    ]);
+
+    locations = locationsData;
+    inventory = inventoryData;
+    loans = loansData;
+    expenses = expensesData;
+
+    console.log('✅ loadAllData success - inventory items:', inventory.length);
+    if (typeof renderList === 'function') renderList();
+  } catch (error) {
+    console.error('Failed to load all data:', error);
+    showToast('⚠ Failed to load inventory - check connection');
+  }
+}
 
 // ── Global Utility Functions ──────────────────────────────────
 // Shared calculation utilities for P&L and Reports
@@ -1551,6 +1678,19 @@ async function loadHuntItems() {
     console.error('Failed to load hunt items:', error);
     huntItems = [];
     showToast('⚠ Failed to load hunt items');
+  }
+}
+
+async function loadLocations() {
+  try {
+    const response = await fetchWithRetry(`${API}/locations`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    locations = await response.json();
+    console.log('Loaded', locations.length, 'locations');
+  } catch (error) {
+    console.error('Failed to load locations:', error);
+    locations = [];
+    showToast('⚠ Failed to load locations');
   }
 }
 
@@ -2012,6 +2152,34 @@ function cancelDetailNotesEdit() {
   }
 }
 
+function saveDetailNotes() {
+  const currentDetailId = window.currentDetailId || window.currentEditId;
+  if (!currentDetailId) {
+    if (typeof showToast === 'function') showToast('No item selected');
+    return;
+  }
+  const textarea = document.getElementById('detail-notes-edit');
+  const notes = textarea ? textarea.value.trim() : '';
+
+  fetch('/.netlify/functions/inventory?action=updateNotes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ itemId: currentDetailId, notes })
+  })
+  .then(res => res.json())
+  .then(() => {
+    const item = inventory.find(i => i.id === currentDetailId);
+    if (item) item.notes = notes;
+    if (typeof renderList === 'function') renderList();
+    if (typeof showToast === 'function') showToast('Notes saved successfully');
+    if (typeof closeModal === 'function') closeModal('modal-detail');
+  })
+  .catch(err => {
+    console.error('saveDetailNotes error:', err);
+    if (typeof showToast === 'function') showToast('Failed to save notes');
+  });
+}
+
 function toggleWarehouseTransfer() {
   const checkbox = document.getElementById('f-transfer-from-warehouse');
   const warehouseSection = document.getElementById('warehouse-transfer-section');
@@ -2079,6 +2247,44 @@ async function saveLocations() {
   } catch (error) {
     console.error('saveLocations error:', error);
     showToast('⚠ Failed to save locations');
+    throw error;
+  }
+}
+
+async function saveExpenses() {
+  try {
+    const response = await fetch(`${API}/expenses`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(expenses)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(error.error || 'Failed to save expenses');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('saveExpenses error:', error);
+    showToast('⚠ Failed to save expenses');
+    throw error;
+  }
+}
+
+async function saveLoans() {
+  try {
+    const response = await fetch(`${API}/loans`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(loans)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(error.error || 'Failed to save loans');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('saveLoans error:', error);
+    showToast('⚠ Failed to save loans');
     throw error;
   }
 }
@@ -3163,9 +3369,21 @@ async function saveItem() {
 }
 
 // ── Item Detail ────────────────────────────────────────────
-function openDetail(id) { currentDetailId=id; renderDetail(); document.getElementById('modal-detail').classList.add('open'); }
+function openDetail(id) {
+  window.currentDetailId = id;
+  const item = inventory.find(i => i.id === id);
+  if (!item) return;
+
+  // Use the comprehensive renderDetail function instead of duplicating logic
+  renderDetail();
+  document.getElementById('modal-detail').classList.add('open');
+}
 function renderDetail() {
-  const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
+  console.log('renderDetail called for item:', currentDetailId);
+  const item=inventory.find(i=>i.id===currentDetailId);
+  console.log('Found item:', item);
+  if(!item) return;
+
   const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
 
   // Calculate adjusted profit and margin after transaction fee
@@ -3180,69 +3398,187 @@ function renderDetail() {
   // Calculate total quantity across all locations
   const totalQty = item.totalQty || 0;
 
-  document.getElementById('detail-name').textContent=item.name;
-  document.getElementById('detail-cat').textContent=item.category;
-  document.getElementById('detail-qty').textContent=totalQty;
-  document.getElementById('detail-unit').textContent=item.unit||'units';
-  document.getElementById('detail-profit').textContent=fmt(adjustedProfit);
-  document.getElementById('detail-margin').textContent=adjustedMargin+'% margin (after '+transactionFeePercent+'% fee)';
-  document.getElementById('dd-cost').textContent=fmt(item.cost);
-  document.getElementById('dd-labor').textContent=fmt(item.labor);
-  document.getElementById('dd-suggested-price').textContent=fmt(suggested);
-  document.getElementById('dd-total-val').textContent=fmt(suggested*totalQty);
+  // Update modal title
+  const detailNameEl = document.getElementById('detail-name');
+  if (detailNameEl) {
+    detailNameEl.textContent = item.name;
+  }
+
+  // Populate the detail-content div with comprehensive item information
+  const detailContent = document.getElementById('detail-content');
+  console.log('detail-content element:', detailContent);
+  if (detailContent) {
+    const content = `
+      <div class="form-section">
+        <div class="form-section-title">📦 Item Details</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Name</label>
+            <input class="form-input" type="text" id="edit-name" value="${esc(item.name)}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <input class="form-input" type="text" id="edit-category" value="${esc(item.category)}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Quantity</label>
+            <input class="form-input" type="number" id="edit-qty" value="${totalQty}" readonly>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit</label>
+            <input class="form-input" type="text" id="edit-unit" value="${esc(item.unit || 'units')}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Cost ($)</label>
+            <input class="form-input" type="number" id="edit-cost" step="0.01" value="${item.cost || 0}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Labor ($)</label>
+            <input class="form-input" type="number" id="edit-labor" step="0.01" value="${item.labor || 0}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Suggested Price ($)</label>
+            <input class="form-input" type="number" id="edit-price" step="0.01" value="${suggested}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Total Value ($)</label>
+            <input class="form-input" type="text" value="${fmt(suggested*totalQty)}" readonly>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Profit ($)</label>
+            <input class="form-input" type="text" value="${fmt(adjustedProfit)}" readonly>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Margin (%)</label>
+            <input class="form-input" type="text" value="${adjustedMargin}% (after ${transactionFeePercent}% fee)" readonly>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">⚙️ Actions</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-save" onclick="saveItemEdits()" style="flex:1;">💾 Save Changes</button>
+          <button class="btn-secondary" onclick="editCurrentItem()" style="flex:1;">🔧 Advanced Edit</button>
+        </div>
+      </div>
+    `;
+    console.log('Setting detail-content innerHTML');
+    detailContent.innerHTML = content;
+    console.log('detail-content populated successfully');
+  } else {
+    console.error('detail-content element not found!');
+  }
 
   // Handle image display
   const imageContainer = document.getElementById('detail-image-container');
-  if (item.imageId) {
-    const imageUrl = `/.netlify/functions/images?id=${item.imageId}`;
-    imageContainer.innerHTML = `<div style="width:100%;height:200px;background:#f5f2ee;border-radius:12px;overflow:hidden;margin-bottom:16px;"><img src="${esc(imageUrl)}" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:#ede9e3;display:flex;align-items:center;justify-content:center;font-size:32px;color:#9a9080;\\'>📦</div>';"></div>`;
-    imageContainer.style.display = 'block';
-  } else {
-    imageContainer.style.display = 'none';
+  if (imageContainer) {
+    if (item.imageId) {
+      const imageUrl = `/.netlify/functions/images?id=${item.imageId}`;
+      imageContainer.innerHTML = `<div style="width:100%;height:200px;background:#f5f2ee;border-radius:12px;overflow:hidden;margin-bottom:16px;"><img src="${esc(imageUrl)}" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:#ede9e3;display:flex;align-items:center;justify-content:center;font-size:32px;color:#9a9080;\\'>📦</div>';"></div>`;
+      imageContainer.style.display = 'block';
+    } else {
+      imageContainer.style.display = 'none';
+    }
   }
 
-  const nw=document.getElementById('detail-notes-wrap');
-  if(item.notes){nw.style.display='block';document.getElementById('detail-notes-edit').value=item.notes;}else nw.style.display='none';
-  updateDetailNotesCounter();
+  // Handle notes
+  const notesTextarea = document.getElementById('detail-notes-edit');
+  if (notesTextarea) {
+    if(item.notes){
+      notesTextarea.value = item.notes;
+      notesTextarea.style.display = 'block';
+    } else {
+      notesTextarea.value = '';
+      notesTextarea.style.display = 'none';
+    }
+  }
 
   // Pre-fill sale section with suggested price
-  document.getElementById('sale-qty').value='1';
-  document.getElementById('sale-price-override').value=suggested > 0 ? suggested.toFixed(2) : '';
-  document.getElementById('sale-date').value=new Date().toISOString().split('T')[0];
+  const saleQty = document.getElementById('sale-qty');
+  if (saleQty) saleQty.value = '1';
+
+  const salePrice = document.getElementById('sale-price');
+  if (salePrice) salePrice.value = suggested > 0 ? suggested.toFixed(2) : '';
+
+  const saleDate = document.getElementById('sale-date');
+  if (saleDate) saleDate.value = new Date().toISOString().split('T')[0];
+
+  // Safe addition of Record Sale form (only if not already present)
+  let saleForm = document.getElementById('sale-form-section');
+  if (!saleForm) {
+    saleForm = document.createElement('div');
+    saleForm.id = 'sale-form-section';
+    saleForm.className = 'form-section';
+    saleForm.innerHTML = `
+      <div class="form-section-title">Record Sale</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Qty to Sell</label>
+          <input class="form-input" type="number" id="sale-qty" min="1" value="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sale Price ($)</label>
+          <input class="form-input" type="number" id="sale-price" step="0.01" value="${suggested.toFixed(2)}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fee % (optional)</label>
+        <input class="form-input" type="number" id="sale-fee" step="0.01" value="${transactionFeePercent}" min="0" max="100">
+      </div>
+      <div class="form-group" id="sale-location-group" style="display:none;">
+        <label class="form-label">Location</label>
+        <select class="form-input" id="sale-location" onchange="updateSaleButton()"></select>
+      </div>
+      <button class="btn-save" id="record-sale-btn" onclick="recordSale()" style="margin-top:12px;">Record Sale</button>
+    `;
+    const modalBody = document.querySelector('#modal-detail .modal-body');
+    if (modalBody) modalBody.insertBefore(saleForm, document.getElementById('detail-notes-wrap'));
+  }
 
   // Populate location selector for multi-location items
   const locationGroup = document.getElementById('sale-location-group');
   const locationSelect = document.getElementById('sale-location');
   const recordSaleBtn = document.getElementById('record-sale-btn');
 
-  // Check if item exists in multiple locations with stock
-  const locationsWithStock = locations.filter(loc =>
-    loc.active && item.inventory && item.inventory[loc.id] && Number(item.inventory[loc.id].qty) > 0
-  );
+  if (locationGroup && locationSelect && recordSaleBtn) {
+    // Check if item exists in multiple locations with stock
+    const locationsWithStock = locations.filter(loc =>
+      loc.active && item.inventory && item.inventory[loc.id] && Number(item.inventory[loc.id].qty) > 0
+    );
 
-  if (locationsWithStock.length > 1) {
-    // Show location selector
-    locationGroup.style.display = 'block';
-    locationSelect.innerHTML = '<option value="">Select location...</option>';
+    if (locationsWithStock.length > 1) {
+      // Show location selector
+      locationGroup.style.display = 'block';
+      locationSelect.innerHTML = '<option value="">Select location...</option>';
 
-    locationsWithStock.forEach(loc => {
-      const qty = Number(item.inventory[loc.id].qty);
-      const option = document.createElement('option');
-      option.value = loc.id;
-      option.textContent = `${loc.name} (${qty} ${item.unit || 'units'})`;
-      locationSelect.appendChild(option);
-    });
+      locationsWithStock.forEach(loc => {
+        const qty = Number(item.inventory[loc.id].qty);
+        const option = document.createElement('option');
+        option.value = loc.id;
+        option.textContent = `${loc.name} (${qty} ${item.unit || 'units'})`;
+        locationSelect.appendChild(option);
+      });
 
-    // Clear any previous selection and disable button
-    locationSelect.value = '';
-    recordSaleBtn.disabled = true;
-    recordSaleBtn.style.opacity = '0.5';
-  } else {
-    // Hide location selector for single location items
-    locationGroup.style.display = 'none';
-    locationSelect.value = '';
-    recordSaleBtn.disabled = false;
-    recordSaleBtn.style.opacity = '1';
+      // Clear any previous selection and disable button
+      locationSelect.value = '';
+      recordSaleBtn.disabled = true;
+      recordSaleBtn.style.opacity = '0.5';
+    } else {
+      // Hide location selector for single location items
+      locationGroup.style.display = 'none';
+      locationSelect.value = '';
+      recordSaleBtn.disabled = false;
+      recordSaleBtn.style.opacity = '1';
+    }
   }
 
   // Add event listener to enable/disable button based on location selection
@@ -3277,80 +3613,60 @@ function renderDetail() {
 }
 
 function recordSale() {
-  const item=inventory.find(i=>i.id===currentDetailId); if(!item) return;
-  const qty=parseInt(document.getElementById('sale-qty').value)||1;
-  const suggested=Number(item.suggestedPrice ?? item.salePrice ?? 0);
-  const priceEach=parseFloat(document.getElementById('sale-price-override').value)||suggested;
-  const date=document.getElementById('sale-date').value;
-
-  if(qty<=0){document.getElementById('sale-qty').focus();return;}
-
-  // Initialize inventory object if it doesn't exist
-  if (!item.inventory) item.inventory = {};
-
-  // Determine the location where the sale occurred
-  let saleLocation = null;
-  let availableQty = 0;
-
-  // Check if location selector is visible (multi-location item)
-  const locationGroup = document.getElementById('sale-location-group');
-  if (locationGroup.style.display !== 'none') {
-    // Multi-location item - use selected location
-    saleLocation = document.getElementById('sale-location').value;
-    if (!saleLocation) {
-      showToast('Please select a location for this sale');
-      document.getElementById('sale-location').focus();
-      return;
-    }
-    availableQty = Number(item.inventory[saleLocation]?.qty || 0);
-  } else {
-    // Single location item - use the first active location with available stock
-    const activeLocations = locations.filter(loc => loc.active);
-    for (const loc of activeLocations) {
-      const locQty = Number(item.inventory[loc.id]?.qty || 0);
-      if (locQty > 0) {
-        saleLocation = loc.id;
-        availableQty = locQty;
-        break;
-      }
-    }
+  const currentDetailId = window.currentDetailId;
+  if (!currentDetailId) {
+    showToast('No item selected – open detail first');
+    return;
   }
-
-  // Check if there's enough stock at the selected location
-  if (!saleLocation || qty > availableQty) {
-    const totalQty = Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc.qty || 0), 0);
-    showToast(`Only ${availableQty || totalQty} in stock at selected location`);
+  const item = inventory.find(i => i.id === currentDetailId);
+  if (!item) {
+    showToast('Item not found');
     return;
   }
 
-   const costEach=Number(item.cost)+Number(item.labor);
-   const revenue=qty*priceEach;
-   const profit=(revenue-transactionFee)-(qty*costEach);
+  const qtyInput = document.getElementById('sale-qty');
+  const priceInput = document.getElementById('sale-price');
+  const feeInput = document.getElementById('sale-fee');
 
-  // Calculate transaction fee for this sale
-  const location = locations.find(l => l.id === saleLocation);
-  const transactionFeePercent = location?.transactionFeePercent || 0;
-  const transactionFee = revenue * (transactionFeePercent / 100);
+  const qty = parseInt(qtyInput ? qtyInput.value : 0) || 0;
+  const price = parseFloat(priceInput ? priceInput.value : 0) || 0;
+  const fee = parseFloat(feeInput ? feeInput.value : 0) || 0;
 
-  if(!item.sales)item.sales=[];
-  item.sales.push({
-    sid:uid(),
-    date,
-    qty,
-    priceEach,
-    revenue,
-    profit,
-    location:saleLocation,
-    transactionFee,
-    transactionFeePercent
+  if (qty <= 0 || price <= 0) {
+    showToast('Please enter valid quantity and price');
+    return;
+  }
+
+  const currentQty = item.inventory?.[currentLocation]?.qty || 0;
+  if (qty > currentQty) {
+    showToast('Not enough stock available');
+    return;
+  }
+
+  fetch('/.netlify/functions/inventory?action=recordSale', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      itemId: item.id,
+      location: currentLocation,
+      qtySold: qty,
+      actualPrice: price,
+      date: new Date().toISOString(),
+      feePercent: fee
+    })
+  })
+  .then(res => res.json())
+  .then(updatedItem => {
+    const index = inventory.findIndex(i => i.id === item.id);
+    if (index !== -1) inventory[index] = updatedItem;
+    if (typeof renderList === 'function') renderList();
+    if (typeof closeModal === 'function') closeModal('modal-detail');
+    showToast(`Sale recorded: $${(updatedItem.salesHistory?.at(-1)?.profit || 0).toFixed(2)} profit`);
+  })
+  .catch(err => {
+    console.error('recordSale error:', err);
+    showToast('Failed to record sale');
   });
-
-  // Decrement quantity at the specific location
-  item.inventory[saleLocation].qty = Math.max(0, Number(item.inventory[saleLocation].qty) - qty);
-  item.inventory[saleLocation].lastUpdated = new Date().toISOString();
-
-  saveInventory(); renderDetail(); renderList();
-  showToast(`✓ Sold ${qty} ${item.unit||'unit'}${qty!==1?'s':''} for ${fmt(revenue)}${transactionFee > 0 ? ` (${fmt(transactionFee)} fee)` : ''}`);
 }
 
 function removeSale(sid) {
@@ -3359,7 +3675,8 @@ function removeSale(sid) {
   // Restore qty
   item.qty=Number(item.qty)+Number(sale.qty);
   item.sales=item.sales.filter(s=>s.sid!==sid);
-  saveInventory(); renderDetail(); renderList(); showToast('Sale removed');
+  // saveInventory removed – using new backend
+  renderDetail(); renderList(); showToast('Sale removed');
 }
 
 function adjustQty(d) {
@@ -3379,7 +3696,8 @@ function adjustQty(d) {
     lastUpdated: new Date().toISOString()
   };
 
-  saveInventory(); renderDetail(); renderList();
+  // saveInventory removed – using new backend
+  renderDetail(); renderList();
 }
 function removeImage() {
   const imageInput = document.getElementById('f-image');
@@ -5027,6 +5345,16 @@ async function confirmDeleteLoan() {
   saveLoans(); closeModal('modal-loan'); renderLoans(); showToast('Loan deleted');
 }
 
+// ── Loan Helper Functions ───────────────────────────────────
+function loanPaid(loan) {
+  if (!loan.payments) return 0;
+  return loan.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+}
+
+function loanBalance(loan) {
+  return Math.max(0, Number(loan.amount || 0) - loanPaid(loan));
+}
+
 // ── Loan Detail ────────────────────────────────────────────
 function openLoanDetail(id) {
   currentLoanId=id;
@@ -6471,6 +6799,17 @@ async function loadAllData() {
     console.error('Failed to load all data:', error);
     showToast('⚠ Failed to load data - some features may not work');
   }
+}
+
+function updateNotesCounter() {
+  const textarea = document.getElementById('detail-notes-edit');
+  const counter = document.getElementById('detail-notes-counter');
+  if (!textarea || !counter) return;
+  const length = textarea.value.length;
+  const max = textarea.getAttribute('maxlength') || 2000;
+  counter.textContent = `${length}/${max}`;
+  counter.style.display = length > 0 ? 'block' : 'none';
+  counter.style.color = length > max * 0.9 ? 'var(--danger)' : 'var(--text3)';
 }
 
 // ── Init ───────────────────────────────────────────────────

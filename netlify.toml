@@ -9,7 +9,7 @@
 # Force esbuild bundler for stable ESM function handling
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["sharp"]
+  external_node_modules = ["sharp", "@netlify/blobs"]
 
 # Clean function URLs
 [[redirects]]
