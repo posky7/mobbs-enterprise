@@ -1102,24 +1102,50 @@ select.form-input option { background:#fff; color:#1a1612; }
       <button class="modal-close" onclick="closeModal('modal-detail')">✕</button>
     </div>
     <div class="modal-body" id="detail-body">
-      <!-- Item info will be populated by openDetail -->
+      <!-- Item info will be populated by renderDetail -->
       <div id="detail-content"></div>
 
-      <!-- Record Sale Form (dynamically inserted by openDetail) -->
-      <div id="sale-form-section" class="form-section" style="display:none;"></div>
+      <!-- Record Sale Form -->
+      <div id="sale-form-section" class="form-section" style="display:none;">
+        <div class="form-section-title">💰 Record Sale</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Qty to Sell</label>
+            <input class="form-input" type="number" id="sale-qty" min="1" value="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sale Price ($)</label>
+            <input class="form-input" type="number" id="sale-price" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fee % (optional)</label>
+          <input class="form-input" type="number" id="sale-fee" step="0.01" value="0" min="0" max="100">
+        </div>
+        <div class="form-group" id="sale-location-group" style="display:none;">
+          <label class="form-label">Location</label>
+          <select class="form-input" id="sale-location"></select>
+        </div>
+        <div class="form-row" style="margin-top:8px;">
+          <button class="btn-secondary" onclick="hideSaleForm()" style="margin-top:0;">Cancel</button>
+          <button class="btn-save" id="record-sale-btn" onclick="recordSale()" style="margin-top:0;">Record Sale</button>
+        </div>
+      </div>
 
       <!-- Sale history -->
       <div id="detail-sale-history-wrap" style="display:none;">
-        <div class="form-label">Sale History</div>
-        <div id="detail-sale-history" class="pnl-card"></div>
+        <div class="form-section">
+          <div class="form-section-title">📋 Sale History</div>
+          <div id="detail-sale-history" class="pnl-card"></div>
+        </div>
       </div>
 
-      <!-- Notes section (editable) -->
+      <!-- Notes section (always visible) -->
       <div class="form-section" id="detail-notes-section">
-        <div class="form-label">Notes</div>
-        <textarea class="form-input" id="detail-notes-edit" placeholder="No notes" rows="3" maxlength="2000" oninput="updateNotesCounter()"></textarea>
-        <div id="detail-notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;display:none;"></div>
-        <button class="btn-save" onclick="saveDetailNotes()" style="margin-top:8px;font-size:13px;padding:8px 16px;">💾 Save Notes</button>
+        <div class="form-section-title">📝 Notes</div>
+        <textarea class="form-input" id="detail-notes-edit" placeholder="Add a note…" rows="3" maxlength="2000" oninput="updateNotesCounter()"></textarea>
+        <div id="detail-notes-counter" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;"></div>
+        <button class="btn-save" onclick="saveDetailNotes()" style="margin-top:8px;font-size:13px;padding:12px 16px;">💾 Save Note</button>
       </div>
     </div>
   </div>
@@ -3478,168 +3504,119 @@ function renderDetail() {
 
   // Populate the detail-content div with comprehensive item information
   const detailContent = document.getElementById('detail-content');
-  console.log('renderDetail: detail-content element:', detailContent);
-  console.log('renderDetail: item data:', item);
   if (detailContent) {
+    // Build location breakdown rows
+    let locationRows = '';
+    if (locations && locations.length > 0 && item.inventory) {
+      locations.filter(l => l.active).forEach(loc => {
+        const locQty = Number(item.inventory?.[loc.id]?.qty || 0);
+        locationRows += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;color:var(--text2);">${esc(loc.name)}</span>
+          <span style="font-family:var(--font-mono);font-size:13px;font-weight:600;color:${locQty === 0 ? 'var(--danger)' : 'var(--text)'};">${locQty} ${esc(item.unit || 'units')}</span>
+        </div>`;
+      });
+    }
+
     const content = `
+      ${item.imageId ? `<div style="width:100%;height:180px;background:#ede9e3;border-radius:12px;overflow:hidden;margin-bottom:16px;">
+        <img src="/.netlify/functions/images?id=${esc(item.imageId)}" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.style.display='none';">
+      </div>` : ''}
+
+      <div class="detail-grid">
+        <div class="detail-stat"><div class="detail-stat-label">Total Stock</div><div class="detail-stat-value ${totalQty === 0 ? '' : 'green'}">${totalQty}</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Category</div><div class="detail-stat-value" style="font-size:15px;">${esc(item.category || '—')}</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Sale Price</div><div class="detail-stat-value accent">${fmt(suggested)}</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Total Value</div><div class="detail-stat-value orange">${fmt((Number(item.cost) + Number(item.labor)) * totalQty)}</div></div>
+      </div>
+
       <div class="form-section">
-        <div class="form-section-title">📦 Item Details</div>
+        <div class="form-section-title">📊 Financials</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Cost</label>
+            ${isEditMode ?
+              `<input class="form-input" type="number" id="edit-cost" step="0.01" value="${item.cost || 0}" oninput="updateDetailProfitMargin()">` :
+              `<div class="detail-value">${fmt(item.cost || 0)}</div>`}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Labor</label>
+            ${isEditMode ?
+              `<input class="form-input" type="number" id="edit-labor" step="0.01" value="${item.labor || 0}" oninput="updateDetailProfitMargin()">` :
+              `<div class="detail-value">${fmt(item.labor || 0)}</div>`}
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Profit / Item</label>
+            <div class="detail-value" style="color:var(--accent2);">${fmt(adjustedProfit)}</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Margin</label>
+            <div class="detail-value" style="color:var(--accent2);">${adjustedMargin}%${transactionFeePercent > 0 ? ` <span style="font-size:11px;color:var(--text3);">after ${transactionFeePercent}% fee</span>` : ''}</div>
+          </div>
+        </div>
+      </div>
+
+      ${isEditMode ? `
+      <div class="form-section">
+        <div class="form-section-title">✏️ Edit Item</div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Name</label>
-            ${isEditMode ?
-              `<input class="form-input" type="text" id="edit-name" value="${esc(item.name)}">` :
-              `<div class="detail-value">${esc(item.name)}</div>`
-            }
+            <input class="form-input" type="text" id="edit-name" value="${esc(item.name)}">
           </div>
           <div class="form-group">
             <label class="form-label">Category</label>
-            ${isEditMode ?
-              `<input class="form-input" type="text" id="edit-category" value="${esc(item.category)}">` :
-              `<div class="detail-value">${esc(item.category)}</div>`
-            }
+            <input class="form-input" type="text" id="edit-category" value="${esc(item.category || '')}">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Quantity</label>
-            ${isEditMode ?
-              `<input class="form-input" type="number" id="edit-qty" value="${totalQty}" min="0">` :
-              `<div class="detail-value">${totalQty} ${esc(item.unit || 'units')}</div>`
-            }
+            <label class="form-label">Sale Price ($)</label>
+            <input class="form-input" type="number" id="edit-price" step="0.01" value="${suggested}">
           </div>
           <div class="form-group">
             <label class="form-label">Unit</label>
-            ${isEditMode ?
-              `<input class="form-input" type="text" id="edit-unit" value="${esc(item.unit || 'units')}">` :
-              `<div class="detail-value">${esc(item.unit || 'units')}</div>`
-            }
+            <input class="form-input" type="text" id="edit-unit" value="${esc(item.unit || 'units')}">
           </div>
         </div>
         <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Cost ($)</label>
-            ${isEditMode ?
-              `<input class="form-input" type="number" id="edit-cost" step="0.01" value="${item.cost || 0}" oninput="updateDetailProfitMargin()">` :
-              `<div class="detail-value">${fmt(item.cost || 0)}</div>`
-            }
-          </div>
-          <div class="form-group">
-            <label class="form-label">Labor ($)</label>
-            ${isEditMode ?
-              `<input class="form-input" type="number" id="edit-labor" step="0.01" value="${item.labor || 0}" oninput="updateDetailProfitMargin()">` :
-              `<div class="detail-value">${fmt(item.labor || 0)}</div>`
-            }
-          </div>
+          <button class="btn-secondary" onclick="toggleDetailEditMode()" style="margin-top:0;">Cancel</button>
+          <button class="btn-save" onclick="saveItemEdits()" style="margin-top:0;">💾 Save Changes</button>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Suggested Price ($)</label>
-            ${isEditMode ?
-              `<input class="form-input" type="number" id="edit-price" step="0.01" value="${suggested}">` :
-              `<div class="detail-value">${fmt(suggested)}</div>`
-            }
-          </div>
-          <div class="form-group">
-            <label class="form-label">Total Value ($)</label>
-            <div class="detail-value">${fmt((Number(item.cost) + Number(item.labor)) * totalQty)}</div>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Profit ($)</label>
-            <div class="detail-value">${fmt(adjustedProfit)}</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Margin (%)</label>
-            <div class="detail-value">${adjustedMargin}% (after ${transactionFeePercent}% fee)</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="form-section">
+      </div>` : `
+      <div class="form-section" style="border-bottom:none;padding-bottom:0;">
         <div class="form-section-title">⚙️ Actions</div>
-        <div style="display:flex;gap:8px;">
-          ${isEditMode ?
-            `<button class="btn-save" onclick="saveItemEdits()" style="flex:1;">💾 Save</button>` :
-            `<button class="btn-secondary" onclick="toggleDetailEditMode()" style="flex:1;">✏️ Edit</button>`
-          }
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <button class="btn-secondary" onclick="toggleDetailEditMode()" style="margin-top:0;">✏️ Edit Item</button>
+          <button class="btn-save" onclick="showSaleForm()" style="margin-top:0;">💰 Record Sale</button>
         </div>
-      </div>
+      </div>`}
+
+      ${locationRows ? `<div class="form-section">
+        <div class="form-section-title">📍 Stock by Location</div>
+        ${locationRows}
+      </div>` : ''}
     `;
-    console.log('renderDetail: Setting detail-content innerHTML with content length:', content.length);
     detailContent.innerHTML = content;
-    console.log('renderDetail: detail-content populated successfully');
-    console.log('renderDetail: detail-content innerHTML after setting:', detailContent.innerHTML.substring(0, 200) + '...');
-  } else {
-    console.error('renderDetail: detail-content element not found!');
   }
 
-  // Handle image display
-  const imageContainer = document.getElementById('detail-image-container');
-  if (imageContainer) {
-    if (item.imageId) {
-      const imageUrl = `/.netlify/functions/images?id=${item.imageId}`;
-      imageContainer.innerHTML = `<div style="width:100%;height:200px;background:#f5f2ee;border-radius:12px;overflow:hidden;margin-bottom:16px;"><img src="${esc(imageUrl)}" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:#ede9e3;display:flex;align-items:center;justify-content:center;font-size:32px;color:#9a9080;\\'>📦</div>';"></div>`;
-      imageContainer.style.display = 'block';
-    } else {
-      imageContainer.style.display = 'none';
-    }
-  }
-
-  // Handle notes
+  // Always show notes textarea (for adding or editing)
   const notesTextarea = document.getElementById('detail-notes-edit');
   if (notesTextarea) {
-    if(item.notes){
-      notesTextarea.value = item.notes;
-      notesTextarea.style.display = 'block';
-    } else {
-      notesTextarea.value = '';
-      notesTextarea.style.display = 'none';
-    }
+    notesTextarea.value = item.notes || '';
+    notesTextarea.style.display = 'block';
   }
 
-  // Pre-fill sale section with suggested price
+  // Pre-fill sale section with suggested price and fee
   const saleQty = document.getElementById('sale-qty');
   if (saleQty) saleQty.value = '1';
 
   const salePrice = document.getElementById('sale-price');
   if (salePrice) salePrice.value = suggested > 0 ? suggested.toFixed(2) : '';
 
-  const saleDate = document.getElementById('sale-date');
-  if (saleDate) saleDate.value = new Date().toISOString().split('T')[0];
-
-  // Safe addition of Record Sale form (only if not already present)
-  let saleForm = document.getElementById('sale-form-section');
-  if (!saleForm) {
-    saleForm = document.createElement('div');
-    saleForm.id = 'sale-form-section';
-    saleForm.className = 'form-section';
-    saleForm.innerHTML = `
-      <div class="form-section-title">Record Sale</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Qty to Sell</label>
-          <input class="form-input" type="number" id="sale-qty" min="1" value="1">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Sale Price ($)</label>
-          <input class="form-input" type="number" id="sale-price" step="0.01" value="${suggested.toFixed(2)}">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Fee % (optional)</label>
-        <input class="form-input" type="number" id="sale-fee" step="0.01" value="${transactionFeePercent}" min="0" max="100">
-      </div>
-      <div class="form-group" id="sale-location-group" style="display:none;">
-        <label class="form-label">Location</label>
-        <select class="form-input" id="sale-location" onchange="updateSaleButton()"></select>
-      </div>
-      <button class="btn-save" id="record-sale-btn" onclick="recordSale()" style="margin-top:12px;">Record Sale</button>
-    `;
-    const modalBody = document.querySelector('#modal-detail .modal-body');
-    if (modalBody) modalBody.insertBefore(saleForm, document.getElementById('detail-notes-wrap'));
-  }
+  const saleFee = document.getElementById('sale-fee');
+  if (saleFee) saleFee.value = transactionFeePercent || 0;
 
   // Populate location selector for multi-location items
   const locationGroup = document.getElementById('sale-location-group');
@@ -3713,6 +3690,19 @@ function renderDetail() {
   }
 }
 
+function showSaleForm() {
+  const saleSection = document.getElementById('sale-form-section');
+  if (saleSection) {
+    saleSection.style.display = 'block';
+    saleSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function hideSaleForm() {
+  const saleSection = document.getElementById('sale-form-section');
+  if (saleSection) saleSection.style.display = 'none';
+}
+
 function recordSale() {
   const currentDetailId = window.currentDetailId;
   if (!currentDetailId) {
@@ -3728,6 +3718,8 @@ function recordSale() {
   const qtyInput = document.getElementById('sale-qty');
   const priceInput = document.getElementById('sale-price');
   const feeInput = document.getElementById('sale-fee');
+  const locationSelect = document.getElementById('sale-location');
+  const locationGroup = document.getElementById('sale-location-group');
 
   const qty = parseInt(qtyInput ? qtyInput.value : 0) || 0;
   const price = parseFloat(priceInput ? priceInput.value : 0) || 0;
@@ -3738,9 +3730,23 @@ function recordSale() {
     return;
   }
 
-  const currentQty = item.inventory?.[currentLocation]?.qty || 0;
+  // Determine which location to deduct from
+  let saleLocation = currentLocationId;
+  if (locationGroup && locationGroup.style.display !== 'none' && locationSelect) {
+    if (!locationSelect.value) {
+      showToast('Please select a location');
+      return;
+    }
+    saleLocation = locationSelect.value;
+  } else {
+    // Use first location that has stock
+    const locWithStock = locations.find(loc => loc.active && Number(item.inventory?.[loc.id]?.qty) > 0);
+    if (locWithStock) saleLocation = locWithStock.id;
+  }
+
+  const currentQty = item.inventory?.[saleLocation]?.qty || 0;
   if (qty > currentQty) {
-    showToast('Not enough stock available');
+    showToast('Not enough stock at selected location');
     return;
   }
 
@@ -3749,7 +3755,7 @@ function recordSale() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       itemId: item.id,
-      location: currentLocation,
+      location: saleLocation,
       qtySold: qty,
       actualPrice: price,
       date: new Date().toISOString(),
@@ -3758,11 +3764,24 @@ function recordSale() {
   })
   .then(res => res.json())
   .then(updatedItem => {
+    // Update local copy immediately
     const index = inventory.findIndex(i => i.id === item.id);
     if (index !== -1) inventory[index] = updatedItem;
-    if (typeof renderList === 'function') renderList();
-    if (typeof closeModal === 'function') closeModal('modal-detail');
-    showToast(`Sale recorded: $${(updatedItem.salesHistory?.at(-1)?.profit || 0).toFixed(2)} profit`);
+    hideSaleForm();
+    showToast(`✅ Sale recorded!`);
+    // Re-fetch full inventory so sold section has the complete sales array
+    fetch(`${API}/inventory`)
+      .then(r => r.json())
+      .then(freshInventory => {
+        inventory = freshInventory;
+        if (typeof renderList === 'function') renderList();
+        if (window.currentDetailId) renderDetail();
+      })
+      .catch(() => {
+        // Fall back to local render if re-fetch fails
+        if (typeof renderList === 'function') renderList();
+        if (window.currentDetailId) renderDetail();
+      });
   })
   .catch(err => {
     console.error('recordSale error:', err);
