@@ -85,6 +85,14 @@ export default async function handler(req, context) {
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
 
+  // Parse path for item ID in PUT /inventory/{id}
+  let itemId = null;
+  const pathname = url.pathname;
+  const pathParts = pathname.split('/').filter(Boolean);
+  if (pathParts.length === 4 && pathParts[2] === 'inventory' && pathParts[3]) {
+    itemId = pathParts[3];
+  }
+
   try {
     if (httpMethod === 'GET') {
       let inventory = await readBlobData('inventory');
@@ -142,44 +150,85 @@ if (migratedInventory.length < inventory.length) {
     }
 
     if (httpMethod === 'PUT') {
-      /** @type {any[] | object} */
-      const data = await req.json().catch(() => []);
+      if (itemId) {
+        // Update specific item by ID
+        const data = await req.json().catch(() => ({}));
 
-      // Safely migrate inventory items with error handling
-      const migrated = [];
-      if (Array.isArray(data)) {
-        for (let i = 0; i < data.length; i++) {
-          try {
-            if (!data[i] || typeof data[i] !== 'object') {
-              console.warn(`Skipping invalid inventory item at index ${i} in PUT request`);
-              continue;
-            }
-            migrated.push(migrateItem(data[i]));
-          } catch (error) {
-            console.error(`Migration failed for item at index ${i} in PUT request:`, error);
-            // Skip corrupted items
-          }
+        if (typeof data !== 'object' || data === null) {
+          return new Response(JSON.stringify({ error: 'Request body must be a valid object' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
-      } else {
-        // Single item
+
+        let inventory = await readBlobData('inventory');
+        let item = inventory.find(i => i.id === itemId);
+        if (!item) {
+          return new Response(JSON.stringify({ error: 'Item not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Merge incoming data into existing item
+        Object.assign(item, data);
+
+        // Migrate the updated item
         try {
-          if (data && typeof data === 'object') {
-            migrated.push(migrateItem(data));
-          }
+          item = migrateItem(item);
         } catch (error) {
-          console.error('Migration failed for single item in PUT request:', error);
+          console.error('Migration failed for updated item:', error);
           return new Response(JSON.stringify({ error: 'Failed to migrate item data' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
           });
         }
-      }
 
-      await writeBlobData('inventory', migrated);
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+        await writeBlobData('inventory', inventory);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } else {
+        /** @type {any[] | object} */
+        const data = await req.json().catch(() => []);
+
+        // Safely migrate inventory items with error handling
+        const migrated = [];
+        if (Array.isArray(data)) {
+          for (let i = 0; i < data.length; i++) {
+            try {
+              if (!data[i] || typeof data[i] !== 'object') {
+                console.warn(`Skipping invalid inventory item at index ${i} in PUT request`);
+                continue;
+              }
+              migrated.push(migrateItem(data[i]));
+            } catch (error) {
+              console.error(`Migration failed for item at index ${i} in PUT request:`, error);
+              // Skip corrupted items
+            }
+          }
+        } else {
+          // Single item
+          try {
+            if (data && typeof data === 'object') {
+              migrated.push(migrateItem(data));
+            }
+          } catch (error) {
+            console.error('Migration failed for single item in PUT request:', error);
+            return new Response(JSON.stringify({ error: 'Failed to migrate item data' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        }
+
+        await writeBlobData('inventory', migrated);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     if (httpMethod === 'DELETE') {
@@ -311,7 +360,6 @@ if (migratedInventory.length < inventory.length) {
         });
       }
 
-      await writeBlobData('inventory', inventory);
       return new Response(JSON.stringify(item), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
