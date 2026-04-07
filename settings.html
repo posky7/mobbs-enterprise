@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cheshire & Co — Settings</title>
+    <style>
+        :root {
+            --bg: #f5f2ee;
+            --surface: #ffffff;
+            --accent: #5b4fcf;
+            --text: #1a1612;
+            --text2: #5a5248;
+            --text3: #9a9080;
+            --border: #d8d0c6;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+        .header { background:var(--accent); color:#fff; padding:12px 16px; text-align:center; position:sticky; top:0; z-index:10; }
+        .header h1 { font-size:1.35rem; margin:0; }
+        .subheader { font-size:0.9rem; opacity:0.85; }
+        main { padding:16px; max-width:640px; margin:0 auto; }
+        h3 { margin:24px 0 12px; font-size:1.2rem; }
+        button { background:var(--accent); color:#fff; border:none; padding:14px 20px; font-size:1.05rem; border-radius:10px; width:100%; margin:8px 0; cursor:pointer; min-height:44px; }
+        button:active { background:#4a3fb8; }
+        nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; padding:8px 0; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
+        nav a { flex:1; text-align:center; text-decoration:none; color:var(--text); font-size:0.85rem; padding:6px 0; }
+        nav a.active { color:var(--accent); font-weight:600; }
+
+        @media (min-width: 768px) {
+            main { max-width:800px; padding:20px; }
+        }
+
+        @media (min-width: 1024px) {
+            main { max-width:1000px; }
+        }
+
+        /* Location cards matching inventory card design */
+        .location-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08); transition:transform 0.1s ease; }
+        .location-card-header { display:flex; justify-content:space-between; align-items:flex-start; padding:16px 16px 8px; }
+        .location-info { flex:1; }
+        .location-name { font-size:1.2rem; font-weight:600; margin-bottom:4px; }
+        .location-meta { display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
+        .location-type { display:inline-block; background:#e8f4fd; color:#0366d6; font-size:0.75rem; font-weight:600; padding:2px 8px; border-radius:12px; }
+        .location-rent { font-size:0.75rem; color:#0366d6; font-weight:600; }
+        .location-fee { font-size:0.75rem; color:#d73a49; font-weight:600; }
+        .location-status-section { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+        .location-buttons { display:flex; gap:4px; }
+        .location-buttons button { padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:600; border:none; cursor:pointer; white-space:nowrap; min-height:20px; }
+        .location-status { background:var(--accent); color:#fff; font-size:0.8rem; font-weight:700; padding:4px 10px; border-radius:12px; white-space:nowrap; }
+        .location-status.inactive { background:#6c757d; }
+        .location-details { padding:0 16px 12px; border-top:1px solid var(--border); font-size:0.9rem; color:var(--text2); }
+        .location-metrics { display:grid; grid-template-columns:repeat(auto-fit, minmax(100px,1fr)); gap:8px; padding:12px 16px; border-top:1px solid var(--border); }
+        .location-metric { text-align:center; }
+        .location-metric-label { font-size:0.75rem; color:var(--text3); margin-bottom:2px; font-weight:500; }
+        .location-metric-value { font-size:0.9rem; font-weight:600; font-family:monospace; }
+        .location-actions { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; padding:0 16px 16px; }
+        .location-actions button { padding:6px 8px; border-radius:6px; font-size:0.75rem; font-weight:600; border:none; cursor:pointer; }
+
+        /* Modal styles matching settings.html design language */
+        .modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10000; }
+        .modal-content { background:var(--surface); border-radius:12px; padding:24px; max-width:400px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.15); }
+        .modal-content h3 { margin:0 0 20px 0; font-size:1.2rem; font-weight:600; }
+        .modal-form { display:flex; flex-direction:column; gap:16px; }
+        .form-group { display:flex; flex-direction:column; gap:4px; }
+        .form-group label { font-weight:600; font-size:0.9rem; }
+        .form-group input, .form-group select { padding:12px; border:1px solid var(--border); border-radius:6px; font-size:16px; }
+        .checkbox-group { margin:4px 0; }
+        .checkbox-label { display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer; }
+        .checkbox-label input[type="checkbox"] { width:16px; height:16px; }
+        .modal-actions { display:flex; gap:12px; margin-top:8px; }
+        .btn-primary { flex:1; padding:12px; border:none; border-radius:6px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+        .btn-primary:hover { background:#4a3fb8; }
+        .btn-secondary { flex:1; padding:12px; border:1px solid var(--border); border-radius:6px; background:#fff; color:var(--text); font-weight:600; cursor:pointer; }
+        .btn-secondary:hover { background:#f8f6f2; }
+
+        /* Data management buttons - minimized and in one row */
+        .data-management-buttons { display:flex; flex-wrap:wrap; gap:8px; }
+        .data-management-buttons button { width:auto; flex:1; min-width:120px; padding:8px 12px; font-size:0.9rem; margin:0; border-radius:8px; background:#fff; color:var(--text); border:1px solid var(--border); }
+        .data-management-buttons button:active { background:#f8f6f2; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Cheshire & Co</h1>
+        <div class="subheader">Settings • 9:58 AM • Tue, Apr 7</div>
+    </div>
+
+    <main>
+        <h3>Locations</h3>
+        <p style="color:#555; margin-bottom:16px;">Manage your retail booth locations and storage facility. Each location can track inventory separately.</p>
+        <button>＋ Add Location</button>
+
+        <h3>Data Management</h3>
+        <p style="color:#555; margin-bottom:16px;">Export and import inventory data, reset levels, and manage backups.</p>
+
+        <div class="data-management-buttons">
+            <button>⬇ Export CSV</button>
+            <button>⬆ Import CSV</button>
+            <button>🔄 Fix Image Orientation</button>
+            <button>🔄 Reset Inventory</button>
+            <button>💸 Reset Expenses</button>
+            <button>🏦 Reset Loans</button>
+            <button>📍 Reset Locations</button>
+            <button>🔒 Backup</button>
+        </div>
+
+        <p style="margin-top:30px; font-size:0.9rem; color:#666;">Last backup: never</p>
+    </main>
+
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="inventory.html">Inventory</a>
+        <a href="finance.html">Finance</a>
+        <a href="hunt.html">Hunt</a>
+        <a href="settings.html" class="active">Settings</a>
+    </nav>
+
+    <script>
+        // Utility functions
+        function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+        function esc(s) { return String(s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); }
+
+        // Toast notifications
+        let _tt;
+        function showToast(msg) {
+          const el = document.getElementById('toast') || createToast();
+          el.textContent = msg; el.classList.add('show');
+          clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove('show'), 2400);
+        }
+
+        function createToast() {
+          const toast = document.createElement('div');
+          toast.id = 'toast';
+          toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:12px 20px;border-radius:8px;z-index:10000;font-size:14px;opacity:0;pointer-events:none;transition:opacity 0.3s ease;';
+          document.body.appendChild(toast);
+          return toast;
+        }
+
+        // API helpers
+        const getApiBaseUrl = () => {
+          const hostname = window.location.hostname;
+          if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return '/.netlify/functions';
+          }
+          return '/.netlify/functions';
+        };
+        const API = getApiBaseUrl();
+
+        // Data
+        let locations = [];
+
+        // Load locations and render them
+        async function loadLocations() {
+            try {
+                const response = await fetch(`${API}/locations`);
+                if (response.ok) {
+                    locations = await response.json();
+                    renderLocations();
+                    console.log('Loaded', locations.length, 'locations');
+                } else {
+                    console.error('Failed to load locations');
+                    locations = [];
+                }
+            } catch (error) {
+                console.error('Error loading locations:', error);
+                locations = [];
+            }
+        }
+
+        // Render locations list
+        function renderLocations() {
+            const container = document.querySelector('main');
+            const addLocationBtn = container.querySelector('button');
+
+            // Remove existing location items (keep the Add Location button)
+            const existingLocations = container.querySelectorAll('.location-card');
+            existingLocations.forEach(el => el.remove());
+
+            // Insert locations after the Add Location button
+            locations.forEach(location => {
+                const locationEl = document.createElement('div');
+                locationEl.className = 'location-card';
+
+                const typeText = location.isWarehouse ? 'Warehouse' : 'Retail';
+                const typeColor = location.isWarehouse ? '#d73a49' : '#0366d6';
+
+                locationEl.innerHTML = `
+                    <div class="location-card-header">
+                        <div class="location-info">
+                            <div class="location-name">${esc(location.name)}</div>
+                            <div class="location-meta">
+                                <span class="location-type" style="background:#e8f4fd;color:${typeColor};">${typeText}</span>
+                                ${location.monthlyRent > 0 ? `<span class="location-rent">$${location.monthlyRent}/mo</span>` : ''}
+                                ${location.transactionFeePercent > 0 ? `<span class="location-fee">${location.transactionFeePercent}% fee</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="location-status-section">
+                            <div class="location-status ${!location.active ? 'inactive' : ''}">${location.active ? 'Active' : 'Inactive'}</div>
+                            <div class="location-buttons">
+                                <button onclick="editLocation('${location.id}')" style="background:#6c757d;color:#fff;">
+                                    Edit
+                                </button>
+                                <button onclick="setAsWarehouse('${location.id}')" style="background:${location.isWarehouse ? '#d73a49' : '#17a2b8'};color:#fff;">
+                                    ${location.isWarehouse ? 'Unset' : 'Set WH'}
+                                </button>
+                                <button onclick="archiveLocation('${location.id}')" style="background:#dc3545;color:#fff;">
+                                    Archive
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                addLocationBtn.parentNode.insertBefore(locationEl, addLocationBtn.nextSibling);
+            });
+        }
+
+        // Set/unset warehouse status
+        async function setAsWarehouse(id) {
+            const location = locations.find(l => l.id === id);
+            if (!location) return;
+
+            // If setting as warehouse, unset any existing warehouse
+            if (!location.isWarehouse) {
+                locations.forEach(loc => loc.isWarehouse = false);
+            }
+
+            location.isWarehouse = !location.isWarehouse;
+
+            try {
+                const response = await fetch(`${API}/locations`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(locations)
+                });
+
+                if (response.ok) {
+                    showToast(`Location ${location.isWarehouse ? 'set as warehouse' : 'unset as warehouse'}`);
+                    renderLocations();
+                } else {
+                    showToast('Failed to update location');
+                    location.isWarehouse = !location.isWarehouse; // Revert
+                    // If we reverted, we need to restore the previous warehouse status
+                    if (!location.isWarehouse) {
+                        const otherWarehouse = locations.find(l => l.id !== id && l.isWarehouse);
+                        if (otherWarehouse) otherWarehouse.isWarehouse = true;
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating location:', error);
+                showToast('Error updating location');
+                location.isWarehouse = !location.isWarehouse; // Revert
+                // If we reverted, we need to restore the previous warehouse status
+                if (!location.isWarehouse) {
+                    const otherWarehouse = locations.find(l => l.id !== id && l.isWarehouse);
+                    if (otherWarehouse) otherWarehouse.isWarehouse = true;
+                }
+            }
+        }
+
+        // Archive location (deactivate)
+        async function archiveLocation(id) {
+            const location = locations.find(l => l.id === id);
+            if (!location) return;
+
+            if (!confirm(`Are you sure you want to archive "${location.name}"? This will deactivate the location.`)) {
+                return;
+            }
+
+            location.active = false;
+
+            try {
+                const response = await fetch(`${API}/locations`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(locations)
+                });
+
+                if (response.ok) {
+                    showToast('Location archived');
+                    renderLocations();
+                } else {
+                    showToast('Failed to archive location');
+                    location.active = true; // Revert
+                }
+            } catch (error) {
+                console.error('Error archiving location:', error);
+                showToast('Error archiving location');
+                location.active = true; // Revert
+            }
+        }
+
+        // Edit location
+        function editLocation(id) {
+            const location = locations.find(l => l.id === id);
+            if (!location) return;
+
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>Edit Location</h3>
+                    <form id="edit-location-form" class="modal-form">
+                        <div class="form-group">
+                            <label>Location Name *</label>
+                            <input type="text" name="name" required value="${esc(location.name)}">
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select name="type">
+                                <option value="retail" ${location.type === 'retail' ? 'selected' : ''}>Retail Booth</option>
+                                <option value="storage" ${location.type === 'storage' ? 'selected' : ''}>Storage Facility</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Monthly Rent ($)</label>
+                            <input type="number" name="monthlyRent" min="0" step="0.01" value="${location.monthlyRent || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Transaction Fee (%)</label>
+                            <input type="number" name="transactionFeePercent" min="0" max="100" step="0.1" value="${location.transactionFeePercent || ''}">
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="isWarehouse" ${location.isWarehouse ? 'checked' : ''}>
+                                This is a warehouse/storage location
+                            </label>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                            <button type="submit" class="btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Handle form submission
+            const form = modal.querySelector('#edit-location-form');
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(form);
+                const updatedData = {
+                    ...location,
+                    name: formData.get('name'),
+                    type: formData.get('type'),
+                    monthlyRent: parseFloat(formData.get('monthlyRent')) || 0,
+                    transactionFeePercent: parseFloat(formData.get('transactionFeePercent')) || 0,
+                    isWarehouse: formData.has('isWarehouse')
+                };
+
+                // If setting as warehouse, unset any existing warehouse (unless it's the same location)
+                if (updatedData.isWarehouse && !location.isWarehouse) {
+                    locations.forEach(loc => {
+                        if (loc.id !== location.id) loc.isWarehouse = false;
+                    });
+                }
+
+                // Update the location in the array
+                const index = locations.findIndex(l => l.id === id);
+                if (index !== -1) {
+                    locations[index] = updatedData;
+                }
+
+                try {
+                    const response = await fetch(`${API}/locations`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(locations)
+                    });
+
+                    if (response.ok) {
+                        showToast('Location updated successfully');
+                        modal.remove();
+                        renderLocations(); // Re-render to show changes
+                    } else {
+                        showToast('Failed to update location');
+                    }
+                } catch (error) {
+                    console.error('Error updating location:', error);
+                    showToast('Error updating location');
+                }
+            });
+        }
+
+        // Add location modal
+        function showAddLocationModal() {
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
+            modal.innerHTML = `
+                <div style="background:#fff;border-radius:12px;padding:24px;max-width:400px;width:90%;max-height:80vh;overflow-y:auto;">
+                    <h3 style="margin:0 0 20px 0;">Add New Location</h3>
+                    <form id="add-location-form">
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block;margin-bottom:4px;font-weight:600;">Location Name *</label>
+                            <input type="text" name="name" required style="width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block;margin-bottom:4px;font-weight:600;">Type</label>
+                            <select name="type" style="width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                                <option value="retail">Retail Booth</option>
+                                <option value="storage">Storage Facility</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block;margin-bottom:4px;font-weight:600;">Monthly Rent ($)</label>
+                            <input type="number" name="monthlyRent" min="0" step="0.01" style="width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block;margin-bottom:4px;font-weight:600;">Transaction Fee (%)</label>
+                            <input type="number" name="transactionFeePercent" min="0" max="100" step="0.1" style="width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px;">
+                        </div>
+                        <div style="margin-bottom:20px;">
+                            <label style="display:flex;align-items:center;">
+                                <input type="checkbox" name="isWarehouse" style="margin-right:8px;">
+                                This is a warehouse/storage location
+                            </label>
+                        </div>
+                        <div style="display:flex;gap:12px;">
+                            <button type="button" onclick="this.closest('div').parentElement.remove()" style="flex:1;padding:12px;border:1px solid #ddd;border-radius:6px;background:#fff;">Cancel</button>
+                            <button type="submit" style="flex:1;padding:12px;border:none;border-radius:6px;background:#5b4fcf;color:#fff;">Add Location</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Handle form submission
+            const form = modal.querySelector('#add-location-form');
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(form);
+                const locationData = {
+                    name: formData.get('name'),
+                    type: formData.get('type'),
+                    monthlyRent: parseFloat(formData.get('monthlyRent')) || 0,
+                    transactionFeePercent: parseFloat(formData.get('transactionFeePercent')) || 0,
+                    isWarehouse: formData.has('isWarehouse')
+                };
+
+                try {
+                    const response = await fetch(`${API}/locations`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(locationData)
+                    });
+
+                    const result = await response.json();
+                    if (response.ok) {
+                        showToast('Location added successfully');
+                        modal.remove();
+                        loadLocations(); // Reload locations
+                    } else {
+                        showToast(result.error || 'Failed to add location');
+                    }
+                } catch (error) {
+                    console.error('Error adding location:', error);
+                    showToast('Error adding location');
+                }
+            });
+        }
+
+        // Reset functions
+        async function resetData(type) {
+            if (!confirm(`Are you sure you want to reset ${type}? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                let endpoint = '';
+                switch(type) {
+                    case 'inventory': endpoint = 'inventory'; break;
+                    case 'expenses': endpoint = 'expenses'; break;
+                    case 'loans': endpoint = 'loans'; break;
+                    case 'locations': endpoint = 'locations'; break;
+                    default: return;
+                }
+
+                const response = await fetch(`${API}/reset`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type })
+                });
+
+                if (response.ok) {
+                    showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} reset successfully`);
+                    if (type === 'locations') {
+                        locations = [];
+                        renderLocations();
+                    }
+                } else {
+                    showToast(`Failed to reset ${type}`);
+                }
+            } catch (error) {
+                console.error(`Error resetting ${type}:`, error);
+                showToast(`Error resetting ${type}`);
+            }
+        }
+
+        // Export all data to CSV
+        async function exportCSV() {
+            try {
+                showToast('Preparing export...');
+
+                // Get all data from different endpoints
+                const [inventoryRes, expensesRes, loansRes, locationsRes] = await Promise.all([
+                    fetch(`${API}/inventory`),
+                    fetch(`${API}/expenses`),
+                    fetch(`${API}/loans`),
+                    fetch(`${API}/locations`)
+                ]);
+
+                const [inventory, expenses, loans, locations] = await Promise.all([
+                    inventoryRes.ok ? inventoryRes.json() : [],
+                    expensesRes.ok ? expensesRes.json() : [],
+                    loansRes.ok ? loansRes.json() : [],
+                    locationsRes.ok ? locationsRes.json() : []
+                ]);
+
+                // Create CSV content
+                let csvContent = 'data:text/csv;charset=utf-8,';
+
+                // Add headers and data for each type
+                if (inventory.length > 0) {
+                    csvContent += 'INVENTORY\n';
+                    csvContent += 'ID,Name,Description,Sale Price,Suggested Price,Category,Location,Quantity,Last Updated\n';
+                    inventory.forEach(item => {
+                        csvContent += `"${item.id}","${item.name}","${item.description || ''}","${item.salePrice || ''}","${item.suggestedPrice || ''}","${item.category || ''}","${item.location || ''}","${item.quantity || 0}","${item.lastUpdated || ''}"\n`;
+                    });
+                    csvContent += '\n';
+                }
+
+                if (expenses.length > 0) {
+                    csvContent += 'EXPENSES\n';
+                    csvContent += 'ID,Description,Amount,Category,Date,Location\n';
+                    expenses.forEach(expense => {
+                        csvContent += `"${expense.id}","${expense.description}","${expense.amount}","${expense.category}","${expense.date}","${expense.location || ''}"\n`;
+                    });
+                    csvContent += '\n';
+                }
+
+                if (loans.length > 0) {
+                    csvContent += 'LOANS\n';
+                    csvContent += 'ID,Description,Amount,Interest Rate,Term,Monthly Payment,Remaining Balance,Status,Start Date\n';
+                    loans.forEach(loan => {
+                        csvContent += `"${loan.id}","${loan.description}","${loan.amount}","${loan.interestRate}","${loan.term}","${loan.monthlyPayment}","${loan.remainingBalance}","${loan.status}","${loan.startDate}"\n`;
+                    });
+                    csvContent += '\n';
+                }
+
+                if (locations.length > 0) {
+                    csvContent += 'LOCATIONS\n';
+                    csvContent += 'ID,Name,Type,Monthly Rent,Transaction Fee,Active,Warehouse\n';
+                    locations.forEach(location => {
+                        csvContent += `"${location.id}","${location.name}","${location.type}","${location.monthlyRent}","${location.transactionFeePercent}","${location.active}","${location.isWarehouse}"\n`;
+                    });
+                }
+
+                // Download the CSV file
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement('a');
+                link.setAttribute('href', encodedUri);
+                link.setAttribute('download', `cheshire-co-backup-${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                showToast('Export completed successfully');
+            } catch (error) {
+                console.error('Export error:', error);
+                showToast('Export failed');
+            }
+        }
+
+        // Import data from CSV
+        function importCSV() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                try {
+                    showToast('Importing data...');
+
+                    const text = await file.text();
+                    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+
+                    let currentSection = '';
+                    const data = {
+                        inventory: [],
+                        expenses: [],
+                        loans: [],
+                        locations: []
+                    };
+
+                    for (const line of lines) {
+                        if (line === 'INVENTORY' || line === 'EXPENSES' || line === 'LOANS' || line === 'LOCATIONS') {
+                            currentSection = line.toLowerCase();
+                            continue;
+                        }
+
+                        if (currentSection && !line.includes('ID,')) { // Skip headers
+                            const values = line.split(',').map(val => val.replace(/^"|"$/g, ''));
+                            switch (currentSection) {
+                                case 'inventory':
+                                    if (values.length >= 9) {
+                                        data.inventory.push({
+                                            id: values[0],
+                                            name: values[1],
+                                            description: values[2],
+                                            salePrice: parseFloat(values[3]) || 0,
+                                            suggestedPrice: parseFloat(values[4]) || 0,
+                                            category: values[5],
+                                            location: values[6],
+                                            quantity: parseInt(values[7]) || 0,
+                                            lastUpdated: values[8]
+                                        });
+                                    }
+                                    break;
+                                case 'expenses':
+                                    if (values.length >= 6) {
+                                        data.expenses.push({
+                                            id: values[0],
+                                            description: values[1],
+                                            amount: parseFloat(values[2]) || 0,
+                                            category: values[3],
+                                            date: values[4],
+                                            location: values[5]
+                                        });
+                                    }
+                                    break;
+                                case 'loans':
+                                    if (values.length >= 9) {
+                                        data.loans.push({
+                                            id: values[0],
+                                            description: values[1],
+                                            amount: parseFloat(values[2]) || 0,
+                                            interestRate: parseFloat(values[3]) || 0,
+                                            term: parseInt(values[4]) || 0,
+                                            monthlyPayment: parseFloat(values[5]) || 0,
+                                            remainingBalance: parseFloat(values[6]) || 0,
+                                            status: values[7],
+                                            startDate: values[8]
+                                        });
+                                    }
+                                    break;
+                                case 'locations':
+                                    if (values.length >= 7) {
+                                        data.locations.push({
+                                            id: values[0],
+                                            name: values[1],
+                                            type: values[2],
+                                            monthlyRent: parseFloat(values[3]) || 0,
+                                            transactionFeePercent: parseFloat(values[4]) || 0,
+                                            active: values[5] === 'true',
+                                            isWarehouse: values[6] === 'true'
+                                        });
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+
+                    // Import data to each endpoint
+                    const results = [];
+                    if (data.inventory.length > 0) {
+                        const res = await fetch(`${API}/inventory`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data.inventory)
+                        });
+                        results.push(`Inventory: ${res.ok ? 'OK' : 'Failed'}`);
+                    }
+
+                    if (data.expenses.length > 0) {
+                        const res = await fetch(`${API}/expenses`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data.expenses)
+                        });
+                        results.push(`Expenses: ${res.ok ? 'OK' : 'Failed'}`);
+                    }
+
+                    if (data.loans.length > 0) {
+                        const res = await fetch(`${API}/loans`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data.loans)
+                        });
+                        results.push(`Loans: ${res.ok ? 'OK' : 'Failed'}`);
+                    }
+
+                    if (data.locations.length > 0) {
+                        const res = await fetch(`${API}/locations`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data.locations)
+                        });
+                        results.push(`Locations: ${res.ok ? 'OK' : 'Failed'}`);
+                    }
+
+                    showToast(`Import completed: ${results.join(', ')}`);
+                    // Reload data
+                    loadLocations();
+                } catch (error) {
+                    console.error('Import error:', error);
+                    showToast('Import failed');
+                }
+            };
+            input.click();
+        }
+
+        // Fix image orientations
+        async function fixImageOrientation() {
+            try {
+                showToast('Fixing image orientations...');
+
+                const response = await fetch(`${API}/images/fix-orientation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast(`Fixed ${result.fixed || 0} image orientations`);
+                } else {
+                    showToast('Failed to fix image orientations');
+                }
+            } catch (error) {
+                console.error('Fix image orientation error:', error);
+                showToast('Failed to fix image orientations');
+            }
+        }
+
+        // Create backup
+        async function createBackup() {
+            try {
+                showToast('Creating backup...');
+
+                const response = await fetch(`${API}/backup-timestamp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast(`Backup created: ${result.timestamp || 'Success'}`);
+                } else {
+                    showToast('Failed to create backup');
+                }
+            } catch (error) {
+                console.error('Backup error:', error);
+                showToast('Failed to create backup');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add click handlers to buttons
+            document.querySelector('button').addEventListener('click', showAddLocationModal);
+            document.querySelectorAll('button')[1].addEventListener('click', exportCSV); // Export CSV
+            document.querySelectorAll('button')[2].addEventListener('click', importCSV); // Import CSV
+            document.querySelectorAll('button')[3].addEventListener('click', fixImageOrientation); // Fix Image Orientation
+            document.querySelectorAll('button')[4].addEventListener('click', () => resetData('inventory')); // Reset Inventory
+            document.querySelectorAll('button')[5].addEventListener('click', () => resetData('expenses')); // Reset Expenses
+            document.querySelectorAll('button')[6].addEventListener('click', () => resetData('loans')); // Reset Loans
+            document.querySelectorAll('button')[7].addEventListener('click', () => resetData('locations')); // Reset Locations
+            document.querySelectorAll('button')[8].addEventListener('click', createBackup); // Backup
+
+            // Load initial data
+            loadLocations();
+        });
+
+        console.log("Settings page loaded - functionality implemented");
+    </script>
+</body>
+</html>

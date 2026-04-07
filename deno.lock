@@ -11,7 +11,8 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@netlify/blobs@^10.7.4"
+        "npm:@netlify/blobs@^10.7.4",
+        "npm:sharp@~0.33.5"
       ]
     }
   }

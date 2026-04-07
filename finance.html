@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cheshire & Co — Finance</title>
+    <style>
+        :root {
+            --bg: #f5f2ee;
+            --surface: #ffffff;
+            --accent: #5b4fcf;
+            --text: #1a1612;
+            --text2: #5a5248;
+            --text3: #9a9080;
+            --border: #d8d0c6;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+        .header { background:var(--accent); color:#fff; padding:12px 16px; text-align:center; position:sticky; top:0; z-index:10; }
+        .header h1 { font-size:1.35rem; margin:0; }
+        .subheader { font-size:0.9rem; opacity:0.85; }
+        main { padding:16px; max-width:640px; margin:0 auto; }
+        .card-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:12px; margin:20px 0; }
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-align:center; }
+        .card h3 { font-size:1rem; margin-bottom:8px; color:var(--text2); }
+        .big-number { font-size:1.9rem; font-weight:700; margin:6px 0; color:var(--text); }
+        button { background:var(--accent); color:#fff; border:none; padding:14px 20px; font-size:1.05rem; border-radius:10px; width:100%; margin:8px 0; cursor:pointer; min-height:44px; }
+
+        @media (min-width: 768px) {
+            .card-grid { grid-template-columns:repeat(2, 1fr); max-width:400px; margin:20px auto; }
+            main { max-width:800px; }
+        }
+
+        @media (min-width: 1024px) {
+            .card-grid { grid-template-columns:repeat(4, 1fr); max-width:600px; }
+            main { max-width:1000px; }
+        }
+        button:active { background:#4a3fb8; transform:scale(0.98); }
+        nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; padding:8px 0; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
+        nav a { flex:1; text-align:center; text-decoration:none; color:var(--text); font-size:0.85rem; padding:6px 0; }
+        nav a.active { color:var(--accent); font-weight:600; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Cheshire & Co</h1>
+        <div class="subheader">Finance Hub • 9:58 AM • Tue, Apr 7</div>
+    </div>
+
+    <main>
+        <h2 style="margin:20px 0 12px; font-size:1.3rem;">Finance Overview</h2>
+        
+        <div class="card-grid">
+            <div class="card"><h3>Revenue</h3><div class="big-number">$0</div><small>this period</small></div>
+            <div class="card"><h3>Profit</h3><div class="big-number">$0</div><small>after costs</small></div>
+            <div class="card"><h3>Units Sold</h3><div class="big-number">0</div><small>items</small></div>
+            <div class="card"><h3>Avg Margin</h3><div class="big-number">0%</div></div>
+        </div>
+
+        <h3 style="margin:30px 0 12px;">Quick Actions</h3>
+        <button>🧾 Individual Sales</button>
+        <button>💸 Expenses</button>
+        <button>📊 Income Summary</button>
+        <button>🏦 Loans</button>
+        <button>📉 P&L</button>
+        <button>📈 Reports</button>
+    </main>
+
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="inventory.html">Inventory</a>
+        <a href="finance.html" class="active">Finance</a>
+        <a href="hunt.html">Hunt</a>
+        <a href="settings.html">Settings</a>
+    </nav>
+
+    <script>
+        const blobHelpers = { /* identical blobHelpers as in index.html */ };
+        console.log("Finance page loaded - colors matched");
+    </script>
+</body>
+</html>

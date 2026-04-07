@@ -8,6 +8,11 @@ function migrateItem(item) {
     throw new Error('Item is not a valid object');
   }
 
+  // Assign ID if missing
+  if (!item.id) {
+    item.id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  }
+
   if (!item.version) {
     item.version = MIGRATION_VERSION;
 
@@ -25,6 +30,26 @@ function migrateItem(item) {
           lastUpdated: new Date().toISOString()
         };
       }
+    } else {
+      // Preserve existing inventory quantities during migration
+      Object.keys(item.inventory).forEach(locId => {
+        const locationData = item.inventory[locId];
+        if (locationData && typeof locationData === 'object') {
+          if (locationData.qty === null || typeof locationData.qty === 'undefined') {
+            locationData.qty = 0;
+          }
+          // Ensure qty is a number, but preserve if already valid
+          const qty = Number(locationData.qty);
+          locationData.qty = isNaN(qty) ? 0 : qty;
+          // Ensure lastUpdated exists
+          if (!locationData.lastUpdated) {
+            locationData.lastUpdated = new Date().toISOString();
+          }
+        } else {
+          // Reset invalid location data
+          item.inventory[locId] = { qty: 0, lastUpdated: new Date().toISOString() };
+        }
+      });
     }
 
     // Remove legacy fields after migration
@@ -37,28 +62,15 @@ function migrateItem(item) {
       item.imageUrl = null;
     }
 
-    // Ensure all inventory entries have valid quantities
-    if (item.inventory && typeof item.inventory === 'object') {
-      try {
-        Object.keys(item.inventory).forEach(locId => {
-          const locationData = item.inventory[locId];
-          if (locationData && typeof locationData === 'object') {
-            if (locationData.qty === null || typeof locationData.qty === 'undefined') {
-              locationData.qty = 0;
-            }
-            // Ensure qty is a number
-            const qty = Number(locationData.qty);
-            locationData.qty = isNaN(qty) ? 0 : qty;
-          } else if (locationData !== null && typeof locationData !== 'object') {
-            // If location data is not an object, reset it
-            item.inventory[locId] = { qty: 0, lastUpdated: new Date().toISOString() };
-          }
-        });
-      } catch (inventoryError) {
-        console.warn('Error processing inventory data during migration:', inventoryError);
-        // Reset inventory to empty object if processing fails
-        item.inventory = {};
-      }
+    // Preserve sales history if exists
+    if (item.salesHistory && Array.isArray(item.salesHistory)) {
+      item.salesHistory = item.salesHistory.map(sale => ({
+        ...sale,
+        qtySold: Number(sale.qtySold) || 0,
+        actualPrice: Number(sale.actualPrice) || 0,
+        feePercent: Number(sale.feePercent) || 0,
+        profit: Number(sale.profit) || 0
+      }));
     }
   }
   return item;
@@ -112,15 +124,16 @@ export default async function handler(req, context) {
         console.warn(`Inventory migration completed with ${migrationErrors.length} errors out of ${inventory.length} items`);
       }
 
-      // Only write back if we have valid migrated data
-      if (migratedInventory.length > 0) {
-        try {
-          await writeBlobData('inventory', migratedInventory);
-        } catch (writeError) {
-          console.error('Failed to write migrated inventory data:', writeError);
-          // Continue with response even if write fails
-        }
-      }
+if (migratedInventory.length < inventory.length) {
+  console.warn(`Migration discarded ${inventory.length - migratedInventory.length} items, not writing back to preserve original data`);
+} else if (migratedInventory.length > 0) {
+  try {
+    await writeBlobData('inventory', migratedInventory);
+  } catch (writeError) {
+    console.error('Failed to write migrated inventory data:', writeError);
+    // Continue with response even if write fails
+  }
+}
 
       return new Response(JSON.stringify(migratedInventory), {
         status: 200,

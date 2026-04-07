@@ -1,4 +1,4 @@
-import { clearBlobStore, setBackupTimestamp } from './_blob-storage.mjs';
+import { clearBlobStore, setBackupTimestamp, writeBlobData } from './_blob-storage.mjs';
 
 /**
  * @param {Request} req
@@ -24,9 +24,86 @@ export default async function handler(req, context) {
 
     await setBackupTimestamp(null);
 
+    // Seed demo data for inventory page
+    const sampleLocations = [
+      {
+        id: 'retail-1',
+        name: 'Retail Booth',
+        active: true,
+        type: 'retail',
+        monthlyRent: 0,
+        transactionFeePercent: 3.5,
+        isWarehouse: false
+      },
+      {
+        id: 'warehouse-1',
+        name: 'Warehouse',
+        active: true,
+        type: 'storage',
+        monthlyRent: 0,
+        transactionFeePercent: 0,
+        isWarehouse: true
+      }
+    ];
+    await writeBlobData('locations', sampleLocations);
+
+    const sampleInventory = [
+      {
+        id: 'item-1',
+        name: 'Vintage Teacup Set',
+        category: 'Ceramic Tableware',
+        cost: 12.50,
+        labor: 2.00,
+        suggestedPrice: 45.00,
+        reorderPt: 5,
+        notes: 'Delicate, handle with care',
+        inventory: {
+          'retail-1': { qty: 8, lastUpdated: new Date().toISOString() },
+          'warehouse-1': { qty: 20, lastUpdated: new Date().toISOString() }
+        },
+        unit: 'sets'
+      },
+      {
+        id: 'item-2',
+        name: 'Crystal Vase',
+        category: 'Clear Glassware',
+        cost: 25.00,
+        labor: 1.50,
+        suggestedPrice: 85.00,
+        reorderPt: 3,
+        inventory: {
+          'retail-1': { qty: 2, lastUpdated: new Date().toISOString() }
+        },
+        unit: 'pcs'
+      },
+      {
+        id: 'item-3',
+        name: 'Abstract Painting',
+        category: 'Art',
+        cost: 150.00,
+        labor: 5.00,
+        suggestedPrice: 450.00,
+        reorderPt: 1,
+        notes: 'Sold one last week',
+        salesHistory: [{
+          date: new Date(Date.now() - 86400000).toISOString(),
+          location: 'retail-1',
+          qtySold: 1,
+          actualPrice: 420,
+          feePercent: 3.5,
+          profit: 250.25
+        }],
+        inventory: {
+          'warehouse-1': { qty: 0, lastUpdated: new Date().toISOString() }
+        },
+        unit: 'pcs'
+      }
+    ];
+    await writeBlobData('inventory', sampleInventory);
+
     return new Response(JSON.stringify({
       success: true,
-      message: 'All data has been reset successfully'
+        message: 'All data reset and seeded with demo inventory & locations'
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
