@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cheshire & Co — Expenses</title>
+    <style>
+        :root {
+            --bg: #f5f2ee; --surface: #fff; --accent: #5b4fcf;
+            --text: #1a1612; --text2: #5a5248; --text3: #9a9080;
+            --border: #d8d0c6; --green: #28a745; --red: #d73a49;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+        .header { background:var(--accent); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:10; }
+        .back-btn { background:rgba(255,255,255,0.2); border:none; color:#fff; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.9rem; }
+        .header-text h1 { font-size:1.2rem; }
+        .header-text p { font-size:0.85rem; opacity:0.85; }
+        main { padding:16px; max-width:680px; margin:0 auto; }
+
+        .stats-bar { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
+        .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+        .stat-label { font-size:0.75rem; color:var(--text3); }
+        .stat-val { font-size:1.15rem; font-weight:700; margin-top:2px; color:var(--red); }
+
+        .filter-row { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+        .filter-row select { flex:1; min-width:120px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:0.9rem; background:var(--surface); }
+
+        /* Add form panel */
+        .add-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+        .add-panel-header { display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+        .add-panel-header h3 { font-size:1rem; }
+        .add-panel-body { margin-top:14px; }
+        .form-group { margin-bottom:13px; }
+        .form-group label { display:block; margin-bottom:5px; font-weight:600; font-size:0.875rem; color:var(--text2); }
+        .form-group input, .form-group select { width:100%; padding:11px 12px; border:1px solid var(--border); border-radius:8px; font-size:1rem; }
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        button.primary { background:var(--accent); color:#fff; border:none; padding:13px 20px; font-size:1rem; border-radius:10px; width:100%; cursor:pointer; min-height:44px; }
+        button.primary:active { background:#4a3fb8; }
+
+        /* Expense cards */
+        .exp-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+        .exp-card-top { display:flex; justify-content:space-between; align-items:flex-start; }
+        .exp-name { font-weight:600; font-size:1rem; }
+        .exp-meta { font-size:0.8rem; color:var(--text3); margin-top:2px; }
+        .exp-right { text-align:right; }
+        .exp-amount { font-weight:700; font-size:1rem; color:var(--red); }
+        .exp-rate { font-size:0.8rem; color:var(--text3); margin-top:2px; }
+        .exp-actions { display:flex; gap:8px; margin-top:10px; justify-content:flex-end; }
+        .btn-sm { padding:5px 12px; border-radius:7px; font-size:0.8rem; border:none; cursor:pointer; min-height:unset; }
+        .btn-del { background:var(--red); color:#fff; }
+        .chip { display:inline-block; font-size:0.75rem; font-weight:600; padding:2px 8px; border-radius:10px; }
+        .chip-blue { background:#e8f4fd; color:#0366d6; }
+        .chip-purple { background:#ede8fd; color:var(--accent); }
+        .empty { text-align:center; padding:50px 20px; color:var(--text3); }
+        .empty-icon { font-size:3rem; margin-bottom:12px; }
+
+        #toast { position:fixed; bottom:84px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:10px 20px; border-radius:8px; font-size:0.9rem; z-index:2000; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+        #toast.show { opacity:1; }
+        nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; padding:8px 0; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
+        nav a { flex:1; text-align:center; text-decoration:none; color:var(--text); font-size:0.85rem; padding:6px 0; }
+        nav a.active { color:var(--accent); font-weight:600; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="location.href='finance.html'">← Back</button>
+        <div class="header-text">
+            <h1>Expenses</h1>
+            <p id="exp-count-sub">Loading...</p>
+        </div>
+    </div>
+
+    <main>
+        <!-- Stats -->
+        <div class="stats-bar">
+            <div class="stat-card"><div class="stat-label">Monthly</div><div class="stat-val" id="st-monthly">$0</div></div>
+            <div class="stat-card"><div class="stat-label">Annual Est.</div><div class="stat-val" id="st-annual">$0</div></div>
+            <div class="stat-card"><div class="stat-label">Count</div><div class="stat-val" id="st-count" style="color:var(--text)">0</div></div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-row">
+            <select id="filter-category" onchange="applyFilters()">
+                <option value="">All Categories</option>
+            </select>
+            <select id="filter-freq" onchange="applyFilters()">
+                <option value="">All Frequencies</option>
+                <option>Monthly</option>
+                <option>Weekly</option>
+                <option>Quarterly</option>
+                <option>Annual</option>
+                <option>One-Time</option>
+            </select>
+        </div>
+
+        <!-- Add Expense panel -->
+        <div class="add-panel">
+            <div class="add-panel-header" onclick="toggleAdd()">
+                <h3>＋ Add New Expense</h3>
+                <span id="add-arrow" style="font-size:1.2rem;color:var(--text3)">▼</span>
+            </div>
+            <div class="add-panel-body" id="add-body" style="display:none">
+                <div class="form-group">
+                    <label>Name / Description</label>
+                    <input type="text" id="exp-name" placeholder="e.g. Storage Unit">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Amount ($)</label>
+                        <input type="number" id="exp-amount" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Frequency</label>
+                        <select id="exp-frequency" onchange="togglePayday()">
+                            <option>Monthly</option>
+                            <option>Weekly</option>
+                            <option>Quarterly</option>
+                            <option>Annual</option>
+                            <option>One-Time</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="exp-category">
+                            <option>Operations</option>
+                            <option>Marketing</option>
+                            <option>Supplies</option>
+                            <option>Shipping</option>
+                            <option>Platform Fees</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label id="date-label">Start Date</label>
+                        <input type="date" id="exp-date">
+                    </div>
+                </div>
+                <div class="form-group" id="payday-group">
+                    <label>Pay Day (day of month)</label>
+                    <input type="number" id="exp-payday" min="1" max="31" step="1" placeholder="1">
+                </div>
+                <button class="primary" onclick="submitExpense()">Save Expense</button>
+            </div>
+        </div>
+
+        <!-- Expense List -->
+        <div id="exp-list"><p style="color:var(--text3);text-align:center;padding:30px">Loading...</p></div>
+    </main>
+    <div style="height:80px"></div>
+
+    <div id="toast"></div>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="inventory.html">Inventory</a>
+        <a href="finance.html" class="active">Finance</a>
+        <a href="hunt.html">Hunt</a>
+        <a href="settings.html">Settings</a>
+    </nav>
+
+    <script>
+    let expenses = [];
+
+    (async () => {
+        await load();
+        buildFilters();
+        renderStats(expenses);
+        renderList(expenses);
+    })();
+
+    async function load() {
+        expenses = await fetch('/netlify/functions/expenses').then(r=>r.json()).catch(()=>[]);
+        if (!Array.isArray(expenses)) expenses = [];
+        document.getElementById('exp-count-sub').textContent = `${expenses.length} expense(s)`;
+    }
+
+    function buildFilters() {
+        const cats = [...new Set(expenses.map(e=>e.category||'Other').filter(Boolean))].sort();
+        const sel = document.getElementById('filter-category');
+        sel.innerHTML = '<option value="">All Categories</option>';
+        cats.forEach(c => sel.add(new Option(c,c)));
+    }
+
+    function applyFilters() {
+        const cat  = document.getElementById('filter-category').value;
+        const freq = document.getElementById('filter-freq').value;
+        const filtered = expenses.filter(e =>
+            (!cat  || (e.category||'Other') === cat) &&
+            (!freq || e.frequency === freq)
+        );
+        renderStats(filtered);
+        renderList(filtered);
+    }
+
+    function monthlyRate(e) {
+        const a = Number(e.amount||0);
+        return {Weekly:a*52/12, Monthly:a, Quarterly:a/3, Annual:a/12, 'One-Time':0}[e.frequency] ?? a;
+    }
+
+    function renderStats(list) {
+        const monthly = list.reduce((s,e)=>s+monthlyRate(e), 0);
+        document.getElementById('st-monthly').textContent = fmt(monthly)+'/mo';
+        document.getElementById('st-annual').textContent = fmt(monthly*12);
+        document.getElementById('st-count').textContent = list.length;
+    }
+
+    function renderList(list) {
+        const el = document.getElementById('exp-list');
+        if (!list.length) {
+            el.innerHTML = `<div class="empty"><div class="empty-icon">💸</div><p>No expenses yet</p><p style="font-size:0.85rem;margin-top:6px">Add one using the form above</p></div>`;
+            return;
+        }
+        el.innerHTML = list.map(e => {
+            const idx = expenses.indexOf(e);
+            const mr  = monthlyRate(e);
+            return `
+            <div class="exp-card">
+                <div class="exp-card-top">
+                    <div>
+                        <div class="exp-name">${e.name||'Unnamed'}</div>
+                        <div class="exp-meta">${e.frequency}${e.startDate?' • from '+e.startDate:''}</div>
+                        <div style="margin-top:6px">
+                            <span class="chip chip-blue">${e.category||'Other'}</span>
+                        </div>
+                    </div>
+                    <div class="exp-right">
+                        <div class="exp-amount">${fmt(Number(e.amount||0))}</div>
+                        <div class="exp-rate">${e.frequency !== 'One-Time' ? '~'+fmt(mr)+'/mo' : 'one-time'}</div>
+                    </div>
+                </div>
+                <div class="exp-actions">
+                    <button class="btn-sm btn-del" onclick="deleteExpense(${idx})">Delete</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // Add form toggle
+    let addOpen = false;
+    function toggleAdd() {
+        addOpen = !addOpen;
+        document.getElementById('add-body').style.display = addOpen ? '' : 'none';
+        document.getElementById('add-arrow').textContent = addOpen ? '▲' : '▼';
+        if (addOpen) {
+            document.getElementById('exp-name').value = '';
+            document.getElementById('exp-amount').value = '';
+            document.getElementById('exp-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('exp-payday').value = '1';
+            document.getElementById('exp-frequency').value = 'Monthly';
+            togglePayday();
+        }
+    }
+
+    function togglePayday() {
+        const freq = document.getElementById('exp-frequency').value;
+        const isOneTime = freq === 'One-Time';
+        document.getElementById('payday-group').style.display = isOneTime ? 'none' : '';
+        document.getElementById('date-label').textContent = isOneTime ? 'Due Date' : 'Start Date';
+    }
+
+    async function submitExpense() {
+        const name      = document.getElementById('exp-name').value.trim();
+        const amount    = parseFloat(document.getElementById('exp-amount').value);
+        const frequency = document.getElementById('exp-frequency').value;
+        const category  = document.getElementById('exp-category').value;
+        const date      = document.getElementById('exp-date').value;
+        const payday    = parseInt(document.getElementById('exp-payday').value) || 1;
+        if (!name || !amount) { showToast('Name and amount are required'); return; }
+
+        const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2,5), name, amount, frequency, category, payday };
+        if (frequency === 'One-Time') entry.due = date;
+        else entry.startDate = date;
+
+        const updated = [...expenses, entry];
+        const res = await fetch('/netlify/functions/expenses', {
+            method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updated)
+        });
+        if (res.ok) {
+            expenses = updated;
+            showToast('Expense saved!');
+            toggleAdd(); // close form
+            buildFilters();
+            applyFilters();
+            document.getElementById('exp-count-sub').textContent = `${expenses.length} expense(s)`;
+        } else { showToast('Failed to save'); }
+    }
+
+    async function deleteExpense(idx) {
+        if (!confirm('Delete this expense?')) return;
+        const updated = expenses.filter((_,i)=>i!==idx);
+        const res = await fetch('/netlify/functions/expenses', {
+            method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updated)
+        });
+        if (res.ok) {
+            expenses = updated;
+            showToast('Deleted');
+            buildFilters(); applyFilters();
+            document.getElementById('exp-count-sub').textContent = `${expenses.length} expense(s)`;
+        } else { showToast('Delete failed'); }
+    }
+
+    const fmt = n => '$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+    </script>
+</body>
+</html>

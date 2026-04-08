@@ -62,21 +62,14 @@ function migrateItem(item) {
       item.imageUrl = null;
     }
 
-    // Preserve & normalize sales history if exists
-    // Bug 1 fix: normalize margin and feeAmount fields added in the new sale recording logic
+    // Preserve sales history if exists
     if (item.salesHistory && Array.isArray(item.salesHistory)) {
       item.salesHistory = item.salesHistory.map(sale => ({
         ...sale,
-        qtySold:     Number(sale.qtySold)     || 0,
+        qtySold: Number(sale.qtySold) || 0,
         actualPrice: Number(sale.actualPrice) || 0,
-        feePercent:  Number(sale.feePercent)  || 0,
-        // feeAmount may be missing on older records — recalculate from percent as fallback
-        feeAmount:   sale.feeAmount != null
-          ? Number(sale.feeAmount)
-          : Number(sale.actualPrice || 0) * (Number(sale.feePercent || 0) / 100),
-        profit:      Number(sale.profit)      || 0,
-        // margin may be missing on older records — default to 0 (UI recalculates as fallback)
-        margin:      sale.margin != null ? Number(sale.margin) : 0
+        feePercent: Number(sale.feePercent) || 0,
+        profit: Number(sale.profit) || 0
       }));
     }
   }
@@ -91,14 +84,6 @@ export default async function handler(req, context) {
   const httpMethod = req.method || 'GET';
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
-
-  // Parse path for item ID in PUT /inventory/{id}
-  let itemId = null;
-  const pathname = url.pathname;
-  const pathParts = pathname.split('/').filter(Boolean);
-  if (pathParts.length === 4 && pathParts[2] === 'inventory' && pathParts[3]) {
-    itemId = pathParts[3];
-  }
 
   try {
     if (httpMethod === 'GET') {
@@ -145,6 +130,7 @@ export default async function handler(req, context) {
 if (migratedInventory.length < inventory.length) {
   console.warn(`Migration discarded ${inventory.length - migratedInventory.length} items, not writing back to preserve original data`);
 } else if (needsWriteback && migratedInventory.length > 0) {
+  // Only write back if items actually needed migration (avoids redundant writes)
   try {
     await writeBlobData('inventory', migratedInventory);
   } catch (writeError) {
@@ -160,85 +146,44 @@ if (migratedInventory.length < inventory.length) {
     }
 
     if (httpMethod === 'PUT') {
-      if (itemId) {
-        // Update specific item by ID
-        const data = await req.json().catch(() => ({}));
+      /** @type {any[] | object} */
+      const data = await req.json().catch(() => []);
 
-        if (typeof data !== 'object' || data === null) {
-          return new Response(JSON.stringify({ error: 'Request body must be a valid object' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' }
-          });
+      // Safely migrate inventory items with error handling
+      const migrated = [];
+      if (Array.isArray(data)) {
+        for (let i = 0; i < data.length; i++) {
+          try {
+            if (!data[i] || typeof data[i] !== 'object') {
+              console.warn(`Skipping invalid inventory item at index ${i} in PUT request`);
+              continue;
+            }
+            migrated.push(migrateItem(data[i]));
+          } catch (error) {
+            console.error(`Migration failed for item at index ${i} in PUT request:`, error);
+            // Skip corrupted items
+          }
         }
-
-        let inventory = await readBlobData('inventory');
-        let item = inventory.find(i => i.id === itemId);
-        if (!item) {
-          return new Response(JSON.stringify({ error: 'Item not found' }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-
-        // Merge incoming data into existing item
-        Object.assign(item, data);
-
-        // Migrate the updated item
+      } else {
+        // Single item
         try {
-          item = migrateItem(item);
+          if (data && typeof data === 'object') {
+            migrated.push(migrateItem(data));
+          }
         } catch (error) {
-          console.error('Migration failed for updated item:', error);
+          console.error('Migration failed for single item in PUT request:', error);
           return new Response(JSON.stringify({ error: 'Failed to migrate item data' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
           });
         }
-
-        await writeBlobData('inventory', inventory);
-        return new Response(JSON.stringify({ success: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } else {
-        /** @type {any[] | object} */
-        const data = await req.json().catch(() => []);
-
-        // Safely migrate inventory items with error handling
-        const migrated = [];
-        if (Array.isArray(data)) {
-          for (let i = 0; i < data.length; i++) {
-            try {
-              if (!data[i] || typeof data[i] !== 'object') {
-                console.warn(`Skipping invalid inventory item at index ${i} in PUT request`);
-                continue;
-              }
-              migrated.push(migrateItem(data[i]));
-            } catch (error) {
-              console.error(`Migration failed for item at index ${i} in PUT request:`, error);
-              // Skip corrupted items
-            }
-          }
-        } else {
-          // Single item
-          try {
-            if (data && typeof data === 'object') {
-              migrated.push(migrateItem(data));
-            }
-          } catch (error) {
-            console.error('Migration failed for single item in PUT request:', error);
-            return new Response(JSON.stringify({ error: 'Failed to migrate item data' }), {
-              status: 400,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          }
-        }
-
-        await writeBlobData('inventory', migrated);
-        return new Response(JSON.stringify({ success: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
       }
+
+      await writeBlobData('inventory', migrated);
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (httpMethod === 'DELETE') {
@@ -270,6 +215,7 @@ if (migratedInventory.length < inventory.length) {
       }
 
       let inventory = await readBlobData('inventory');
+      if (!Array.isArray(inventory)) inventory = [];
       let item = inventory.find(i => i.id === itemId);
       if (!item) {
         return new Response(JSON.stringify({ error: 'Item not found' }), {
@@ -348,6 +294,7 @@ if (migratedInventory.length < inventory.length) {
       }
 
       let inventory = await readBlobData('inventory');
+      if (!Array.isArray(inventory)) inventory = [];
       let item = inventory.find(i => i.id === itemId);
       if (!item) {
         return new Response(JSON.stringify({ error: 'Item not found' }), {
@@ -370,7 +317,9 @@ if (migratedInventory.length < inventory.length) {
         });
       }
 
+      // Persist the updated inventory back to blob storage
       await writeBlobData('inventory', inventory);
+
       return new Response(JSON.stringify(item), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
@@ -379,8 +328,8 @@ if (migratedInventory.length < inventory.length) {
 
     // Record sale action (used for recording item sales)
     if (httpMethod === 'POST' && action === 'recordSale') {
-      /** @type {{ itemId?: string, location?: string, qtySold?: any, actualPrice?: any, date?: string, feePercent?: any, feeAmount?: any, margin?: any }} */
-      const { itemId, location, qtySold, actualPrice, date, feePercent, feeAmount: clientFeeAmount, margin: clientMargin } = await req.json().catch(() => ({}));
+      /** @type {{ itemId?: string, location?: string, qtySold?: any, actualPrice?: any, date?: string, feePercent?: any }} */
+      const { itemId, location, qtySold, actualPrice, date, feePercent } = await req.json().catch(() => ({}));
 
       if (!itemId || !location || !qtySold || !actualPrice || !date) {
         return new Response(JSON.stringify({ error: 'Missing required parameters: itemId, location, qtySold, actualPrice, date' }), {
@@ -415,6 +364,7 @@ if (migratedInventory.length < inventory.length) {
       }
 
       let inventory = await readBlobData('inventory');
+      if (!Array.isArray(inventory)) inventory = [];
       let item = inventory.find(i => i.id === itemId);
       if (!item) {
         return new Response(JSON.stringify({ error: 'Item not found' }), {
@@ -446,27 +396,14 @@ if (migratedInventory.length < inventory.length) {
       // Ensure salesHistory array exists
       if (!item.salesHistory) item.salesHistory = [];
 
-      // Bug 1 fix: accept client-calculated margin (or recalculate here as fallback)
-      // Profit  = (salePrice - feeAmount) - (qtySold × costPerUnit)
-      // Margin  = (profit / salePrice) × 100
+      // Calculate profit: (actualPrice - fee) - (qtySold * totalCostPerUnit)
       const feeAmount = salePrice * (feePct / 100);
       const effectiveRevenue = salePrice - feeAmount;
       const totalCostPerUnit = Number(item.cost || 0) + Number(item.labor || 0);
       const costOfGoods = saleQty * totalCostPerUnit;
       const profit = effectiveRevenue - costOfGoods;
 
-      // Use margin supplied by client if valid; otherwise calculate server-side
-      const margin = (clientMargin != null && !isNaN(Number(clientMargin)))
-        ? Number(clientMargin)
-        : (salePrice > 0 ? Math.round((profit / salePrice) * 100) : 0);
-
-      // Use feeAmount supplied by client (e.g. includes flat fee for Online);
-      // fall back to the simple percentage calculation
-      const resolvedFeeAmount = (clientFeeAmount != null && !isNaN(Number(clientFeeAmount)))
-        ? Number(clientFeeAmount)
-        : feeAmount;
-
-      // Append sale record — location, feePercent, feeAmount, profit, and margin all saved
+      // Append sale record
       const saleRecord = {
         id: Date.now().toString(),
         date,
@@ -474,9 +411,7 @@ if (migratedInventory.length < inventory.length) {
         qtySold: saleQty,
         actualPrice: salePrice,
         feePercent: feePct,
-        feeAmount: resolvedFeeAmount,  // dollar amount of the transaction fee
-        profit,
-        margin
+        profit
       };
       item.salesHistory.push(saleRecord);
 
@@ -511,6 +446,7 @@ if (migratedInventory.length < inventory.length) {
       }
 
       let inventory = await readBlobData('inventory');
+      if (!Array.isArray(inventory)) inventory = [];
       let item = inventory.find(i => i.id === itemId);
       if (!item) {
         return new Response(JSON.stringify({ error: 'Item not found' }), {

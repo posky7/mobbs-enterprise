@@ -13,6 +13,8 @@
             --text2: #5a5248;
             --text3: #9a9080;
             --border: #d8d0c6;
+            --green: #28a745;
+            --red: #d73a49;
         }
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family: system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
@@ -23,48 +25,145 @@
         .card-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:12px; margin:20px 0; }
         .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08); text-align:center; }
         .card h3 { font-size:1rem; margin-bottom:8px; color:var(--text2); }
-        .big-number { font-size:1.9rem; font-weight:700; margin:6px 0; color:var(--text); }
-        button { background:var(--accent); color:#fff; border:none; padding:14px 20px; font-size:1.05rem; border-radius:10px; width:100%; margin:8px 0; cursor:pointer; min-height:44px; }
+        .big-number { font-size:1.9rem; font-weight:700; margin:6px 0; }
+        .big-number.pos { color:var(--green); }
+        .big-number.neg { color:var(--red); }
+        button { background:var(--accent); color:#fff; border:none; padding:14px 20px; font-size:1.05rem; border-radius:10px; width:100%; cursor:pointer; min-height:44px; }
+        button:active { background:#4a3fb8; transform:scale(0.98); }
+        .btn-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px; }
+
+        /* Modal */
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px; }
+        .modal-overlay.hidden { display:none; }
+        .modal { background:#fff; border-radius:12px; max-width:520px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 10px 30px rgba(0,0,0,0.3); }
+        .modal-header { display:flex; justify-content:space-between; align-items:center; padding:20px; border-bottom:1px solid var(--border); }
+        .modal-header h3 { margin:0; font-size:1.2rem; }
+        .modal-close { background:none; border:none; font-size:24px; cursor:pointer; color:var(--text3); padding:0; width:32px; height:32px; min-height:unset; display:flex; align-items:center; justify-content:center; }
+        .modal-body { padding:20px; }
+        .period-bar { display:flex; gap:8px; margin-bottom:20px; }
+        .period-btn { flex:1; padding:8px; border-radius:8px; font-size:0.85rem; font-weight:600; background:var(--bg); color:var(--text2); border:1px solid var(--border); cursor:pointer; min-height:unset; width:auto; }
+        .period-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .stmt-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:0.95rem; }
+        .stmt-row:last-child { border-bottom:none; }
+        .stmt-row.total { font-weight:700; font-size:1rem; padding-top:12px; }
+        .stmt-section { margin-bottom:20px; }
+        .stmt-section h4 { font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text3); margin-bottom:8px; }
+        .tab-bar { display:flex; border-bottom:1px solid var(--border); margin-bottom:16px; }
+        .tab { flex:1; padding:10px; text-align:center; font-size:0.9rem; font-weight:600; cursor:pointer; color:var(--text3); border-bottom:2px solid transparent; }
+        .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+        .list-item { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; }
+        .list-item-header { display:flex; justify-content:space-between; align-items:flex-start; }
+        .list-item-title { font-weight:600; }
+        .list-item-sub { font-size:0.85rem; color:var(--text3); }
+        .chip { display:inline-block; font-size:0.75rem; font-weight:600; padding:2px 8px; border-radius:10px; }
+        .chip-green { background:#e6f4ea; color:var(--green); }
+        .chip-red { background:#fde8ea; color:var(--red); }
+
+        #toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:10px 20px; border-radius:8px; font-size:0.9rem; z-index:2000; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+        #toast.show { opacity:1; }
+
+        nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; padding:8px 0; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
+        nav a { flex:1; text-align:center; text-decoration:none; color:var(--text); font-size:0.85rem; padding:6px 0; }
+        nav a.active { color:var(--accent); font-weight:600; }
 
         @media (min-width: 768px) {
             .card-grid { grid-template-columns:repeat(2, 1fr); max-width:400px; margin:20px auto; }
             main { max-width:800px; }
         }
-
         @media (min-width: 1024px) {
-            .card-grid { grid-template-columns:repeat(4, 1fr); max-width:600px; }
+            .card-grid { grid-template-columns:repeat(4, 1fr); max-width:700px; }
             main { max-width:1000px; }
         }
-        button:active { background:#4a3fb8; transform:scale(0.98); }
-        nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; padding:8px 0; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
-        nav a { flex:1; text-align:center; text-decoration:none; color:var(--text); font-size:0.85rem; padding:6px 0; }
-        nav a.active { color:var(--accent); font-weight:600; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Cheshire & Co</h1>
-        <div class="subheader">Finance Hub • 9:58 AM • Tue, Apr 7</div>
+        <div class="subheader" id="subheader-date">Finance Hub</div>
     </div>
 
     <main>
         <h2 style="margin:20px 0 12px; font-size:1.3rem;">Finance Overview</h2>
-        
         <div class="card-grid">
-            <div class="card"><h3>Revenue</h3><div class="big-number">$0</div><small>this period</small></div>
-            <div class="card"><h3>Profit</h3><div class="big-number">$0</div><small>after costs</small></div>
-            <div class="card"><h3>Units Sold</h3><div class="big-number">0</div><small>items</small></div>
-            <div class="card"><h3>Avg Margin</h3><div class="big-number">0%</div></div>
+            <div class="card"><h3>Revenue</h3><div class="big-number pos" id="ov-revenue">$0</div><small>all time</small></div>
+            <div class="card"><h3>Profit</h3><div class="big-number" id="ov-profit">$0</div><small>after costs</small></div>
+            <div class="card"><h3>Units Sold</h3><div class="big-number" id="ov-units">0</div><small>items</small></div>
+            <div class="card"><h3>Avg Margin</h3><div class="big-number" id="ov-margin">0%</div></div>
         </div>
 
         <h3 style="margin:30px 0 12px;">Quick Actions</h3>
-        <button>🧾 Individual Sales</button>
-        <button>💸 Expenses</button>
-        <button>📊 Income Summary</button>
-        <button>🏦 Loans</button>
-        <button>📉 P&L</button>
-        <button>📈 Reports</button>
+        <div class="btn-grid">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <button onclick="location.href='finance-sales.html'">🧾 Individual Sales</button>
+                <button onclick="location.href='finance-expenses.html'">💸 Expenses</button>
+                <button onclick="location.href='finance-loans.html'">🏦 Loans</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <button onclick="openIncomeModal()">📊 Income Summary</button>
+                <button onclick="openPLModal()">📉 P&amp;L</button>
+                <button onclick="openReportsModal()">📈 Reports</button>
+            </div>
+        </div>
     </main>
+    <div style="height:80px;"></div>
+
+    <!-- INCOME SUMMARY -->
+    <div class="modal-overlay hidden" id="income-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>📊 Income Summary</h3>
+                <button class="modal-close" onclick="closeModal('income-overlay')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="period-bar">
+                    <button class="period-btn active" onclick="setIncomePeriod('mtd',this)">MTD</button>
+                    <button class="period-btn" onclick="setIncomePeriod('ytd',this)">YTD</button>
+                    <button class="period-btn" onclick="setIncomePeriod('all',this)">All Time</button>
+                </div>
+                <div id="income-content"><p style="color:var(--text3)">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- P&L -->
+    <div class="modal-overlay hidden" id="pl-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>📉 Profit &amp; Loss</h3>
+                <button class="modal-close" onclick="closeModal('pl-overlay')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="period-bar">
+                    <button class="period-btn active" onclick="setPLPeriod('mtd',this)">MTD</button>
+                    <button class="period-btn" onclick="setPLPeriod('ytd',this)">YTD</button>
+                    <button class="period-btn" onclick="setPLPeriod('all',this)">All Time</button>
+                </div>
+                <div id="pl-content"><p style="color:var(--text3)">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- REPORTS -->
+    <div class="modal-overlay hidden" id="reports-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>📈 Reports</h3>
+                <button class="modal-close" onclick="closeModal('reports-overlay')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="tab-bar">
+                    <div class="tab active" onclick="repTab('sales',this)">Sales</div>
+                    <div class="tab" onclick="repTab('exp',this)">Expenses</div>
+                    <div class="tab" onclick="repTab('loans',this)">Loans</div>
+                </div>
+                <div id="rep-tab-sales"><div id="rep-sales-content"><p style="color:var(--text3)">Loading...</p></div></div>
+                <div id="rep-tab-exp" style="display:none;"><div id="rep-exp-content"></div></div>
+                <div id="rep-tab-loans" style="display:none;"><div id="rep-loans-content"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
 
     <nav>
         <a href="index.html">Home</a>
@@ -75,8 +174,222 @@
     </nav>
 
     <script>
-        const blobHelpers = { /* identical blobHelpers as in index.html */ };
-        console.log("Finance page loaded - colors matched");
+    let inventory = [], expenses = [], loans = [];
+
+    // Must use /.netlify/functions/ (with dot) — /netlify/functions/ (without dot)
+    // matches the SPA fallback redirect in netlify.toml and returns index.html,
+    // causing all JSON fetches to fail silently and stats to show $0.
+    const API = '/.netlify/functions';
+
+    (async () => {
+        const now = new Date();
+        document.getElementById('subheader-date').textContent =
+            `Finance Hub • ${now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} • ${now.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}`;
+        await loadAll();
+        renderOverview();
+    })();
+
+    async function loadAll() {
+        [inventory, expenses, loans] = await Promise.all([
+            fetch(`${API}/inventory`).then(r=>r.json()).catch(()=>[]),
+            fetch(`${API}/expenses`).then(r=>r.json()).catch(()=>[]),
+            fetch(`${API}/loans`).then(r=>r.json()).catch(()=>[])
+        ]);
+        if (!Array.isArray(inventory)) inventory = [];
+        if (!Array.isArray(expenses)) expenses = [];
+        if (!Array.isArray(loans)) loans = [];
+    }
+
+    function renderOverview() {
+        const all = inventory.flatMap(i => i.salesHistory || []);
+        const rev  = all.reduce((s,x) => s + (Number(x.actualPrice)||0), 0);
+        const prof = all.reduce((s,x) => s + (Number(x.profit)||0), 0);
+        const units= all.reduce((s,x) => s + (Number(x.qtySold)||0), 0);
+        const marg = rev > 0 ? prof/rev*100 : 0;
+        document.getElementById('ov-revenue').textContent = fmt(rev);
+        const pe = document.getElementById('ov-profit');
+        pe.textContent = fmt(prof); pe.className = 'big-number ' + (prof>=0?'pos':'neg');
+        document.getElementById('ov-units').textContent = units;
+        const me = document.getElementById('ov-margin');
+        me.textContent = marg.toFixed(1)+'%'; me.className = 'big-number ' + (marg>=0?'pos':'neg');
+    }
+
+    const fmt = n => '$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const fmtS = n => (n<0?'-$':'$')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function periodBounds(p) {
+        const now = new Date();
+        if (p==='mtd') return {start:new Date(now.getFullYear(),now.getMonth(),1),end:now};
+        if (p==='ytd') return {start:new Date(now.getFullYear(),0,1),end:now};
+        return {start:new Date(0),end:now};
+    }
+    function salesIn(period) {
+        const {start,end} = periodBounds(period);
+        return inventory.flatMap(item =>
+            (item.salesHistory||[]).filter(s=>{const d=new Date(s.date);return d>=start&&d<=end;})
+                .map(s=>({...s,itemName:item.name,cost:Number(item.cost||0),labor:Number(item.labor||0)})));
+    }
+    function monthlyRate(e) {
+        const a=Number(e.amount||0);
+        return {Weekly:a*52/12,Monthly:a,Quarterly:a/3,Annual:a/12,'One-Time':0}[e.frequency]??a;
+    }
+    function expInPeriod(exp,start,end) {
+        if (exp.frequency==='One-Time') { const d=new Date(exp.due||0); return d>=start&&d<=end?Number(exp.amount||0):0; }
+        if (!exp.startDate) return monthlyRate(exp)*Math.max(0,(end-start)/(30.44*86400000));
+        const s=new Date(exp.startDate),pd=Math.max(1,parseInt(exp.payday)||1);
+        let n=0; const cl=(y,m,d)=>new Date(y,m+1,0).getDate()>=d?new Date(y,m,d):new Date(y,m+1,0);
+        if (exp.frequency==='Weekly') { let c=new Date(s); while(c<=end){if(c>=start)n++;c.setDate(c.getDate()+7);} }
+        else if (exp.frequency==='Monthly') { let y=s.getFullYear(),m=s.getMonth(); while(true){const d=cl(y,m,pd);if(d>end)break;if(d>=start)n++;m++;if(m>11){m=0;y++;}} }
+        else if (exp.frequency==='Quarterly') { let y=s.getFullYear(),m=s.getMonth(); while(true){const d=cl(y,m,pd);if(d>end)break;if(d>=start)n++;m+=3;while(m>11){m-=12;y++;}} }
+        else if (exp.frequency==='Annual') { let y=s.getFullYear(); while(true){const d=cl(y,s.getMonth(),pd);if(d>end)break;if(d>=start)n++;y++;} }
+        return n*Number(exp.amount||0);
+    }
+    function loanBalance(l) { return Math.max(0,Number(l.amount||0)-(l.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0)); }
+
+    // ── Income Summary ──────────────────────────────────────────────────────────
+    let incomePeriod='mtd';
+    async function openIncomeModal() {
+        await loadAll(); incomePeriod='mtd';
+        document.querySelectorAll('#income-overlay .period-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+        renderIncome(); document.getElementById('income-overlay').classList.remove('hidden');
+    }
+    function setIncomePeriod(p,el) {
+        incomePeriod=p;
+        document.querySelectorAll('#income-overlay .period-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active');
+        renderIncome();
+    }
+    function renderIncome() {
+        const {start,end}=periodBounds(incomePeriod), sales=salesIn(incomePeriod);
+        const rev   = sales.reduce((s,x)=>s+Number(x.actualPrice||0),0);
+        const cogs  = sales.reduce((s,x)=>s+(Number(x.qtySold||1)*(x.cost+x.labor)),0);
+        const fees  = sales.reduce((s,x)=>s+Number(x.actualPrice||0)*(Number(x.feePercent||0)/100),0);
+        const gross = rev-cogs-fees;
+        const opex  = expenses.reduce((s,e)=>s+expInPeriod(e,start,end),0);
+        const net   = gross-opex;
+        document.getElementById('income-content').innerHTML = `
+            <div class="stmt-section"><h4>Revenue</h4>
+                <div class="stmt-row"><span>Gross Sales</span><span style="color:var(--green)">${fmt(rev)}</span></div>
+                <div class="stmt-row"><span>Platform Fees</span><span style="color:var(--red)">-${fmt(fees)}</span></div>
+                <div class="stmt-row"><span>Cost of Goods Sold</span><span style="color:var(--red)">-${fmt(cogs)}</span></div>
+                <div class="stmt-row total"><span>Gross Profit</span><span style="color:${gross>=0?'var(--green)':'var(--red)'}">${fmtS(gross)}</span></div>
+            </div>
+            <div class="stmt-section"><h4>Operating Expenses</h4>
+                ${expenses.length?expenses.map(e=>`<div class="stmt-row"><span>${e.name||'Expense'}</span><span style="color:var(--red)">-${fmt(expInPeriod(e,start,end))}</span></div>`).join(''):'<div class="stmt-row"><span style="color:var(--text3)">No expenses</span><span>$0.00</span></div>'}
+                <div class="stmt-row total"><span>Total Expenses</span><span style="color:var(--red)">-${fmt(opex)}</span></div>
+            </div>
+            <div style="border-top:2px solid var(--accent);padding-top:12px;">
+                <div class="stmt-row total"><span style="font-size:1.1rem">Net Income</span><span style="font-size:1.2rem;color:${net>=0?'var(--green)':'var(--red)'}">${fmtS(net)}</span></div>
+            </div>
+            <p style="font-size:0.8rem;color:var(--text3);margin-top:12px">Based on ${sales.length} sale(s) in period.</p>`;
+    }
+
+    // ── P&L ─────────────────────────────────────────────────────────────────────
+    let plPeriod='mtd';
+    async function openPLModal() {
+        await loadAll(); plPeriod='mtd';
+        document.querySelectorAll('#pl-overlay .period-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+        renderPL(); document.getElementById('pl-overlay').classList.remove('hidden');
+    }
+    function setPLPeriod(p,el) {
+        plPeriod=p;
+        document.querySelectorAll('#pl-overlay .period-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active');
+        renderPL();
+    }
+    function renderPL() {
+        const {start,end}=periodBounds(plPeriod), sales=salesIn(plPeriod);
+        const rev  = sales.reduce((s,x)=>s+Number(x.actualPrice||0),0);
+        const cogs = sales.reduce((s,x)=>s+(Number(x.qtySold||1)*(x.cost+x.labor)),0);
+        const fees = sales.reduce((s,x)=>s+Number(x.actualPrice||0)*(Number(x.feePercent||0)/100),0);
+        const gross= rev-cogs-fees;
+        const opex = expenses.reduce((s,e)=>s+expInPeriod(e,start,end),0);
+        const ebit = gross-opex;
+        const pmts = loans.flatMap(l=>(l.payments||[]).filter(p=>{const d=new Date(p.date);return d>=start&&d<=end;}))
+                         .reduce((s,p)=>s+Number(p.amount||0),0);
+        const net  = ebit-pmts;
+        document.getElementById('pl-content').innerHTML = `
+            <div class="stmt-section"><h4>Revenue</h4>
+                <div class="stmt-row"><span>Total Sales</span><span style="color:var(--green)">${fmt(rev)}</span></div>
+            </div>
+            <div class="stmt-section"><h4>Cost of Goods Sold</h4>
+                <div class="stmt-row"><span>Inventory Cost + Labor</span><span style="color:var(--red)">-${fmt(cogs)}</span></div>
+                <div class="stmt-row"><span>Platform Fees</span><span style="color:var(--red)">-${fmt(fees)}</span></div>
+                <div class="stmt-row total"><span>Gross Profit</span><span style="color:${gross>=0?'var(--green)':'var(--red)'}">${fmtS(gross)}</span></div>
+            </div>
+            <div class="stmt-section"><h4>Operating Expenses</h4>
+                <div class="stmt-row"><span>Total OpEx</span><span style="color:var(--red)">-${fmt(opex)}</span></div>
+                <div class="stmt-row total"><span>EBIT</span><span style="color:${ebit>=0?'var(--green)':'var(--red)'}">${fmtS(ebit)}</span></div>
+            </div>
+            <div class="stmt-section"><h4>Below the Line</h4>
+                <div class="stmt-row"><span>Loan Payments</span><span style="color:var(--red)">-${fmt(pmts)}</span></div>
+            </div>
+            <div style="border-top:2px solid var(--accent);padding-top:12px;">
+                <div class="stmt-row total"><span style="font-size:1.1rem">Net P&amp;L</span><span style="font-size:1.2rem;color:${net>=0?'var(--green)':'var(--red)'}">${fmtS(net)}</span></div>
+            </div>
+            <p style="font-size:0.8rem;color:var(--text3);margin-top:12px">${start.toLocaleDateString()} – ${end.toLocaleDateString()}</p>`;
+    }
+
+    // ── Reports ──────────────────────────────────────────────────────────────────
+    async function openReportsModal() {
+        await loadAll();
+        renderRepSales(); renderRepExp(); renderRepLoans();
+        document.getElementById('reports-overlay').classList.remove('hidden');
+    }
+    function repTab(name, el) {
+        document.querySelectorAll('#reports-overlay .tab').forEach(t=>t.classList.remove('active')); el.classList.add('active');
+        ['sales','exp','loans'].forEach(k=>document.getElementById(`rep-tab-${k}`).style.display = k===name?'':'none');
+    }
+    function renderRepSales() {
+        const all = inventory.flatMap(i=>(i.salesHistory||[]).map(s=>({...s,itemName:i.name,cost:Number(i.cost||0),labor:Number(i.labor||0)})));
+        if (!all.length) { document.getElementById('rep-sales-content').innerHTML='<p style="color:var(--text3);text-align:center;padding:20px 0">No sales recorded</p>'; return; }
+        const byItem={};
+        all.forEach(s=>{if(!byItem[s.itemName])byItem[s.itemName]={rev:0,prof:0,units:0};byItem[s.itemName].rev+=Number(s.actualPrice||0);byItem[s.itemName].prof+=Number(s.profit||0);byItem[s.itemName].units+=Number(s.qtySold||0);});
+        const totRev=all.reduce((s,x)=>s+Number(x.actualPrice||0),0), totProf=all.reduce((s,x)=>s+Number(x.profit||0),0);
+        document.getElementById('rep-sales-content').innerHTML=`
+            <div style="display:flex;gap:12px;margin-bottom:16px">
+                <div class="card" style="flex:1;padding:12px"><div style="font-size:0.8rem;color:var(--text3)">Total Revenue</div><div style="font-size:1.3rem;font-weight:700;color:var(--green)">${fmt(totRev)}</div></div>
+                <div class="card" style="flex:1;padding:12px"><div style="font-size:0.8rem;color:var(--text3)">Total Profit</div><div style="font-size:1.3rem;font-weight:700;color:${totProf>=0?'var(--green)':'var(--red)'}">${fmtS(totProf)}</div></div>
+            </div>
+            ${Object.entries(byItem).sort(([,a],[,b])=>b.rev-a.rev).map(([name,d])=>`
+                <div class="list-item"><div class="list-item-header">
+                    <div><div class="list-item-title">${name}</div><div class="list-item-sub">${d.units} unit(s)</div></div>
+                    <div style="text-align:right"><div style="font-weight:700;color:var(--green)">${fmt(d.rev)}</div><div style="font-size:0.8rem;color:${d.prof>=0?'var(--green)':'var(--red)'}">Profit ${fmtS(d.prof)}</div></div>
+                </div></div>`).join('')}`;
+    }
+    function renderRepExp() {
+        if (!expenses.length) { document.getElementById('rep-exp-content').innerHTML='<p style="color:var(--text3);text-align:center;padding:20px 0">No expenses</p>'; return; }
+        const byCat={};
+        expenses.forEach(e=>{const c=e.category||'Other';if(!byCat[c])byCat[c]=0;byCat[c]+=monthlyRate(e);});
+        const tot=expenses.reduce((s,e)=>s+monthlyRate(e),0);
+        document.getElementById('rep-exp-content').innerHTML=`
+            <div class="card" style="margin-bottom:16px;padding:12px;text-align:left">
+                <div style="font-size:0.8rem;color:var(--text3)">Monthly Run Rate</div>
+                <div style="font-size:1.4rem;font-weight:700;color:var(--red)">${fmt(tot)}/mo</div>
+                <div style="font-size:0.8rem;color:var(--text3)">~${fmt(tot*12)}/yr</div>
+            </div>
+            ${Object.entries(byCat).sort(([,a],[,b])=>b-a).map(([cat,amt])=>`
+                <div class="list-item"><div class="list-item-header">
+                    <div class="list-item-title">${cat}</div>
+                    <div style="font-weight:700;color:var(--red)">${fmt(amt)}/mo</div>
+                </div></div>`).join('')}`;
+    }
+    function renderRepLoans() {
+        if (!loans.length) { document.getElementById('rep-loans-content').innerHTML='<p style="color:var(--text3);text-align:center;padding:20px 0">No loans</p>'; return; }
+        const totB=loans.reduce((s,l)=>s+Number(l.amount||0),0), totO=loans.reduce((s,l)=>s+loanBalance(l),0);
+        document.getElementById('rep-loans-content').innerHTML=`
+            <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+                <div class="card" style="flex:1;padding:12px"><div style="font-size:0.75rem;color:var(--text3)">Borrowed</div><div style="font-size:1.1rem;font-weight:700">${fmt(totB)}</div></div>
+                <div class="card" style="flex:1;padding:12px"><div style="font-size:0.75rem;color:var(--text3)">Paid</div><div style="font-size:1.1rem;font-weight:700;color:var(--green)">${fmt(totB-totO)}</div></div>
+                <div class="card" style="flex:1;padding:12px"><div style="font-size:0.75rem;color:var(--text3)">Owed</div><div style="font-size:1.1rem;font-weight:700;color:var(--red)">${fmt(totO)}</div></div>
+            </div>
+            ${loans.map(l=>{const bal=loanBalance(l),pct=Number(l.amount||0)>0?Math.round((Number(l.amount||0)-bal)/Number(l.amount||0)*100):100;return`
+                <div class="list-item">
+                    <div class="list-item-header"><div><div class="list-item-title">${l.lender||'Loan'}</div><div class="list-item-sub">${l.note||''}</div></div>
+                    <div style="text-align:right"><span class="chip ${bal===0?'chip-green':'chip-red'}">${bal===0?'Paid Off':'Active'}</span><div style="font-size:0.85rem;color:var(--red);margin-top:4px">Owed ${fmt(bal)}</div></div></div>
+                    <div style="height:5px;background:#f1f1f1;border-radius:3px;margin-top:8px;overflow:hidden"><div style="height:100%;background:var(--green);width:${pct}%"></div></div>
+                </div>`}).join('')}`;
+    }
     </script>
 </body>
 </html>

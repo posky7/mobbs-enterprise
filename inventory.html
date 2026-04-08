@@ -19,7 +19,8 @@
         .header { background:var(--accent); color:#fff; padding:12px 16px; text-align:center; position:sticky; top:0; z-index:10; }
         .header h1 { font-size:1.35rem; margin:0; }
         .subheader { font-size:0.9rem; opacity:0.85; }
-        main { padding:16px; max-width:640px; margin:0 auto; }
+        /* Bug 2 fix: extra bottom padding clears the fixed nav bar (~60px) */
+        main { padding:16px 16px 80px; max-width:640px; margin:0 auto; }
         .section-header { display:flex; justify-content:space-between; align-items:center; margin:20px 0 12px; flex-wrap:wrap; gap:12px; }
         button { background:var(--accent); color:#fff; border:none; padding:14px 16px; font-size:1rem; border-radius:10px; cursor:pointer; min-height:44px; }
         button:active { background:#4a3fb8; }
@@ -90,8 +91,8 @@
         <div class="section-header">
             <h2>Inventory</h2>
             <div>
-                <button>📦 Move Inventory</button>
-                <button>＋ Add Item</button>
+                <button onclick="openMoveModal()">📦 Move Inventory</button>
+                <button onclick="openAddModal()">＋ Add Item</button>
             </div>
         </div>
 
@@ -194,34 +195,56 @@
                 <button class="modal-close" onclick="closeModal('modal-move')">×</button>
             </div>
             <div class="modal-body">
+
+                <!-- Step 1: Select item -->
                 <div class="form-group">
-                    <label for="move-item">Select Item</label>
-                    <select id="move-item">
+                    <label for="move-item">Item *</label>
+                    <select id="move-item" onchange="onMoveItemChange()">
                         <option value="">Choose an item...</option>
                     </select>
                 </div>
+
+                <!-- Item info banner — shown after item is selected -->
+                <div id="move-item-info" style="display:none;background:#f0f4ff;border:1px solid #c8d6f5;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.9rem;">
+                    <div id="move-item-name" style="font-weight:600;font-size:1rem;margin-bottom:4px;"></div>
+                    <div id="move-item-stock" style="color:var(--text2);font-size:0.85rem;"></div>
+                </div>
+
+                <!-- Step 2: Select source location (only locations with stock for the chosen item) -->
                 <div class="form-group">
-                    <label for="move-from">From Location</label>
-                    <select id="move-from"></select>
+                    <label for="move-from">From Location *</label>
+                    <select id="move-from" onchange="onMoveFromChange()">
+                        <option value="">Select source location...</option>
+                    </select>
                 </div>
+
+                <!-- Available qty status line -->
+                <div id="move-qty-status" style="display:none;font-size:0.8rem;color:var(--text2);margin:-8px 0 12px;padding:0 2px;"></div>
+
+                <!-- Step 3: Select destination location -->
                 <div class="form-group">
-                    <label for="move-to">To Location</label>
-                    <select id="move-to"></select>
+                    <label for="move-to">To Location *</label>
+                    <select id="move-to" onchange="validateMoveForm()">
+                        <option value="">Select destination...</option>
+                    </select>
                 </div>
+
+                <!-- Step 4: Quantity -->
                 <div class="form-group">
-                    <label for="move-qty">Quantity to Move</label>
-                    <input type="number" id="move-qty" placeholder="0" min="1">
+                    <label for="move-qty">Quantity to Move *</label>
+                    <input type="number" id="move-qty" placeholder="0" min="1" oninput="validateMoveForm()">
+                    <!-- Inline validation error -->
+                    <div id="move-qty-error" style="display:none;color:#d73a49;font-size:0.8rem;margin-top:4px;"></div>
                 </div>
-                <div id="warehouse-info" style="background:#e8f4fd;padding:12px;border-radius:8px;margin-top:12px;font-size:0.9rem;display:none;">
-                    <strong>Warehouse Transfer:</strong> Moving items from warehouse to retail location.
-                </div>
+
             </div>
             <div class="modal-footer">
                 <button onclick="closeModal('modal-move')">Cancel</button>
-                <button onclick="performMove()" style="background:#28a745;">Move Inventory</button>
+                <!-- Disabled until validateMoveForm() passes -->
+                <button id="btn-move" onclick="performMove()" style="background:#28a745;" disabled>Move Inventory</button>
             </div>
+        </div>
     </div>
-</div>
 
 <!-- Edit Item Modal -->
 <div id="modal-edit" class="modal-overlay" style="display:none;">
@@ -290,6 +313,68 @@
     </div>
 </div>
 
+<!-- Sale Detail / Edit Modal -->
+<div id="modal-sale-detail" class="modal-overlay" style="display:none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="sale-detail-title">Sale Transactions</h3>
+            <button class="modal-close" onclick="closeModal('modal-sale-detail')">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="sale-transactions-list"></div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeModal('modal-sale-detail')">Cancel</button>
+            <button onclick="saveSaleChanges()" style="background:#28a745;">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- Record Sale Modal -->
+<div id="modal-record-sale" class="modal-overlay" style="display:none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="record-sale-title">Record Sale</h3>
+            <button class="modal-close" onclick="closeModal('modal-record-sale')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="sale-location">Location *</label>
+                <select id="sale-location" onchange="updateSaleCalc()">
+                    <option value="">Select location...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="sale-qty">Quantity Sold *</label>
+                <input type="number" id="sale-qty" placeholder="1" min="1" step="1" oninput="updateSaleCalc()">
+            </div>
+            <div class="form-group">
+                <label for="sale-price">Revenue Received ($) *</label>
+                <input type="number" id="sale-price" placeholder="0.00" min="0" step="0.01" oninput="updateSaleCalc()">
+            </div>
+            <div class="form-group">
+                <label for="sale-date">Date *</label>
+                <input type="date" id="sale-date">
+            </div>
+            <div id="sale-calc-section" style="background:#f8f9fa;padding:16px;border-radius:8px;margin-top:4px;">
+                <h4 style="margin:0 0 12px 0;">Breakdown</h4>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.9rem;">
+                    <div>Transaction Fee: <strong id="sale-fee-pct">0%</strong></div>
+                    <div>Fee Amount: <strong id="sale-fee-amt">$0.00</strong></div>
+                    <div>Net Revenue: <strong id="sale-net-rev">$0.00</strong></div>
+                    <div>Cost of Goods: <strong id="sale-cog">$0.00</strong></div>
+                    <div>Profit: <strong id="sale-profit" class="calc-item-val">$0.00</strong></div>
+                    <div>Margin: <strong id="sale-margin" class="calc-item-val">0%</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeModal('modal-record-sale')">Cancel</button>
+            <button onclick="submitSale()" style="background:#28a745;">Record Sale</button>
+        </div>
+    </div>
+</div>
+
 <nav>
         <a href="index.html">Home</a>
         <a href="inventory.html" class="active">Inventory</a>
@@ -301,7 +386,7 @@
     <script>
         // Utility functions
         function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
-        function esc(s) { return String(s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); }
+        function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
         function fmt(n)  { return '$' + parseFloat(n||0).toFixed(2); }
         function fmtK(n) { n=parseFloat(n||0); return Math.abs(n)>=1000 ? '$'+(n/1000).toFixed(1)+'k' : fmt(n); }
 
@@ -316,7 +401,7 @@
         function createToast() {
           const toast = document.createElement('div');
           toast.id = 'toast';
-          toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:12px 20px;border-radius:8px;z-index:10000;font-size:14px;opacity:0;pointer-events:none;transition:opacity 0.3s ease;';
+          toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:12px 20px;border-radius:8px;z-index:10000;font-size:14px;pointer-events:none;';
           document.body.appendChild(toast);
           return toast;
         }
@@ -338,6 +423,70 @@
         let inventoryLocationFilter = 'all';
         let editingId = null;
         let editingItemImages = [];
+        let currentSaleItemId = null;
+        let saleDetailItemId = null;
+        let saleDetailLocationId = null;
+        let saleDetailEdits = [];
+
+        // ─────────────────────────────────────────────────────────────────────
+        // LOCATION-BASED TRANSACTION FEE SYSTEM (Bug 1)
+        //
+        // These are FALLBACK fees used when a location's transactionFeePercent
+        // is 0 or missing in the API. Values are decimals (0.035 = 3.5%).
+        // "Default" is the final catch-all.
+        //
+        // For "Online" we support a combined model: 2.9% + $0.30 flat fee.
+        // The flat portion is handled in getLocationFeeForAmount().
+        // ─────────────────────────────────────────────────────────────────────
+        const locationFees = {
+          "Nashville Market":    0.035,  // 3.5%
+          "Franklin Craft Fair": 0.05,   // 5.0%
+          "Online":              0.029,  // 2.9% (+$0.30 flat — see getLocationFeeForAmount)
+          "Default":             0.04    // 4.0% catch-all
+        };
+
+        // Optional flat fees (in $) on top of the % rate.
+        // Only applied when falling back to locationFees (not when the API has a value set).
+        const locationFlatFees = {
+          "Online": 0.30
+        };
+
+        /**
+         * Returns the transaction fee PERCENT (0–100) for a location ID.
+         * Priority order:
+         *   1. API-configured transactionFeePercent (if > 0)
+         *   2. locationFees map matched by location name
+         *   3. locationFees['Default']
+         * @param {string} locationId
+         * @returns {number} fee as a percentage, e.g. 3.5
+         */
+        function getLocationFeePercent(locationId) {
+          const loc = locations.find(l => l.id === locationId);
+          if (loc && Number(loc.transactionFeePercent) > 0) {
+            return Number(loc.transactionFeePercent);
+          }
+          if (loc?.name && locationFees[loc.name] !== undefined) {
+            return locationFees[loc.name] * 100;
+          }
+          return (locationFees['Default'] || 0) * 100;
+        }
+
+        /**
+         * Returns the total fee AMOUNT ($) for a given revenue + location.
+         * Adds a flat fee (e.g. Online's $0.30) only when using fallback rates.
+         * @param {number} revenue - gross sale price
+         * @param {string} locationId
+         * @returns {number} total fee in dollars
+         */
+        function getLocationFeeForAmount(revenue, locationId) {
+          const feePct = getLocationFeePercent(locationId);
+          const percentageFee = revenue * (feePct / 100);
+          // Flat fee only when the API has no configured value
+          const loc = locations.find(l => l.id === locationId);
+          const apiHasFee = loc && Number(loc.transactionFeePercent) > 0;
+          const flatFee = (!apiHasFee && loc?.name) ? (locationFlatFees[loc.name] || 0) : 0;
+          return percentageFee + flatFee;
+        }
 
         // Load data on page load
         async function loadData() {
@@ -378,6 +527,9 @@
 
            console.log('Rendering inventory list. Total inventory items:', inventory.length);
            console.log('Inventory data:', inventory);
+
+           // Keep all location selects in sync with loaded locations data
+           populateLocationSelect();
 
             const soldOut = inventory.filter(i => calculateTotalQty(i) === 0 && (i.salesHistory||[]).length > 0);
 
@@ -436,21 +588,26 @@
             .filter(Boolean)
             .join(' · ');
 
-          // Image HTML
+          // Image thumbnail
           let imageHtml = '';
           if (item.imageId) {
             const thumbUrl = `/.netlify/functions/images?id=${item.imageId}&size=thumb`;
-            imageHtml = `<div style="width:100%;aspect-ratio:4/3;background:#f5f2ee;border-radius:12px 12px 0 0;overflow:hidden;margin-bottom:8px;">
-              <img src="${esc(thumbUrl)}" alt="${esc(item.name)}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy"
-                   onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:#ede9e3;display:flex;align-items:center;justify-content:center;font-size:24px;color:#9a9080;\\'>📦</div>';">
-            </div>`;
+            imageHtml = `<img src="${esc(thumbUrl)}" alt="${esc(item.name)}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;flex-shrink:0;display:block;" loading="lazy" onerror="this.style.display=\'none\';">`;
           }
 
           return `<div class="inv-card" onclick="openDetail('${item.id}')">
-            ${imageHtml}
             <div class="inv-card-header">
-              <div><div class="inv-name">${esc(item.name)}</div><span class="category-chip">${esc(item.category)}</span></div>
-              <div class="inv-qty-badge ${totalQty<=thresh?'low':'ok'}">${totalQty} ${esc(item.unit||'units')}</div>
+              <div style="display:flex;align-items:flex-start;gap:12px;">
+                ${imageHtml || `<div style="width:72px;height:72px;background:#f5f2ee;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#9a9080;">📦</div>`}
+                <div>
+                  <div class="inv-name">${esc(item.name)}</div>
+                  <span class="category-chip">${esc(item.category)}</span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                <div class="inv-qty-badge ${totalQty<=thresh?'low':'ok'}">${totalQty} ${esc(item.unit||'units')}</div>
+                <button onclick="event.stopPropagation();openRecordSaleModal('${item.id}')" style="background:#28a745;font-size:0.75rem;padding:4px 8px;border-radius:6px;min-height:unset;line-height:1.4;">Record Sale</button>
+              </div>
             </div>
             ${locationBreakdown ? `<div style="font-size:11px;color:var(--text3);padding:0 16px 8px;margin-top:-4px;">${esc(locationBreakdown)}</div>` : ''}
             <div class="margin-bar"><div class="margin-fill" style="width:${Math.min(100,Math.max(0,adjustedMargin))}%"></div></div>
@@ -463,96 +620,88 @@
             </div>${item.notes && item.notes.trim() ? `<div class="inv-notes">${esc(item.notes)}</div>` : ''}</div>`;
         }
 
-        function renderSoldList(soldItems) {
+        /**
+         * Bug 3 fix: Render one sold card per individual sale transaction.
+         * Each card shows: item name, category, location, date, qty, revenue,
+         * fee ($+%), profit (after fee & cost), and margin %.
+         * Sorted by date descending (most recent first).
+         *
+         * Formula per card:
+         *   feeAmt  = revenue × (feePercent / 100)   [+ flat fee if applicable]
+         *   profit  = (revenue - feeAmt) - (qtySold × costPerUnit)
+         *   margin  = (profit / revenue) × 100
+         */
+        function renderSoldList() {
           const sec = document.getElementById('sold-section');
           const list = document.getElementById('sold-list');
 
-          if (!soldItems.length) {
+          // Flatten all individual sale records across all items
+          const allSales = [];
+          inventory.forEach(item => {
+            if (!item.salesHistory || item.salesHistory.length === 0) return;
+            item.salesHistory.forEach(sale => {
+              if (inventoryLocationFilter !== 'all' && sale.location !== inventoryLocationFilter) return;
+              allSales.push({ item, sale });
+            });
+          });
+
+          if (allSales.length === 0) {
             sec.style.display = 'none';
             return;
           }
 
           sec.style.display = 'block';
 
-          // Create location-specific sale entries
-          let locationSpecificSales = [];
-          inventory.forEach(item => {
-            if (!item.salesHistory || item.salesHistory.length === 0) return;
+          // Sort by date descending — most recent sale first
+          allSales.sort((a, b) => new Date(b.sale.date) - new Date(a.sale.date));
 
-            const totalQtyAcrossAllLocations = item.inventory ?
-              Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc.qty || 0), 0) : 0;
+          list.innerHTML = allSales.map(({ item, sale }) => {
+            const locationId = sale.location || '';
+            const locationName = locations.find(l => l.id === locationId)?.name || 'Unknown Location';
+            const revenue = Number(sale.actualPrice || 0);
+            const qtySold = Number(sale.qtySold || 0);
+            const costPerUnit = Number(item.cost || 0) + Number(item.labor || 0);
 
-            const salesByLocation = {};
-            item.salesHistory.forEach(sale => {
-              const locationId = sale.location || 'unknown';
-              if (!salesByLocation[locationId]) {
-                salesByLocation[locationId] = [];
-              }
-              salesByLocation[locationId].push(sale);
-            });
+            // Use stored feePercent if available, else look up via helper
+            const feePct = Number(sale.feePercent) > 0
+              ? Number(sale.feePercent)
+              : (locationId ? getLocationFeePercent(locationId) : 0);
+            const feeAmt = revenue * (feePct / 100);
+            const netRev = revenue - feeAmt;
+            const profit = netRev - (qtySold * costPerUnit);
+            // Margin stored on record takes precedence; recalculate as fallback
+            const margin = Number(sale.margin) !== 0 && sale.margin != null
+              ? Number(sale.margin)
+              : (revenue > 0 ? Math.round((profit / revenue) * 100) : 0);
 
-            Object.keys(salesByLocation).forEach(locationId => {
-              const locationSales = salesByLocation[locationId];
-              const totalSoldQty = locationSales.reduce((s, sl) => s + Number(sl.qty), 0);
-              const totalRevenue = locationSales.reduce((s, sl) => s + Number(sl.revenue), 0);
-              const totalTransactionFee = locationSales.reduce((s, sl) => s + Number(sl.transactionFee || 0), 0);
-              const netRevenue = totalRevenue - totalTransactionFee;
-              const totalCostBasis = locationSales.reduce((s, sl) => s + (Number(item.cost) + Number(item.labor)) * Number(sl.qty), 0);
-              const netProfit = netRevenue - totalCostBasis;
-              const suggestedPrice = Number(item.suggestedPrice ?? item.salePrice ?? 0);
-              const location = locations.find(l => l.id === locationId);
-              const transactionFeePercent = location?.transactionFeePercent || 0;
-              const effectiveRevenue = suggestedPrice * (1 - (transactionFeePercent / 100));
-              const marginPercent = effectiveRevenue > 0 ? Math.round((netProfit / effectiveRevenue) * 100) : 0;
+            const dateFormatted = sale.date
+              ? new Date(sale.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : '—';
 
-              if (inventoryLocationFilter !== 'all' && locationId !== inventoryLocationFilter) return;
-
-              locationSpecificSales.push({
-                item: item,
-                locationId: locationId,
-                locationName: locations.find(l => l.id === locationId)?.name || 'Unknown Location',
-                sales: locationSales,
-                totalSoldQty: totalSoldQty,
-                totalRevenue: totalRevenue,
-                totalTransactionFee: totalTransactionFee,
-                netRevenue: netRevenue,
-                netProfit: netProfit,
-                marginPercent: marginPercent,
-                lastSale: locationSales.sort((a, b) => new Date(b.date) - new Date(a.date))[0]
-              });
-            });
-          });
-
-          locationSpecificSales.sort((a, b) => {
-            const itemCompare = a.item.name.localeCompare(b.item.name);
-            if (itemCompare !== 0) return itemCompare;
-            return a.locationName.localeCompare(b.locationName);
-          });
-
-          list.innerHTML = locationSpecificSales.map(entry => {
-            const { item, locationName, totalSoldQty, totalRevenue, totalTransactionFee, netRevenue, netProfit, marginPercent, lastSale } = entry;
-
-            return `<div class="inv-card" onclick="openDetail('${item.id}')" style="opacity:1">
+            return `<div class="inv-card" onclick="openSaleDetailModal('${esc(item.id)}', '${esc(locationId)}')" style="opacity:1;cursor:pointer;">
               <div class="inv-card-header">
                 <div style="flex:1;padding-right:10px;">
-                  <div class="inv-name">${esc(item.name)}</div>
-                  <span class="category-chip">${esc(item.category)}</span>
-                  <div style="font-size:11px;color:var(--accent);font-weight:600;margin-top:4px;">📍 ${esc(locationName)}</div>
+                  <div class="inv-name" style="font-size:1.05rem;">${esc(item.name)}</div>
+                  <span class="category-chip" style="margin-left:0;">${esc(item.category)}</span>
+                  <div style="font-size:11px;color:var(--accent);font-weight:600;margin-top:5px;">📍 ${esc(locationName)}</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px;">🗓 ${esc(dateFormatted)} &nbsp;·&nbsp; ${qtySold} sold</div>
                 </div>
-                <div style="text-align:right;">
-                  <div style="font-size:12px;font-weight:700;font-family:monospace;margin-bottom:4px;${netProfit>=0?'color:#28a745;':'color:#d73a49;'}">
-                    ${netProfit>=0?'+':''}${fmt(netProfit)}
+                <div style="text-align:right;flex-shrink:0;">
+                  <div style="font-size:13px;font-weight:700;font-family:monospace;${profit>=0?'color:#28a745;':'color:#d73a49;'}">
+                    ${profit>=0?'+':''}${fmt(profit)}
                   </div>
-                  <div style="background:#f0faf6;border:1.5px solid #28a745;border-radius:9px;padding:4px 10px;font-family:monospace;font-size:12px;font-weight:600;color:#28a745;white-space:nowrap;">${totalSoldQty} sold</div>
-                  <div style="font-size:10px;color:var(--text3);font-family:monospace;margin-top:4px;">${lastSale?new Date(lastSale.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—'}</div>
+                  <div style="font-size:10px;color:var(--text3);font-family:monospace;margin-top:2px;">${margin}% margin</div>
+                  <div style="font-size:10px;color:#d73a49;font-family:monospace;margin-top:2px;">Fee: ${fmt(feeAmt)} (${feePct}%)</div>
                 </div>
               </div>
               <div class="inv-metrics">
-                <div class="inv-metric"><div class="inv-metric-label">Suggested</div><div class="inv-metric-value highlight">${fmt(item.suggestedPrice ?? item.salePrice ?? 0)}</div></div>
-                <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(totalRevenue)}</div></div>
-                <div class="inv-metric"><div class="inv-metric-label">Fee</div><div class="inv-metric-value">${locations.find(l => l.id === entry.locationId)?.transactionFeePercent || 0}%</div></div>
-                <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value price">${marginPercent}%</div></div>
-              </div></div>`;
+                <div class="inv-metric"><div class="inv-metric-label">Revenue</div><div class="inv-metric-value highlight">${fmt(revenue)}</div></div>
+                <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(qtySold * costPerUnit)}</div></div>
+                <div class="inv-metric"><div class="inv-metric-label">Tx Fee</div><div class="inv-metric-value cost">${fmt(feeAmt)}</div></div>
+                <div class="inv-metric"><div class="inv-metric-label">Profit</div><div class="inv-metric-value ${profit>=0?'price':'cost'}">${fmt(profit)}</div></div>
+                <div class="inv-metric"><div class="inv-metric-label">Margin</div><div class="inv-metric-value ${margin>=0?'price':'cost'}">${margin}%</div></div>
+              </div>
+            </div>`;
           }).join('');
         }
 
@@ -600,7 +749,7 @@
             editingItemImages.slice(0, 6).forEach(url => {
               const thumbDiv = document.createElement('div');
               thumbDiv.style.cssText = 'width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--border);flex-shrink:0;';
-              thumbDiv.innerHTML = `<img src="${esc(url)}" alt="Preview" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" onerror="this.src=\'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTE2IDFMMTYgNjFDMTYgNjMgMjQgNjMgMzIgNjNDNDAgNjMgNDggNjMgNDggNjFDNDggNjEgNDggMTYgNDggMTZDMzIgMTYgMjQgMTYgMTYgMTZaIiBmaWxsPSIjRjVGMkVFIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzMiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmaWxsPSIjOUE5MDgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+dG1sPC90ZXh0Pgo8L3N2Zz4K\';this.parentElement.innerHTML=\'📦\';">`;
+              thumbDiv.innerHTML = `<img src="${esc(url)}" alt="Preview" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTE2IDFMMTYgNjFDMTYgNjMgMjQgNjMgMzIgNjNDNDAgNjMgNDggNjMgNDggNjFDNDggNjEgNDggMTYgNDggMTZDMzIgMTYgMjQgMTYgMTYgMTZaIiBmaWxsPSIjRjVGMkVFIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzMiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmaWxsPSIjOUE5MDgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+dG1sPC90ZXh0Pgo8L3N2Zz4K';this.parentElement.innerHTML='📦';">`;
               preview.appendChild(thumbDiv);
             });
           }
@@ -619,23 +768,20 @@
           openModal('modal-edit');
         }
 
-        // Modal functions
-        function openModal(modalId) {
-          document.getElementById(modalId).style.display = 'flex';
-          document.body.style.overflow = 'hidden';
+        function populateLocationSelect() {
+          const selects = ['f-location', 'move-from', 'move-to'];
+          selects.forEach(selId => {
+            const select = document.getElementById(selId);
+            if (!select) return;
+            select.innerHTML = '<option value="">Select location...</option>';
+            locations.filter(l => l.active).forEach(loc => {
+              const opt = document.createElement('option');
+              opt.value = loc.id;
+              opt.textContent = loc.name;
+              select.appendChild(opt);
+            });
+          });
         }
-
-        function closeModal(modalId) {
-          document.getElementById(modalId).style.display = 'none';
-          document.body.style.overflow = '';
-        }
-
-        // Close modal when clicking overlay
-        document.addEventListener('click', (e) => {
-          if (e.target.classList.contains('modal-overlay')) {
-            closeModal(e.target.id);
-          }
-        });
 
         // Image upload handling
         async function handleImageUpload(input) {
@@ -700,44 +846,200 @@
           const pe = document.getElementById('calc-profit');
           const me = document.getElementById('calc-margin');
           pe.textContent = fmt(p);
-          pe.className = 'calc
-          const selects = ['f-location', 'move-from', 'move-to'];
-          selects.forEach(selectId => {
-            const select = document.getElementById(selectId);
-            if (!select) return;
-
-            // Clear existing options except first
-            const firstOption = select.querySelector('option');
-            select.innerHTML = '';
-            if (firstOption) select.appendChild(firstOption);
-
-            // Add active locations
-            locations.filter(loc => loc.active).forEach(loc => {
-              const option = document.createElement('option');
-              option.value = loc.id;
-              option.textContent = loc.name;
-              select.appendChild(option);
-            });
-          });
+          pe.className = p >= 0 ? 'calc-item-val pos' : 'calc-item-val neg';
+          document.getElementById('calc-suggested').textContent = fmt(s);
+          me.textContent = m + '%';
+          me.className = m >= 0 ? 'calc-item-val pos' : 'calc-item-val neg';
         }
 
-        // Populate item select for move modal
-        function populateItemSelect() {
+        // ─────────────────────────────────────────────────────────────────────
+        // MOVE INVENTORY MODAL — helpers
+        // ─────────────────────────────────────────────────────────────────────
+
+        /**
+         * Populate the item selector with items that have stock somewhere.
+         * Shows total qty in parentheses: "Blue Mug (12 units)"
+         * @param {string} [preselectId] — optional item ID to pre-select
+         */
+        function populateItemSelect(preselectId) {
           const select = document.getElementById('move-item');
           if (!select) return;
 
-          // Clear existing options except first
-          const firstOption = select.querySelector('option');
-          select.innerHTML = '';
-          if (firstOption) select.appendChild(firstOption);
+          select.innerHTML = '<option value="">Choose an item...</option>';
 
-          // Add items with inventory
-          inventory.filter(item => calculateTotalQty(item) > 0).forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.id;
-            option.textContent = item.name;
-            select.appendChild(option);
-          });
+          inventory
+            .filter(item => calculateTotalQty(item) > 0)
+            .forEach(item => {
+              const option = document.createElement('option');
+              option.value = item.id;
+              const total = calculateTotalQty(item);
+              option.textContent = `${item.name} (${total} total)`;
+              if (item.id === preselectId) option.selected = true;
+              select.appendChild(option);
+            });
+
+          // If pre-selected, trigger the item-change handler immediately
+          if (preselectId) onMoveItemChange();
+        }
+
+        /**
+         * Called when the "Item" dropdown changes.
+         * Updates the item info banner and repopulates "From Location"
+         * to only show locations with stock > 0 for this item.
+         */
+        function onMoveItemChange() {
+          const itemId = document.getElementById('move-item').value;
+          const item = inventory.find(i => i.id === itemId);
+
+          // Reset downstream fields
+          document.getElementById('move-from').innerHTML = '<option value="">Select source location...</option>';
+          document.getElementById('move-to').innerHTML = '<option value="">Select destination...</option>';
+          document.getElementById('move-qty').value = '';
+          document.getElementById('move-qty-status').style.display = 'none';
+          document.getElementById('move-qty-error').style.display = 'none';
+          document.getElementById('btn-move').disabled = true;
+
+          if (!item) {
+            document.getElementById('move-item-info').style.display = 'none';
+            return;
+          }
+
+          // Show item info banner
+          const totalQty = calculateTotalQty(item);
+          const stockByLocation = locations
+            .filter(l => l.active && Number(item.inventory?.[l.id]?.qty) > 0)
+            .map(l => `${l.name}: ${item.inventory[l.id].qty}`)
+            .join(' · ');
+          document.getElementById('move-item-name').textContent = item.name;
+          document.getElementById('move-item-stock').textContent =
+            `Total in stock: ${totalQty} unit${totalQty !== 1 ? 's' : ''}` +
+            (stockByLocation ? ` — ${stockByLocation}` : '');
+          document.getElementById('move-item-info').style.display = 'block';
+
+          // Populate "From Location" — only locations with qty > 0 for this item
+          const fromSelect = document.getElementById('move-from');
+          locations
+            .filter(l => l.active && Number(item.inventory?.[l.id]?.qty) > 0)
+            .forEach(loc => {
+              const qty = Number(item.inventory[loc.id].qty);
+              const opt = document.createElement('option');
+              opt.value = loc.id;
+              opt.textContent = `${loc.name} (${qty} unit${qty !== 1 ? 's' : ''})`;
+              fromSelect.appendChild(opt);
+            });
+
+          // Auto-select the only option if there's just one source location
+          if (fromSelect.options.length === 2) { // 2 = placeholder + one real option
+            fromSelect.selectedIndex = 1;
+            onMoveFromChange();
+          }
+        }
+
+        /**
+         * Called when the "From Location" dropdown changes.
+         * Updates the "To Location" dropdown (excludes the selected source),
+         * sets the qty input's max, and shows the available qty status line.
+         */
+        function onMoveFromChange() {
+          const itemId = document.getElementById('move-item').value;
+          const fromId = document.getElementById('move-from').value;
+          const item = inventory.find(i => i.id === itemId);
+
+          // Reset downstream fields
+          document.getElementById('move-to').innerHTML = '<option value="">Select destination...</option>';
+          document.getElementById('move-qty').value = '';
+          document.getElementById('move-qty-error').style.display = 'none';
+          document.getElementById('btn-move').disabled = true;
+
+          if (!fromId || !item) {
+            document.getElementById('move-qty-status').style.display = 'none';
+            return;
+          }
+
+          const availableQty = Number(item.inventory?.[fromId]?.qty || 0);
+          const fromName = locations.find(l => l.id === fromId)?.name || 'location';
+
+          // Show available qty status line
+          const statusEl = document.getElementById('move-qty-status');
+          statusEl.textContent = `${availableQty} unit${availableQty !== 1 ? 's' : ''} available at ${fromName}`;
+          statusEl.style.display = 'block';
+
+          // Set qty input max
+          const qtyInput = document.getElementById('move-qty');
+          qtyInput.max = availableQty;
+
+          // Populate "To Location" — all active locations except the selected "from"
+          const toSelect = document.getElementById('move-to');
+          locations
+            .filter(l => l.active && l.id !== fromId)
+            .forEach(loc => {
+              const currentQty = Number(item.inventory?.[loc.id]?.qty || 0);
+              const opt = document.createElement('option');
+              opt.value = loc.id;
+              opt.textContent = currentQty > 0
+                ? `${loc.name} (${currentQty} already there)`
+                : loc.name;
+              toSelect.appendChild(opt);
+            });
+
+          validateMoveForm();
+        }
+
+        /**
+         * Validates the Move Inventory form on every input change.
+         * Rules:
+         *   - Item, from, and to must all be selected
+         *   - From ≠ To
+         *   - Qty must be a positive integer
+         *   - Qty must not exceed available stock at the source location
+         *
+         * Enables/disables #btn-move and shows/hides the inline error message.
+         */
+        function validateMoveForm() {
+          const itemId  = document.getElementById('move-item').value;
+          const fromId  = document.getElementById('move-from').value;
+          const toId    = document.getElementById('move-to').value;
+          const qtyRaw  = document.getElementById('move-qty').value;
+          const errEl   = document.getElementById('move-qty-error');
+          const btn     = document.getElementById('btn-move');
+
+          const item = inventory.find(i => i.id === itemId);
+          const availableQty = fromId && item ? Number(item.inventory?.[fromId]?.qty || 0) : 0;
+
+          let errorMsg = '';
+
+          if (!itemId || !fromId || !toId) {
+            // Not all dropdowns filled yet — just keep button disabled, no error
+            btn.disabled = true;
+            errEl.style.display = 'none';
+            return;
+          }
+
+          if (fromId === toId) {
+            errorMsg = 'Choose a different destination location.';
+          } else if (!qtyRaw || qtyRaw === '') {
+            // Qty not entered yet — no error message, just disabled
+            btn.disabled = true;
+            errEl.style.display = 'none';
+            return;
+          } else {
+            const qty = Number(qtyRaw);
+            if (!Number.isInteger(qty) || qty <= 0) {
+              errorMsg = 'Quantity must be a whole number greater than 0.';
+            } else if (qty > availableQty) {
+              const fromName = locations.find(l => l.id === fromId)?.name || 'that location';
+              errorMsg = `Only ${availableQty} unit${availableQty !== 1 ? 's' : ''} available at ${fromName}.`;
+            }
+          }
+
+          if (errorMsg) {
+            errEl.textContent = errorMsg;
+            errEl.style.display = 'block';
+            btn.disabled = true;
+          } else {
+            errEl.style.display = 'none';
+            btn.disabled = false;
+          }
         }
 
         // Open add item modal
@@ -776,21 +1078,30 @@
           document.getElementById('f-name').focus();
         }
 
-        // Open move inventory modal
-        function openMoveModal() {
-          // Check if any items exist
+        /**
+         * Open the Move Inventory modal.
+         * @param {string} [preselectItemId] — optional item ID to pre-select (e.g. from a card button)
+         */
+        function openMoveModal(preselectItemId) {
           const itemsWithInventory = inventory.filter(item => calculateTotalQty(item) > 0);
           if (itemsWithInventory.length === 0) {
             showToast('No items with inventory to move.');
             return;
           }
 
-          // Reset form
+          // Reset all move form state
+          document.getElementById('move-item-info').style.display = 'none';
+          document.getElementById('move-item-name').textContent = '';
+          document.getElementById('move-item-stock').textContent = '';
+          document.getElementById('move-from').innerHTML = '<option value="">Select source location...</option>';
+          document.getElementById('move-to').innerHTML = '<option value="">Select destination...</option>';
           document.getElementById('move-qty').value = '';
+          document.getElementById('move-qty-status').style.display = 'none';
+          document.getElementById('move-qty-error').style.display = 'none';
+          document.getElementById('btn-move').disabled = true;
 
-          // Populate selects
-          populateItemSelect();
-          populateLocationSelect();
+          // Populate item dropdown (pre-selects and triggers onMoveItemChange if ID provided)
+          populateItemSelect(preselectItemId);
 
           openModal('modal-move');
         }
@@ -882,52 +1193,64 @@
           }
         }
 
-        // Perform inventory move
+        /**
+         * Submit the Move Inventory form.
+         * Re-validates before calling the API as a safety guard.
+         * On success: shows descriptive toast, closes modal, refreshes inventory.
+         */
         async function performMove() {
-          const itemId = document.getElementById('move-item').value;
-          const fromLocation = document.getElementById('move-from').value;
-          const toLocation = document.getElementById('move-to').value;
-          const qty = parseInt(document.getElementById('move-qty').value);
+          const itemId      = document.getElementById('move-item').value;
+          const fromId      = document.getElementById('move-from').value;
+          const toId        = document.getElementById('move-to').value;
+          const qty         = parseInt(document.getElementById('move-qty').value);
 
-          if (!itemId || !fromLocation || !toLocation || !qty) {
-            showToast('Please fill in all fields');
+          // Safety guard — should already be blocked by disabled button, but be safe
+          if (!itemId || !fromId || !toId || !qty || qty <= 0) {
+            showToast('Please fill in all fields correctly.');
+            return;
+          }
+          if (fromId === toId) {
+            showToast('Cannot move to the same location.');
             return;
           }
 
-          if (fromLocation === toLocation) {
-            showToast('Cannot move to the same location');
+          const item = inventory.find(i => i.id === itemId);
+          const availableQty = Number(item?.inventory?.[fromId]?.qty || 0);
+          if (qty > availableQty) {
+            showToast(`Only ${availableQty} units available.`);
             return;
           }
 
-          if (qty <= 0) {
-            showToast('Quantity must be greater than 0');
-            return;
-          }
+          const itemName  = item?.name || 'Item';
+          const fromName  = locations.find(l => l.id === fromId)?.name  || fromId;
+          const toName    = locations.find(l => l.id === toId)?.name    || toId;
+
+          // Disable button during the request to prevent double-submit
+          const btn = document.getElementById('btn-move');
+          btn.disabled = true;
+          btn.textContent = 'Moving…';
 
           try {
             const response = await fetch(`${API}/inventory?action=transfer`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                itemId,
-                fromLocation,
-                toLocation,
-                quantity: qty
-              })
+              body: JSON.stringify({ itemId, fromLocation: fromId, toLocation: toId, quantity: qty })
             });
 
             if (!response.ok) {
-              const error = await response.json();
-              throw new Error(error.error || 'Transfer failed');
+              const err = await response.json().catch(() => ({}));
+              throw new Error(err.error || 'Transfer failed');
             }
 
-            const result = await response.json();
-            showToast(`✓ Moved ${qty} units successfully`);
+            showToast(`✓ Moved ${qty} unit${qty !== 1 ? 's' : ''} of ${itemName} from ${fromName} to ${toName}`);
             closeModal('modal-move');
-            loadData(); // Reload inventory
+            loadData();
           } catch (error) {
             console.error('Transfer failed:', error);
             showToast(`Transfer failed: ${error.message}`);
+            // Re-enable button so user can retry
+            btn.disabled = false;
+            btn.textContent = 'Move Inventory';
           }
         }
 
@@ -974,21 +1297,415 @@
           }
         }
 
-        // Event listeners
+
+        // Init
         document.addEventListener('DOMContentLoaded', () => {
-          loadData();
-
-          // Add item button
-          document.querySelector('button:last-child').addEventListener('click', openAddModal);
-
-          // Move inventory button
-          document.querySelector('button:first-of-type').addEventListener('click', openMoveModal);
-
           // Update calculations when inputs change
           ['f-cost', 'f-labor', 'f-suggested-price'].forEach(id => {
             document.getElementById(id).addEventListener('input', updateCalc);
           });
+
+          // Load all data
+          loadData();
         });
+
+        // Modal utilities
+        function openModal(modalId) {
+          document.getElementById(modalId).style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+          document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Edit calculations
+        function updateEditCalc() {
+          const c = parseFloat(document.getElementById('f-edit-cost').value) || 0;
+          const l = parseFloat(document.getElementById('f-edit-labor').value) || 0;
+          const s = parseFloat(document.getElementById('f-edit-suggested-price').value) || 0;
+          const tc = c + l;
+          const p = s - tc;
+          const m = s > 0 ? Math.round((p / s) * 100) : 0;
+
+          document.getElementById('edit-calc-total-cost').textContent = fmt(tc);
+          const pe = document.getElementById('edit-calc-profit');
+          pe.textContent = fmt(p);
+          pe.className = p >= 0 ? 'calc-item-val pos' : 'calc-item-val neg';
+          document.getElementById('edit-calc-suggested').textContent = fmt(s);
+          const me = document.getElementById('edit-calc-margin');
+          me.textContent = m + '%';
+          me.className = m >= 0 ? 'calc-item-val pos' : 'calc-item-val neg';
+        }
+
+        // Edit image upload (multiple)
+        async function handleEditImageUpload(input) {
+          const files = Array.from(input.files);
+          if (files.length === 0) return;
+
+          const preview = document.getElementById('edit-image-preview');
+          const status = document.getElementById('edit-image-status');
+          status.textContent = 'Uploading images...';
+          status.style.display = 'block';
+          status.style.color = 'var(--text2)';
+
+          const newImageIds = [];
+          for (const file of files) {
+            const formData = new FormData();
+            formData.append('image', file);
+            try {
+              const response = await fetch(`${API}/images`, {
+                method: 'POST',
+                body: formData
+              });
+              if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Upload failed');
+              }
+              const result = await response.json();
+              newImageIds.push(result.imageId);
+              editingItemImages.push(`/.netlify/functions/images?id=${result.imageId}&size=thumb`);
+            } catch (error) {
+              console.error('Image upload error:', error);
+              showToast(`Upload failed: ${error.message}`);
+            }
+          }
+
+          // Refresh preview
+          preview.innerHTML = '';
+          if (editingItemImages.length === 0) {
+            preview.innerHTML = '<div style="width:100%;height:120px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--text3);">📦 No images</div>';
+          } else {
+            editingItemImages.slice(0, 6).forEach(url => {
+              const thumbDiv = document.createElement('div');
+              thumbDiv.style.cssText = 'width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--border);flex-shrink:0;';
+              thumbDiv.innerHTML = `<img src="${esc(url)}" alt="Preview" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTE2IDFMMTYgNjFDMTYgNjMgMjQgNjMgMzIgNjNDNDAgNjMgNDggNjMgNDggNjFDNDggNjEgNDggMTYgNDggMTZDMzIgMTYgMjQgMTYgMTYgMTZaIiBmaWxsPSIjRjVGMkVFIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzMiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmaWxsPSIjOUE5MDgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+dG1sPC90ZXh0Pgo8L3N2Zz4K';this.parentElement.innerHTML='📦';">`;
+              preview.appendChild(thumbDiv);
+            });
+          }
+
+          status.textContent = `✓ Added ${newImageIds.length} image(s)`;
+          status.style.color = '#28a745';
+        }
+
+        // Save edited item
+        async function saveEdit() {
+          const item = inventory.find(i => i.id === editingId);
+          if (!item) {
+            showToast('Item not found');
+            return;
+          }
+
+          // Update basic fields
+          item.name = document.getElementById('f-edit-name').value.trim();
+          item.category = document.getElementById('f-edit-category').value;
+          item.cost = parseFloat(document.getElementById('f-edit-cost').value) || 0;
+          item.labor = parseFloat(document.getElementById('f-edit-labor').value) || 0;
+          item.suggestedPrice = parseFloat(document.getElementById('f-edit-suggested-price').value) || 0;
+          item.reorderPt = parseInt(document.getElementById('f-edit-reorder').value) || 5;
+          item.notes = document.getElementById('f-edit-notes').value.trim() || undefined;
+
+          // Update inventory by location
+          item.inventory = item.inventory || {};
+          document.querySelectorAll('#edit-inventory-section input[data-loc-id]').forEach(input => {
+            const locId = input.dataset.locId;
+            const qty = parseInt(input.value) || 0;
+            item.inventory[locId] = {
+              qty,
+              lastUpdated: new Date().toISOString()
+            };
+          });
+
+          // Update images (extract IDs from URLs)
+          if (editingItemImages.length > 0) {
+            item.images = editingItemImages.map(url => {
+              const match = url.match(/id=([^&]+)/);
+              return match ? match[1] : null;
+            }).filter(Boolean);
+          } else {
+            delete item.images;
+          }
+          // Migrate legacy imageId
+          if (item.imageId && (!item.images || !item.images.includes(item.imageId))) {
+            if (!item.images) item.images = [];
+            item.images.push(item.imageId);
+          }
+          delete item.imageId;
+
+          // Build patch without salesHistory — never overwrite recorded sales when editing metadata
+          const { salesHistory: _sh, ...itemPatch } = item;
+
+          try {
+            const response = await fetch(`${API}/inventory?action=updateItem`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ itemId: editingId, patch: itemPatch })
+            });
+
+            if (!response.ok) {
+              const error = await response.json().catch(() => ({}));
+              throw new Error(error.error || 'Save failed');
+            }
+
+            showToast('✓ Item updated successfully!');
+            closeModal('modal-edit');
+            loadData();
+          } catch (error) {
+            console.error('Save edit failed:', error);
+            showToast(`Save failed: ${error.message}`);
+          }
+        }
+
+        function openSaleDetailModal(itemId, locationId) {
+          const item = inventory.find(i => i.id === itemId);
+          if (!item) { showToast('Item not found'); return; }
+
+          saleDetailItemId = itemId;
+          saleDetailLocationId = locationId;
+
+          // Deep copy only this location's sales
+          saleDetailEdits = (item.salesHistory || [])
+            .filter(s => s.location === locationId)
+            .map(s => ({ ...s }));
+
+          const locationName = locations.find(l => l.id === locationId)?.name || 'Unknown Location';
+          document.getElementById('sale-detail-title').textContent = `${esc(item.name)} — ${esc(locationName)}`;
+
+          renderSaleTransactions();
+          openModal('modal-sale-detail');
+        }
+
+        function renderSaleTransactions() {
+          const container = document.getElementById('sale-transactions-list');
+          const item = inventory.find(i => i.id === saleDetailItemId);
+          const location = locations.find(l => l.id === saleDetailLocationId);
+          const feePercent = location?.transactionFeePercent || 0;
+          const costPerUnit = Number(item?.cost || 0) + Number(item?.labor || 0);
+
+          if (saleDetailEdits.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3);">No sale transactions for this location.</div>';
+            return;
+          }
+
+          container.innerHTML = saleDetailEdits.map((sale, idx) => {
+            const feeAmt = Number(sale.actualPrice) * (feePercent / 100);
+            const netRev = Number(sale.actualPrice) - feeAmt;
+            const cog = Number(sale.qtySold) * costPerUnit;
+            const profit = netRev - cog;
+            return `<div style="background:#f8f9fa;border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:0.8rem;">Date</label>
+                  <input type="date" value="${esc(sale.date||'')}" onchange="updateSaleEdit(${idx},'date',this.value)" style="padding:6px;font-size:0.85rem;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:0.8rem;">Qty Sold</label>
+                  <input type="number" value="${sale.qtySold}" min="1" step="1" oninput="updateSaleEdit(${idx},'qtySold',this.value)" style="padding:6px;font-size:0.85rem;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:0.8rem;">Revenue ($)</label>
+                  <input type="number" value="${Number(sale.actualPrice).toFixed(2)}" min="0" step="0.01" oninput="updateSaleEdit(${idx},'actualPrice',this.value)" style="padding:6px;font-size:0.85rem;">
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;color:var(--text2);">
+                <span>Fee ${feePercent}% = <span id="sale-edit-fee-${idx}">${fmt(feeAmt)}</span> &nbsp;|&nbsp; Profit: <strong id="sale-edit-profit-${idx}" style="color:${profit>=0?'#28a745':'#d73a49'};">${fmt(profit)}</strong></span>
+                <button onclick="deleteSaleEdit(${idx})" style="background:#d73a49;font-size:0.75rem;padding:3px 8px;min-height:unset;border-radius:4px;line-height:1.4;">Delete</button>
+              </div>
+            </div>`;
+          }).join('');
+        }
+
+        function updateSaleEdit(idx, field, value) {
+          if (field === 'qtySold') saleDetailEdits[idx].qtySold = parseInt(value) || 0;
+          else if (field === 'actualPrice') saleDetailEdits[idx].actualPrice = parseFloat(value) || 0;
+          else saleDetailEdits[idx][field] = value;
+
+          // Update only the profit/fee display without re-rendering inputs (avoids cursor loss)
+          const item = inventory.find(i => i.id === saleDetailItemId);
+          const location = locations.find(l => l.id === saleDetailLocationId);
+          const feePercent = location?.transactionFeePercent || 0;
+          const costPerUnit = Number(item?.cost || 0) + Number(item?.labor || 0);
+          const sale = saleDetailEdits[idx];
+          const feeAmt = Number(sale.actualPrice) * (feePercent / 100);
+          const netRev = Number(sale.actualPrice) - feeAmt;
+          const profit = netRev - (Number(sale.qtySold) * costPerUnit);
+
+          const feeEl = document.getElementById(`sale-edit-fee-${idx}`);
+          if (feeEl) feeEl.textContent = fmt(feeAmt);
+          const profitEl = document.getElementById(`sale-edit-profit-${idx}`);
+          if (profitEl) { profitEl.textContent = fmt(profit); profitEl.style.color = profit >= 0 ? '#28a745' : '#d73a49'; }
+        }
+
+        function deleteSaleEdit(idx) {
+          saleDetailEdits.splice(idx, 1);
+          renderSaleTransactions();
+        }
+
+        async function saveSaleChanges() {
+          const item = inventory.find(i => i.id === saleDetailItemId);
+          if (!item) { showToast('Item not found'); return; }
+
+          const location = locations.find(l => l.id === saleDetailLocationId);
+          const feePercent = location?.transactionFeePercent || 0;
+          const costPerUnit = Number(item.cost || 0) + Number(item.labor || 0);
+
+          // Recalculate profit for each edited sale and stamp feePercent from location
+          const updatedSales = saleDetailEdits.map(sale => {
+            const feeAmt = Number(sale.actualPrice) * (feePercent / 100);
+            const netRev = Number(sale.actualPrice) - feeAmt;
+            const profit = netRev - (Number(sale.qtySold) * costPerUnit);
+            return { ...sale, feePercent, profit };
+          });
+
+          // Keep other locations' sales intact, replace this location's
+          const otherSales = (item.salesHistory || []).filter(s => s.location !== saleDetailLocationId);
+          const newSalesHistory = [...otherSales, ...updatedSales];
+
+          try {
+            const response = await fetch(`${API}/inventory?action=updateItem`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ itemId: saleDetailItemId, patch: { salesHistory: newSalesHistory } })
+            });
+
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              throw new Error(err.error || 'Save failed');
+            }
+
+            showToast('✓ Sale updated');
+            closeModal('modal-sale-detail');
+            loadData();
+          } catch (error) {
+            showToast(`Error: ${error.message}`);
+          }
+        }
+
+        function openRecordSaleModal(id) {
+          const item = inventory.find(i => i.id === id);
+          if (!item) { showToast('Item not found'); return; }
+          currentSaleItemId = id;
+
+          document.getElementById('record-sale-title').textContent = `Record Sale — ${item.name}`;
+
+          // Populate locations that have stock for this item
+          const select = document.getElementById('sale-location');
+          select.innerHTML = '<option value="">Select location...</option>';
+          locations.filter(l => l.active).forEach(loc => {
+            const qty = Number(item.inventory?.[loc.id]?.qty || 0);
+            const opt = document.createElement('option');
+            opt.value = loc.id;
+            opt.textContent = `${loc.name} (${qty} in stock)`;
+            opt.disabled = qty === 0;
+            select.appendChild(opt);
+          });
+
+          // Reset fields
+          document.getElementById('sale-qty').value = '';
+          document.getElementById('sale-price').value = '';
+          document.getElementById('sale-date').value = new Date().toISOString().slice(0, 10);
+
+          updateSaleCalc();
+          openModal('modal-record-sale');
+        }
+
+        /**
+         * Bug 1 fix: Real-time sale breakdown using getLocationFeePercent() + getLocationFeeForAmount().
+         * Formula: Profit = (Revenue - Fee) - (Qty × CostPerUnit)
+         *          Margin = (Profit / Revenue) × 100
+         */
+        function updateSaleCalc() {
+          const item = inventory.find(i => i.id === currentSaleItemId);
+          const locationId = document.getElementById('sale-location').value;
+          const qty = parseInt(document.getElementById('sale-qty').value) || 0;
+          const revenue = parseFloat(document.getElementById('sale-price').value) || 0;
+
+          // Use helper: checks API value first, falls back to locationFees map
+          const feePct = locationId ? getLocationFeePercent(locationId) : 0;
+          const feeAmt = locationId ? getLocationFeeForAmount(revenue, locationId) : 0;
+          const netRev = revenue - feeAmt;
+          const costPerUnit = Number(item?.cost || 0) + Number(item?.labor || 0);
+          const cog = qty * costPerUnit;
+          // Profit = net revenue (after fee) minus cost of goods sold
+          const profit = netRev - cog;
+          // Margin = profit as a percentage of gross revenue
+          const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+
+          document.getElementById('sale-fee-pct').textContent = `${feePct}%`;
+          document.getElementById('sale-fee-amt').textContent = fmt(feeAmt);
+          document.getElementById('sale-net-rev').textContent = fmt(netRev);
+          document.getElementById('sale-cog').textContent = fmt(cog);
+
+          const profitEl = document.getElementById('sale-profit');
+          profitEl.textContent = fmt(profit);
+          profitEl.className = profit >= 0 ? 'calc-item-val pos' : 'calc-item-val neg';
+
+          const marginEl = document.getElementById('sale-margin');
+          marginEl.textContent = `${margin}%`;
+          marginEl.className = margin >= 0 ? 'calc-item-val pos' : 'calc-item-val neg';
+        }
+
+        async function submitSale() {
+          const item = inventory.find(i => i.id === currentSaleItemId);
+          if (!item) { showToast('Item not found'); return; }
+
+          const locationId = document.getElementById('sale-location').value;
+          const qty = parseInt(document.getElementById('sale-qty').value);
+          const revenue = parseFloat(document.getElementById('sale-price').value);
+          const date = document.getElementById('sale-date').value;
+
+          if (!locationId) { showToast('Please select a location'); return; }
+          if (!qty || qty <= 0) { showToast('Please enter a valid quantity'); return; }
+          if (isNaN(revenue) || revenue <= 0) { showToast('Please enter a revenue amount greater than $0'); return; }
+          if (!date) { showToast('Please enter a date'); return; }
+
+          const availableQty = Number(item.inventory?.[locationId]?.qty || 0);
+          if (qty > availableQty) {
+            showToast(`Only ${availableQty} in stock at that location`);
+            return;
+          }
+
+          // Bug 1 fix: use helper to resolve fee, then calculate margin to save with record
+          const feePercent = getLocationFeePercent(locationId);
+          const feeAmt = getLocationFeeForAmount(revenue, locationId);
+          const costPerUnit = Number(item.cost || 0) + Number(item.labor || 0);
+          const profit = (revenue - feeAmt) - (qty * costPerUnit);
+          // Margin = Profit / Revenue × 100
+          const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+
+          const salePayload = {
+            itemId: currentSaleItemId,
+            location: locationId,
+            qtySold: qty,
+            actualPrice: revenue,
+            date,
+            feePercent,       // fee as a percentage (e.g. 3.5)
+            feeAmount: feeAmt, // fee in dollars (e.g. $0.88) — stored for direct display
+            profit,            // net profit after fee and cost
+            margin             // margin % = (profit / revenue) × 100
+          };
+          console.log('Recording sale:', salePayload);
+
+          try {
+            const response = await fetch(`${API}/inventory?action=recordSale`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(salePayload)
+            });
+
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              console.error('Record sale failed:', response.status, err);
+              throw new Error(err.error || `Server error ${response.status}`);
+            }
+
+            showToast('✓ Sale recorded!');
+            closeModal('modal-record-sale');
+            loadData();
+          } catch (error) {
+            console.error('submitSale error:', error);
+            showToast(`Error: ${error.message}`);
+          }
+        }
 
         console.log("Inventory page loaded with full functionality");
     </script>

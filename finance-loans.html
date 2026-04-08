@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cheshire & Co — Loans</title>
+    <style>
+        :root {
+            --bg: #f5f2ee; --surface: #fff; --accent: #5b4fcf;
+            --text: #1a1612; --text2: #5a5248; --text3: #9a9080;
+            --border: #d8d0c6; --green: #28a745; --red: #d73a49;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+        .header { background:var(--accent); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:10; }
+        .back-btn { background:rgba(255,255,255,0.2); border:none; color:#fff; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.9rem; }
+        .header-text h1 { font-size:1.2rem; }
+        .header-text p { font-size:0.85rem; opacity:0.85; }
+        main { padding:16px; max-width:680px; margin:0 auto; }
+
+        .stats-bar { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
+        .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+        .stat-label { font-size:0.75rem; color:var(--text3); }
+        .stat-val { font-size:1.15rem; font-weight:700; margin-top:2px; }
+
+        /* Filter */
+        .filter-row { display:flex; gap:8px; margin-bottom:16px; }
+        .filter-row select { flex:1; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:0.9rem; background:var(--surface); }
+
+        /* Add panel */
+        .add-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+        .add-panel-header { display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+        .add-panel-header h3 { font-size:1rem; }
+        .add-panel-body { margin-top:14px; }
+        .form-group { margin-bottom:13px; }
+        .form-group label { display:block; margin-bottom:5px; font-weight:600; font-size:0.875rem; color:var(--text2); }
+        .form-group input, .form-group select { width:100%; padding:11px 12px; border:1px solid var(--border); border-radius:8px; font-size:1rem; }
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        button.primary { background:var(--accent); color:#fff; border:none; padding:13px 20px; font-size:1rem; border-radius:10px; width:100%; cursor:pointer; min-height:44px; }
+        button.primary:active { background:#4a3fb8; }
+
+        /* Loan cards */
+        .loan-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+        .loan-top { display:flex; justify-content:space-between; align-items:flex-start; }
+        .loan-lender { font-weight:600; font-size:1rem; }
+        .loan-sub { font-size:0.8rem; color:var(--text3); margin-top:2px; }
+        .loan-right { text-align:right; }
+        .loan-amount { font-weight:700; font-size:1rem; }
+        .loan-balance { font-size:0.8rem; margin-top:2px; }
+        .progress-bar { height:6px; background:#f0ede8; border-radius:3px; margin:10px 0 4px; overflow:hidden; }
+        .progress-fill { height:100%; background:var(--green); border-radius:3px; transition:width 0.3s; }
+        .progress-label { font-size:0.75rem; color:var(--text3); }
+        .chip { display:inline-block; font-size:0.75rem; font-weight:600; padding:2px 8px; border-radius:10px; }
+        .chip-green { background:#e6f4ea; color:var(--green); }
+        .chip-red { background:#fde8ea; color:var(--red); }
+
+        /* Payment history */
+        .payments-section { margin-top:12px; border-top:1px solid var(--border); padding-top:10px; }
+        .payments-title { font-size:0.8rem; font-weight:600; color:var(--text3); margin-bottom:8px; text-transform:uppercase; }
+        .payment-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0ede8; font-size:0.875rem; }
+        .payment-row:last-child { border-bottom:none; }
+
+        /* Pay modal */
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px; }
+        .modal-overlay.hidden { display:none; }
+        .modal { background:#fff; border-radius:12px; max-width:480px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 10px 30px rgba(0,0,0,0.3); }
+        .modal-header { display:flex; justify-content:space-between; align-items:center; padding:20px; border-bottom:1px solid var(--border); }
+        .modal-header h3 { margin:0; font-size:1.1rem; }
+        .modal-close { background:none; border:none; font-size:22px; cursor:pointer; color:var(--text3); padding:0; width:30px; height:30px; display:flex; align-items:center; justify-content:center; }
+        .modal-body { padding:20px; }
+        .modal-footer { display:flex; gap:12px; justify-content:flex-end; padding:16px 20px; border-top:1px solid var(--border); }
+        .modal-footer button { width:auto; padding:10px 20px; font-size:0.95rem; }
+        .btn-secondary { background:#e8e5f7; color:var(--accent); border:none; border-radius:8px; cursor:pointer; }
+        .loan-card-actions { display:flex; gap:8px; margin-top:10px; }
+        .btn-sm { padding:6px 14px; border-radius:8px; font-size:0.85rem; border:none; cursor:pointer; }
+        .btn-pay { background:var(--accent); color:#fff; }
+        .btn-del { background:var(--red); color:#fff; }
+
+        .empty { text-align:center; padding:50px 20px; color:var(--text3); }
+        .empty-icon { font-size:3rem; margin-bottom:12px; }
+
+        #toast { position:fixed; bottom:84px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:10px 20px; border-radius:8px; font-size:0.9rem; z-index:2000; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+        #toast.show { opacity:1; }
+        nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; padding:8px 0; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
+        nav a { flex:1; text-align:center; text-decoration:none; color:var(--text); font-size:0.85rem; padding:6px 0; }
+        nav a.active { color:var(--accent); font-weight:600; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="location.href='finance.html'">← Back</button>
+        <div class="header-text">
+            <h1>Loans</h1>
+            <p id="loan-count-sub">Loading...</p>
+        </div>
+    </div>
+
+    <main>
+        <!-- Stats -->
+        <div class="stats-bar">
+            <div class="stat-card"><div class="stat-label">Borrowed</div><div class="stat-val" id="st-borrow">$0</div></div>
+            <div class="stat-card"><div class="stat-label">Paid</div><div class="stat-val" id="st-paid" style="color:var(--green)">$0</div></div>
+            <div class="stat-card"><div class="stat-label">Owed</div><div class="stat-val" id="st-owed" style="color:var(--red)">$0</div></div>
+        </div>
+
+        <!-- Filter -->
+        <div class="filter-row">
+            <select id="filter-status" onchange="applyFilters()">
+                <option value="">All Loans</option>
+                <option value="active">Active</option>
+                <option value="paid">Paid Off</option>
+            </select>
+        </div>
+
+        <!-- Add Loan panel -->
+        <div class="add-panel">
+            <div class="add-panel-header" onclick="toggleAdd()">
+                <h3>＋ Add New Loan</h3>
+                <span id="add-arrow" style="font-size:1.2rem;color:var(--text3)">▼</span>
+            </div>
+            <div class="add-panel-body" id="add-body" style="display:none">
+                <div class="form-group">
+                    <label>Lender / Source</label>
+                    <input type="text" id="loan-lender" placeholder="e.g. Bank, Personal">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Amount ($)</label>
+                        <input type="number" id="loan-amount" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="loan-date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Note (optional)</label>
+                    <input type="text" id="loan-note" placeholder="Purpose or terms">
+                </div>
+                <button class="primary" onclick="submitLoan()">Add Loan</button>
+            </div>
+        </div>
+
+        <!-- Loan list -->
+        <div id="loan-list"><p style="color:var(--text3);text-align:center;padding:30px">Loading...</p></div>
+    </main>
+    <div style="height:80px"></div>
+
+    <!-- Payment modal -->
+    <div class="modal-overlay hidden" id="pay-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="pay-modal-title">Record Payment</h3>
+                <button class="modal-close" onclick="closePayModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Payment Amount ($)</label>
+                    <input type="number" id="pay-amount" min="0.01" step="0.01" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="pay-date">
+                </div>
+                <div class="form-group">
+                    <label>Note (optional)</label>
+                    <input type="text" id="pay-note" placeholder="e.g. Monthly payment">
+                </div>
+                <p id="pay-balance-hint" style="font-size:0.85rem;color:var(--text3);margin-top:4px"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closePayModal()">Cancel</button>
+                <button class="primary" style="width:auto;padding:10px 20px" onclick="submitPayment()">Record Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="inventory.html">Inventory</a>
+        <a href="finance.html" class="active">Finance</a>
+        <a href="hunt.html">Hunt</a>
+        <a href="settings.html">Settings</a>
+    </nav>
+
+    <script>
+    let loans = [];
+    let payingLoanId = null;
+
+    (async () => {
+        await load();
+        renderStats();
+        renderList(loans);
+    })();
+
+    async function load() {
+        loans = await fetch('/netlify/functions/loans').then(r=>r.json()).catch(()=>[]);
+        if (!Array.isArray(loans)) loans = [];
+        document.getElementById('loan-count-sub').textContent = `${loans.length} loan(s)`;
+    }
+
+    function loanBalance(l) {
+        return Math.max(0, Number(l.amount||0) - (l.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0));
+    }
+
+    function applyFilters() {
+        const status = document.getElementById('filter-status').value;
+        const filtered = loans.filter(l => {
+            const bal = loanBalance(l);
+            if (status === 'active') return bal > 0;
+            if (status === 'paid')   return bal === 0;
+            return true;
+        });
+        renderList(filtered);
+    }
+
+    function renderStats() {
+        const totB = loans.reduce((s,l)=>s+Number(l.amount||0), 0);
+        const totO = loans.reduce((s,l)=>s+loanBalance(l), 0);
+        document.getElementById('st-borrow').textContent = fmt(totB);
+        document.getElementById('st-paid').textContent   = fmt(totB-totO);
+        document.getElementById('st-owed').textContent   = fmt(totO);
+    }
+
+    function renderList(list) {
+        const el = document.getElementById('loan-list');
+        if (!list.length) {
+            el.innerHTML = `<div class="empty"><div class="empty-icon">🏦</div><p>No loans yet</p><p style="font-size:0.85rem;margin-top:6px">Add one using the form above</p></div>`;
+            return;
+        }
+        el.innerHTML = list.map(l => {
+            const bal   = loanBalance(l);
+            const paid  = Number(l.amount||0) - bal;
+            const pct   = Number(l.amount||0) > 0 ? Math.round(paid/Number(l.amount||0)*100) : 100;
+            const isPaid= bal === 0;
+            const idx   = loans.indexOf(l);
+            const pmts  = (l.payments||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+            return `
+            <div class="loan-card">
+                <div class="loan-top">
+                    <div>
+                        <div class="loan-lender">${l.lender||'Unknown'} <span class="chip ${isPaid?'chip-green':'chip-red'}">${isPaid?'Paid Off':'Active'}</span></div>
+                        <div class="loan-sub">${l.date||''} ${l.note?'• '+l.note:''}</div>
+                    </div>
+                    <div class="loan-right">
+                        <div class="loan-amount">${fmt(Number(l.amount||0))}</div>
+                        <div class="loan-balance" style="color:${isPaid?'var(--green)':'var(--red)'}">
+                            ${isPaid ? 'Fully paid' : 'Owed '+fmt(bal)}
+                        </div>
+                    </div>
+                </div>
+                <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+                <div class="progress-label">${pct}% paid (${fmt(paid)} of ${fmt(Number(l.amount||0))})</div>
+
+                ${pmts.length ? `
+                <div class="payments-section">
+                    <div class="payments-title">Payment History (${pmts.length})</div>
+                    ${pmts.slice(0,3).map(p => `
+                        <div class="payment-row">
+                            <span>${p.date} — ${p.note||'Payment'}</span>
+                            <span style="font-weight:600;color:var(--green)">${fmt(Number(p.amount||0))}</span>
+                        </div>`).join('')}
+                    ${pmts.length > 3 ? `<div style="font-size:0.8rem;color:var(--text3);margin-top:4px">+${pmts.length-3} more payment(s)</div>` : ''}
+                </div>` : ''}
+
+                <div class="loan-card-actions">
+                    ${!isPaid ? `<button class="btn-sm btn-pay" onclick="openPayModal('${l.id}','${l.lender||'Loan'}',${bal})">+ Payment</button>` : ''}
+                    <button class="btn-sm btn-del" onclick="deleteLoan(${idx})">Delete</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // Add Loan
+    let addOpen = false;
+    function toggleAdd() {
+        addOpen = !addOpen;
+        document.getElementById('add-body').style.display = addOpen ? '' : 'none';
+        document.getElementById('add-arrow').textContent  = addOpen ? '▲' : '▼';
+        if (addOpen) {
+            document.getElementById('loan-lender').value = '';
+            document.getElementById('loan-amount').value = '';
+            document.getElementById('loan-date').value   = new Date().toISOString().split('T')[0];
+            document.getElementById('loan-note').value   = '';
+        }
+    }
+
+    async function submitLoan() {
+        const lender = document.getElementById('loan-lender').value.trim();
+        const amount = parseFloat(document.getElementById('loan-amount').value);
+        const date   = document.getElementById('loan-date').value;
+        const note   = document.getElementById('loan-note').value.trim();
+        if (!lender || !amount || !date) { showToast('Lender, amount, and date required'); return; }
+
+        const entry = { id: Date.now().toString(36)+Math.random().toString(36).slice(2,5), lender, amount, date, note, status:'Active', payments:[] };
+        const updated = [...loans, entry];
+        const res = await fetch('/netlify/functions/loans', {
+            method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(updated)
+        });
+        if (res.ok) {
+            loans = updated;
+            showToast('Loan added!');
+            toggleAdd();
+            renderStats();
+            applyFilters();
+            document.getElementById('loan-count-sub').textContent = `${loans.length} loan(s)`;
+        } else { showToast('Failed to add loan'); }
+    }
+
+    async function deleteLoan(idx) {
+        if (!confirm('Delete this loan and all its payment history?')) return;
+        const updated = loans.filter((_,i)=>i!==idx);
+        const res = await fetch('/netlify/functions/loans', {
+            method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(updated)
+        });
+        if (res.ok) {
+            loans = updated;
+            showToast('Loan deleted');
+            renderStats(); applyFilters();
+            document.getElementById('loan-count-sub').textContent = `${loans.length} loan(s)`;
+        } else { showToast('Delete failed'); }
+    }
+
+    // Payment modal
+    function openPayModal(loanId, lenderName, balance) {
+        payingLoanId = loanId;
+        document.getElementById('pay-modal-title').textContent = `Payment — ${lenderName}`;
+        document.getElementById('pay-balance-hint').textContent = `Outstanding balance: ${fmt(balance)}`;
+        document.getElementById('pay-amount').value = '';
+        document.getElementById('pay-date').value   = new Date().toISOString().split('T')[0];
+        document.getElementById('pay-note').value   = '';
+        document.getElementById('pay-overlay').classList.remove('hidden');
+    }
+    function closePayModal() { document.getElementById('pay-overlay').classList.add('hidden'); payingLoanId=null; }
+
+    async function submitPayment() {
+        const amount = parseFloat(document.getElementById('pay-amount').value);
+        const date   = document.getElementById('pay-date').value;
+        const note   = document.getElementById('pay-note').value.trim();
+        if (!payingLoanId || !amount || !date) { showToast('Amount and date required'); return; }
+
+        const res = await fetch('/netlify/functions/loans?action=add-payment', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ loanId: payingLoanId, amount, date, note: note||'Payment' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast(data.message || 'Payment recorded');
+            closePayModal();
+            await load();
+            renderStats(); applyFilters();
+        } else { showToast(data.error || 'Payment failed'); }
+    }
+
+    const fmt = n => '$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+    </script>
+</body>
+</html>

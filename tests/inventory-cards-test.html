@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Inventory Cards Test</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; }
+    #test-output { margin-top: 20px; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+    .pass { color: green; font-weight: bold; }
+    .fail { color: red; font-weight: bold; }
+    button { padding: 10px 20px; background: #5b4fcf; color: white; border: none; border-radius: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Inventory & Sold Cards Display Test</h1>
+  <p>Tests that inventory cards (.inv-card in #inv-list) and sold cards (.inv-card in #sold-list) render correctly with mock data.</p>
+  <button onclick="runTests()">Run Tests</button>
+  <div id="test-output"></div>
+
+  <div id="inv-list"></div>
+  <div id="sold-section" style="display:none;">
+    <h3>Recently Sold</h3>
+    <div id="sold-list"></div>
+  </div>
+
+  <script>
+    // Mock data
+    let inventory = [
+      {
+        id: '1',
+        name: 'Test Bowl',
+        category: 'Ceramic Tableware',
+        inventory: { 'loc1': { qty: 5 } },
+        cost: 10,
+        labor: 2,
+        suggestedPrice: 25,
+        unit: 'units',
+        reorderPt: 3,
+        salesHistory: []
+      },
+      {
+        id: '2',
+        name: 'Sold Glass',
+        category: 'Clear Glassware',
+        inventory: { 'loc1': { qty: 0 } },
+        cost: 5,
+        labor: 1,
+        suggestedPrice: 15,
+        unit: 'units',
+        salesHistory: [{ location: 'loc1', qty: 3, revenue: 45, date: '2026-04-01' }]
+      }
+    ];
+    let locations = [{ id: 'loc1', name: 'Retail', active: true, transactionFeePercent: 5 }];
+
+    // Key functions from inventory.html (copied)
+    function fmt(n) { return '$' + parseFloat(n||0).toFixed(2); }
+    function esc(s) { return String(s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); }
+
+    function calculateTotalQty(item) {
+      if (!item.inventory) return 0;
+      return Object.values(item.inventory).reduce((sum, loc) => sum + Number(loc.qty || 0), 0);
+    }
+
+    function getItemPrimaryLocation(item) {
+      if (!item.inventory) return null;
+      const locationsWithInventory = Object.keys(item.inventory)
+        .filter(locId => Number(item.inventory[locId]?.qty) > 0)
+        .map(locId => ({ id: locId, qty: Number(item.inventory[locId]?.qty) }));
+      if (locationsWithInventory.length === 0) return null;
+      return locationsWithInventory.sort((a, b) => b.qty - a.qty)[0].id;
+    }
+
+    function calculateAdjustedMargin(item) {
+      const primaryLocationId = getItemPrimaryLocation(item);
+      const location = locations.find(l => l.id === primaryLocationId);
+      const transactionFeePercent = location?.transactionFeePercent || 0;
+      const suggested = Number(item.suggestedPrice ?? 0);
+      const effectiveRevenue = suggested * (1 - transactionFeePercent / 100);
+      const cost = Number(item.cost) + Number(item.labor);
+      const netProfit = effectiveRevenue - cost;
+      return suggested > 0 ? Math.round((netProfit / suggested) * 100) : 0;
+    }
+
+    function buildItemCard(item) {
+      const suggested = Number(item.suggestedPrice ?? 0);
+      const primaryLocationId = getItemPrimaryLocation(item);
+      const location = locations.find(l => l.id === primaryLocationId);
+      const transactionFeePercent = location?.transactionFeePercent || 0;
+      const adjustedMargin = calculateAdjustedMargin(item);
+      const thresh = Number(item.reorderPt ?? 5);
+      const totalQty = calculateTotalQty(item);
+
+      const locationBreakdown = locations
+        .filter(loc => loc.active)
+        .map(loc => {
+          const qty = Number((item.inventory?.[loc.id]?.qty) || 0);
+          return qty > 0 ? `${loc.name}: ${qty}` : null;
+        })
+        .filter(Boolean)
+        .join(' · ');
+
+      let imageHtml = ''; // No images for test
+
+      return `<div class="inv-card" onclick="openDetail('${item.id}')">
+        ${imageHtml}
+        <div class="inv-card-header">
+          <div><div class="inv-name">${esc(item.name)}</div><span class="category-chip">${esc(item.category)}</span></div>
+          <div class="inv-qty-badge ${totalQty<=thresh?'low':'ok'}">${totalQty} ${esc(item.unit||'units')}</div>
+        </div>
+        ${locationBreakdown ? `<div style="font-size:11px;color:var(--text3);padding:0 16px 8px;margin-top:-4px;">${esc(locationBreakdown)}</div>` : ''}
+        <div class="margin-bar"><div class="margin-fill" style="width:${Math.min(100,Math.max(0,adjustedMargin))}%"></div></div>
+        <div class="inv-metrics">
+          <div class="inv-metric"><div class="inv-metric-label">Cost</div><div class="inv-metric-value cost">${fmt(item.cost)}</div></div>
+          <div class
