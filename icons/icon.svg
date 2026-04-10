@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" shape-rendering="geometricPrecision">
+  <!-- Rounded-square background (for browser tab favicon — shown as-is, not clipped) -->
+  <rect width="512" height="512" rx="96" ry="96" fill="#5b4fcf"/>
+  <!--
+    Bold geometric "C" shape.
+    Circle: center (256,256), radius 140.
+    Gap opens on the right at ±50° from east → ~100° aperture.
+      Upper tip: (346, 149)  [angle = –50°]
+      Lower tip: (346, 363)  [angle = +50°]
+    Arc command: large-arc=1, sweep=0 (CCW in SVG screen coords)
+    → traces 260° through top, left, and bottom of the circle.
+    stroke-width 72 → ring thickness 36px each side.
+  -->
+  <path
+    d="M 346 149 A 140 140 0 1 0 346 363"
+    stroke="#ffffff"
+    stroke-width="72"
+    stroke-linecap="round"
+    fill="none"
+  />
+</svg>

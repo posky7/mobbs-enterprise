@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" shape-rendering="geometricPrecision">
+  <!-- Full-bleed square background (for PNG generation → apple-touch-icon, PWA icons).
+       iOS and Android apply their own corner masks; pre-rounding here would
+       create transparent corners inside the OS clip, which looks wrong. -->
+  <rect width="512" height="512" fill="#5b4fcf"/>
+  <path
+    d="M 346 149 A 140 140 0 1 0 346 363"
+    stroke="#ffffff"
+    stroke-width="72"
+    stroke-linecap="round"
+    fill="none"
+  />
+</svg>

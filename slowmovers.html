@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Favicon & PWA -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#5b4fcf">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Cheshire">
+    <title>Cheshire & Co — Slow Movers</title>
+    <style>
+        :root {
+            --bg: #f5f2ee;
+            --surface: #ffffff;
+            --accent: #5b4fcf;
+            --text: #1a1612;
+            --text2: #5a5248;
+            --text3: #9a9080;
+            --border: #d8d0c6;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+
+        .header { background:var(--accent); color:#fff; padding:12px 16px; text-align:center; position:sticky; top:0; z-index:10; }
+        .header h1 { font-size:1.35rem; margin:0; }
+        .subheader { font-size:0.9rem; opacity:0.85; }
+
+        /* Bug 2 fix: extra bottom padding clears the fixed nav bar */
+        main { padding:16px 16px 80px; max-width:640px; margin:0 auto; }
+
+        button { background:var(--accent); color:#fff; border:none; padding:14px 16px; font-size:1rem; border-radius:10px; cursor:pointer; min-height:44px; }
+        button:active { background:#4a3fb8; }
+        .btn-outline { background:var(--surface); color:var(--accent); border:1.5px solid var(--accent); }
+        .btn-sm { padding:8px 14px; font-size:0.85rem; min-height:36px; }
+
+        /* ── Filters ── */
+        .filters-card {
+            background:var(--surface);
+            border:1px solid var(--border);
+            border-radius:12px;
+            padding:14px 16px;
+            margin:16px 0;
+            box-shadow:0 2px 8px rgba(0,0,0,0.06);
+        }
+        .filters-row { display:flex; gap:8px; flex-wrap:wrap; }
+        .filter-group { display:flex; flex-direction:column; gap:4px; flex:1; min-width:140px; }
+        .filter-group label { font-size:0.8rem; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.04em; }
+        .filter-group select,
+        .filter-group input { width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.95rem; background:var(--bg); color:var(--text); }
+
+        /* ── Summary chips ── */
+        .summary-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+        .chip { display:inline-flex; align-items:center; gap:4px; font-size:0.8rem; font-weight:600; padding:4px 10px; border-radius:20px; }
+        .chip-neutral  { background:#f0eef8; color:var(--accent); }
+        .chip-warn     { background:#fff8e1; color:#c77900; }
+        .chip-orange   { background:#fff0e0; color:#c75000; }
+        .chip-danger   { background:#fde8ea; color:#d73a49; }
+
+        /* ── Slow-mover cards ── */
+        .sm-card {
+            background:var(--surface);
+            border:1px solid var(--border);
+            border-radius:12px;
+            margin-bottom:12px;
+            box-shadow:0 2px 8px rgba(0,0,0,0.07);
+            overflow:hidden;
+        }
+        /* Age-based left border indicator */
+        .sm-card.age-fresh  { border-left:4px solid #28a745; }
+        .sm-card.age-warn   { border-left:4px solid #ffc107; }
+        .sm-card.age-orange { border-left:4px solid #fd7e14; }
+        .sm-card.age-danger { border-left:4px solid #d73a49; }
+
+        .sm-card-top {
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            padding:14px 16px 8px;
+            gap:8px;
+        }
+        .sm-name { font-size:1.05rem; font-weight:600; }
+        .sm-category { font-size:0.75rem; color:var(--text3); margin-top:2px; }
+        .sm-location { font-size:0.85rem; color:var(--text2); margin-top:4px; }
+
+        .days-badge {
+            font-size:0.85rem;
+            font-weight:700;
+            padding:5px 10px;
+            border-radius:10px;
+            white-space:nowrap;
+            text-align:center;
+            min-width:64px;
+        }
+        .days-badge.fresh  { background:#e6f4ea; color:#1a7431; }
+        .days-badge.warn   { background:#fff8e1; color:#c77900; }
+        .days-badge.orange { background:#fff0e0; color:#c75000; }
+        .days-badge.danger { background:#fde8ea; color:#d73a49; }
+        .days-badge.unknown { background:#f0f0f0; color:var(--text3); }
+
+        .sm-metrics {
+            display:grid;
+            grid-template-columns:repeat(4, 1fr);
+            gap:0;
+            padding:10px 16px 14px;
+            border-top:1px solid var(--border);
+        }
+        .sm-metric { text-align:center; }
+        .sm-metric-label { font-size:0.7rem; color:var(--text3); font-weight:500; margin-bottom:2px; }
+        .sm-metric-value { font-size:0.9rem; font-weight:600; font-family:monospace; }
+
+        /* ── Empty / loading states ── */
+        .empty-state { text-align:center; padding:40px 20px; color:var(--text3); }
+        .empty-icon  { font-size:3rem; margin-bottom:16px; }
+        .empty-text  { font-size:1.1rem; font-weight:600; margin-bottom:8px; color:var(--text2); }
+        .empty-sub   { font-size:0.9rem; }
+
+        /* ── Sort bar ── */
+        .sort-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+        .sort-bar span { font-size:0.85rem; color:var(--text3); font-weight:500; }
+        .sort-btn { padding:6px 12px; font-size:0.8rem; min-height:32px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text2); cursor:pointer; }
+        .sort-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+        /* ── Toast ── */
+        #toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:12px 20px; border-radius:8px; z-index:10000; font-size:14px; pointer-events:none; opacity:0; transition:opacity 0.3s; }
+        #toast.show { opacity:1; }
+
+        /* ── Nav ── */
+        nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; padding:8px 0; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
+        nav a { flex:1; text-align:center; text-decoration:none; color:var(--text); font-size:0.85rem; padding:6px 0; }
+        nav a.active { color:var(--accent); font-weight:600; }
+
+        @media (min-width: 768px) {
+            main { max-width:800px; padding:20px 20px 80px; }
+            .sm-metrics { grid-template-columns:repeat(5, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            main { max-width:1000px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Cheshire & Co</h1>
+    <div class="subheader">Slow Moving Inventory</div>
+</div>
+
+<main>
+    <!-- Back link + page title -->
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:4px; margin-top:4px;">
+        <button class="btn-outline btn-sm" onclick="location.href='inventory.html'">← Inventory</button>
+        <h2 style="font-size:1.2rem;">Slow Movers</h2>
+    </div>
+    <p style="font-size:0.875rem; color:var(--text3); margin-bottom:8px;">
+        Items with quantity on hand, sorted by days sitting at each location.
+    </p>
+
+    <!-- Filters -->
+    <div class="filters-card">
+        <div class="filters-row">
+            <div class="filter-group">
+                <label for="filter-location">Location</label>
+                <select id="filter-location" onchange="applyFilters()">
+                    <option value="all">All Locations</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-min-days">Min Days</label>
+                <select id="filter-min-days" onchange="applyFilters()">
+                    <option value="0">Any age</option>
+                    <option value="30">30+ days</option>
+                    <option value="60">60+ days</option>
+                    <option value="90">90+ days</option>
+                    <option value="120">120+ days</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-search">Search</label>
+                <input type="text" id="filter-search" placeholder="Item name…" oninput="applyFilters()">
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary chips -->
+    <div class="summary-row" id="summary-row"></div>
+
+    <!-- Sort bar -->
+    <div class="sort-bar">
+        <span>Sort:</span>
+        <button class="sort-btn active" id="sort-days"   onclick="setSort('days')">Days ▼</button>
+        <button class="sort-btn"        id="sort-name"   onclick="setSort('name')">Name</button>
+        <button class="sort-btn"        id="sort-value"  onclick="setSort('value')">Value</button>
+    </div>
+
+    <!-- Results list -->
+    <div id="sm-list">
+        <div class="empty-state">
+            <div class="empty-icon">🐢</div>
+            <div class="empty-text">Loading inventory…</div>
+        </div>
+    </div>
+</main>
+
+<div id="toast"></div>
+
+<nav>
+    <a href="index.html">Home</a>
+    <a href="inventory.html" class="active">Inventory</a>
+    <a href="finance.html">Finance</a>
+    <a href="hunt.html">Hunt</a>
+    <a href="settings.html">Settings</a>
+</nav>
+
+<script>
+    // ── Utilities ──────────────────────────────────────────────────────────────
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function fmt(n) { return '$' + parseFloat(n || 0).toFixed(2); }
+
+    let _tt;
+    function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg; el.classList.add('show');
+        clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove('show'), 2600);
+    }
+
+    const API = '/.netlify/functions';
+
+    // ── State ──────────────────────────────────────────────────────────────────
+    let allRows   = [];   // flat array: one entry per item × location
+    let sortKey   = 'days';   // 'days' | 'name' | 'value'
+
+    // ── Days-at-location calculation ───────────────────────────────────────────
+    /**
+     * Returns the whole number of days elapsed since `lastUpdated`.
+     * Returns null when the timestamp is missing or invalid.
+     */
+    function daysAtLocation(lastUpdated) {
+        if (!lastUpdated) return null;
+        const then = new Date(lastUpdated);
+        if (isNaN(then.getTime())) return null;
+        const ms = Date.now() - then.getTime();
+        return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+    }
+
+    // ── Age classification ─────────────────────────────────────────────────────
+    // < 30 days  → fresh  (green)
+    // 30–59 days → warn   (yellow)
+    // 60–89 days → orange
+    // 90+ days   → danger (red)
+    function ageClass(days) {
+        if (days === null) return 'unknown';
+        if (days < 30)  return 'fresh';
+        if (days < 60)  return 'warn';
+        if (days < 90)  return 'orange';
+        return 'danger';
+    }
+
+    // ── Load data ──────────────────────────────────────────────────────────────
+    async function loadData() {
+        try {
+            const [invRes, locRes] = await Promise.all([
+                fetch(`${API}/inventory`),
+                fetch(`${API}/locations`)
+            ]);
+
+            if (!invRes.ok) {
+                showToast(`Inventory load failed (${invRes.status})`);
+                renderList([]);
+                return;
+            }
+            if (!locRes.ok) {
+                showToast(`Locations load failed (${locRes.status})`);
+                renderList([]);
+                return;
+            }
+
+            const inventory = await invRes.json();
+            const locations  = await locRes.json();
+
+            populateLocationFilter(locations);
+            allRows = buildRows(inventory, locations);
+            applyFilters();
+
+        } catch (err) {
+            console.error('loadData error:', err);
+            showToast('Failed to load data');
+            renderList([]);
+        }
+    }
+
+    // ── Build flat row array ───────────────────────────────────────────────────
+    /**
+     * Expand each inventory item into one row per location entry where qty > 0.
+     */
+    function buildRows(inventory, locations) {
+        const rows = [];
+        for (const item of inventory) {
+            if (!item.inventory) continue;
+            for (const [locId, locData] of Object.entries(item.inventory)) {
+                const qty = Number(locData?.qty || 0);
+                if (qty <= 0) continue;
+
+                const loc  = locations.find(l => l.id === locId);
+                const days = daysAtLocation(locData.lastUpdated);
+                const costPerUnit = Number(item.cost || 0) + Number(item.labor || 0);
+
+                rows.push({
+                    itemId:       item.id,
+                    name:         item.name || 'Unnamed Item',
+                    category:     item.category || '—',
+                    locationId:   locId,
+                    locationName: loc?.name || 'Unknown Location',
+                    qty,
+                    days,
+                    lastUpdated:  locData.lastUpdated || null,
+                    cost:         Number(item.cost || 0),
+                    labor:        Number(item.labor || 0),
+                    suggestedPrice: Number(item.suggestedPrice || 0),
+                    totalValue:   qty * costPerUnit,
+                });
+            }
+        }
+        return rows;
+    }
+
+    // ── Populate location filter dropdown ──────────────────────────────────────
+    function populateLocationFilter(locations) {
+        const sel = document.getElementById('filter-location');
+        // Remove any previously-added options except the first "All Locations"
+        while (sel.options.length > 1) sel.remove(1);
+        locations
+            .filter(l => l.active !== false)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .forEach(l => {
+                const opt = document.createElement('option');
+                opt.value = l.id;
+                opt.textContent = l.name;
+                sel.appendChild(opt);
+            });
+    }
+
+    // ── Filter + sort + render ─────────────────────────────────────────────────
+    function applyFilters() {
+        const locFilter  = document.getElementById('filter-location').value;
+        const minDays    = parseInt(document.getElementById('filter-min-days').value, 10) || 0;
+        const searchRaw  = document.getElementById('filter-search').value.trim().toLowerCase();
+
+        let rows = allRows.filter(r => {
+            if (locFilter !== 'all' && r.locationId !== locFilter) return false;
+            if (r.days !== null && r.days < minDays) return false;
+            if (r.days === null && minDays > 0) return false;  // exclude unknown-age items when a min is set
+            if (searchRaw && !r.name.toLowerCase().includes(searchRaw)) return false;
+            return true;
+        });
+
+        // Sort
+        if (sortKey === 'days') {
+            rows = rows.sort((a, b) => {
+                // null days go to the bottom
+                if (a.days === null && b.days === null) return 0;
+                if (a.days === null) return 1;
+                if (b.days === null) return -1;
+                return b.days - a.days;
+            });
+        } else if (sortKey === 'name') {
+            rows = rows.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (sortKey === 'value') {
+            rows = rows.sort((a, b) => b.totalValue - a.totalValue);
+        }
+
+        updateSummary(rows);
+        renderList(rows);
+    }
+
+    // ── Summary chips ──────────────────────────────────────────────────────────
+    function updateSummary(rows) {
+        const fresh  = rows.filter(r => r.days !== null && r.days < 30).length;
+        const warn   = rows.filter(r => r.days !== null && r.days >= 30 && r.days < 60).length;
+        const orange = rows.filter(r => r.days !== null && r.days >= 60 && r.days < 90).length;
+        const danger = rows.filter(r => r.days !== null && r.days >= 90).length;
+        const total  = rows.length;
+
+        const container = document.getElementById('summary-row');
+        if (total === 0) { container.innerHTML = ''; return; }
+
+        container.innerHTML = [
+            `<span class="chip chip-neutral">${total} row${total !== 1 ? 's' : ''}</span>`,
+            fresh  ? `<span class="chip chip-neutral" title="Under 30 days">🟢 ${fresh} fresh</span>`   : '',
+            warn   ? `<span class="chip chip-warn"    title="30–59 days">🟡 ${warn} warn</span>`         : '',
+            orange ? `<span class="chip chip-orange"  title="60–89 days">🟠 ${orange} aging</span>`      : '',
+            danger ? `<span class="chip chip-danger"  title="90+ days">🔴 ${danger} overdue</span>`      : '',
+        ].join('');
+    }
+
+    // ── Render card list ───────────────────────────────────────────────────────
+    function renderList(rows) {
+        const container = document.getElementById('sm-list');
+
+        if (!rows || rows.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">🐢</div>
+                    <div class="empty-text">No items match</div>
+                    <div class="empty-sub">Try adjusting your filters.</div>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = rows.map(r => buildCard(r)).join('');
+    }
+
+    function buildCard(r) {
+        const cls      = ageClass(r.days);
+        const daysText = r.days === null ? '? days' : `${r.days} day${r.days !== 1 ? 's' : ''}`;
+        const dateText = r.lastUpdated
+            ? new Date(r.lastUpdated).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+            : 'Unknown';
+
+        const totalValue = r.qty * (r.cost + r.labor);
+        const retailValue = r.qty * r.suggestedPrice;
+
+        return `
+        <div class="sm-card age-${cls}">
+            <div class="sm-card-top">
+                <div style="flex:1; min-width:0;">
+                    <div class="sm-name">${esc(r.name)}</div>
+                    <div class="sm-category">${esc(r.category)}</div>
+                    <div class="sm-location">📍 ${esc(r.locationName)}</div>
+                </div>
+                <div class="days-badge ${cls}">${esc(daysText)}</div>
+            </div>
+            <div class="sm-metrics">
+                <div class="sm-metric">
+                    <div class="sm-metric-label">Qty</div>
+                    <div class="sm-metric-value">${r.qty}</div>
+                </div>
+                <div class="sm-metric">
+                    <div class="sm-metric-label">Cost/Unit</div>
+                    <div class="sm-metric-value">${fmt(r.cost + r.labor)}</div>
+                </div>
+                <div class="sm-metric">
+                    <div class="sm-metric-label">Retail</div>
+                    <div class="sm-metric-value">${r.suggestedPrice > 0 ? fmt(r.suggestedPrice) : '—'}</div>
+                </div>
+                <div class="sm-metric">
+                    <div class="sm-metric-label">Total Cost</div>
+                    <div class="sm-metric-value">${fmt(totalValue)}</div>
+                </div>
+                <div class="sm-metric" style="grid-column: span 4; border-top:1px solid var(--border); padding-top:6px; margin-top:4px;">
+                    <div class="sm-metric-label">Date moved/received</div>
+                    <div class="sm-metric-value" style="font-size:0.8rem;">${esc(dateText)}</div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // ── Sort ───────────────────────────────────────────────────────────────────
+    function setSort(key) {
+        sortKey = key;
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`sort-${key}`).classList.add('active');
+        applyFilters();
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    loadData();
+</script>
+
+</body>
+</html>
