@@ -20,7 +20,7 @@ export default async function handler(req, context) {
   // Clean mode: overwrite all stores with empty arrays, no demo seeding
   if (mode === 'clean') {
     const errors = [];
-    for (const store of ['inventory', 'locations', 'expenses', 'loans']) {
+    for (const store of ['inventory', 'locations', 'expenses', 'loans', 'hunt']) {
       try {
         await writeBlobData(store, []);
       } catch (err) {
