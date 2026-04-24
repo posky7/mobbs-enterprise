@@ -14,6 +14,42 @@ export default async function handler(req, context) {
     });
   }
 
+  const url = new URL(req.url);
+  const mode = url.searchParams.get('mode');
+
+  // Clean mode: wipe all stores to empty, no demo seeding
+  if (mode === 'clean') {
+    try {
+      console.log('Reset function called - clean wipe, no demo data');
+      await clearBlobStore('inventory');
+      await clearBlobStore('locations');
+      await clearBlobStore('expenses');
+      await clearBlobStore('loans');
+      await clearBlobStore('images');
+      await setBackupTimestamp(null);
+      await writeBlobData('inventory', []);
+      await writeBlobData('locations', []);
+      await writeBlobData('expenses', []);
+      await writeBlobData('loans', []);
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'All data wiped. No demo data seeded.'
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Clean wipe error:', error);
+      return new Response(JSON.stringify({
+        error: 'Failed to wipe data',
+        details: error.message
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
   try {
     console.log('Reset function called - clearing all data stores');
 
