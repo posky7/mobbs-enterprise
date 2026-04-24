@@ -17,12 +17,11 @@ export default async function handler(req, context) {
   const url = new URL(req.url);
   const mode = url.searchParams.get('mode');
 
-  // Clean mode: wipe all stores to empty, no demo seeding
+  // Clean mode: overwrite all stores with empty arrays, no demo seeding
   if (mode === 'clean') {
     const errors = [];
     for (const store of ['inventory', 'locations', 'expenses', 'loans']) {
       try {
-        await clearBlobStore(store);
         await writeBlobData(store, []);
       } catch (err) {
         console.error(`Clean wipe failed for store ${store}:`, err);
