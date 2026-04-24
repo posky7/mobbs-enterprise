@@ -19,35 +19,28 @@ export default async function handler(req, context) {
 
   // Clean mode: wipe all stores to empty, no demo seeding
   if (mode === 'clean') {
-    try {
-      console.log('Reset function called - clean wipe, no demo data');
-      await clearBlobStore('inventory');
-      await clearBlobStore('locations');
-      await clearBlobStore('expenses');
-      await clearBlobStore('loans');
-      await clearBlobStore('images');
-      await setBackupTimestamp(null);
-      await writeBlobData('inventory', []);
-      await writeBlobData('locations', []);
-      await writeBlobData('expenses', []);
-      await writeBlobData('loans', []);
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'All data wiped. No demo data seeded.'
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Clean wipe error:', error);
-      return new Response(JSON.stringify({
-        error: 'Failed to wipe data',
-        details: error.message
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    const errors = [];
+    for (const store of ['inventory', 'locations', 'expenses', 'loans']) {
+      try {
+        await clearBlobStore(store);
+        await writeBlobData(store, []);
+      } catch (err) {
+        console.error(`Clean wipe failed for store ${store}:`, err);
+        errors.push(`${store}: ${err.message}`);
+      }
     }
+    try { await setBackupTimestamp(null); } catch {}
+
+    if (errors.length) {
+      return new Response(JSON.stringify({
+        error: 'Partial wipe — some stores failed',
+        details: errors
+      }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'All data wiped. No demo data seeded.'
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
